@@ -108,10 +108,24 @@ def test_docker_image():
     expected(rows + [("eMudhra CA", p, "", "AFFECTED", "") for p, _, _ in bundles])
 
 
+def test_docker_oversized_member_skipped():
+    import secinspect
+    # a lockfile pinning the bad build, but larger than the read cap: metadata guard must skip it unread
+    big = fake_venv({"home/app/requirements.txt": b"litellm==1.107.0\n" + b"#" * 200})
+    saved = tar_of({"manifest.json": b"[]", "l/layer.tar": tar_of(big)})
+    try:
+        secinspect.MAX_READ = 50  # force the cap below the member size
+        rows, _ = scan_image_tar("img:1", io.BytesIO(saved))
+    finally:
+        secinspect.MAX_READ = 50_000_000
+    assert not any(r[2] == "1.107.0" and "requirements" in r[1] for r in rows), rows
+
+
 if __name__ == "__main__":
     test_versions()
     test_ca()
     test_overrides()
     test_scan_files()
     test_docker_image()
+    test_docker_oversized_member_skipped()
     print("ok")

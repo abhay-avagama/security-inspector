@@ -181,6 +181,7 @@ def bundle_summary(bundles):
 
 LOCKFILE = re.compile(r"(requirements.*\.txt|pyproject\.toml|uv\.lock|poetry\.lock|Pipfile\.lock)$")
 SKIP = {"node_modules", ".git", ".Trash"}
+MAX_READ = 50_000_000  # cap per-file reads (disk and tar members) so an untrusted file can't exhaust memory
 
 
 def inspect_file(path, read):
@@ -231,7 +232,7 @@ def scan_files(roots):
 
                 def read(p=p):
                     try:
-                        return open(p, "rb").read() if os.path.getsize(p) < 50_000_000 else b""
+                        return open(p, "rb").read() if os.path.getsize(p) < MAX_READ else b""
                     except OSError:
                         return b""
 
@@ -258,7 +259,9 @@ def scan_image_tar(label, stream):
                 with tarfile.open(fileobj=outer.extractfile(member), mode="r|*") as layer:
                     for f in layer:
                         if f.isfile():
-                            r, b = inspect_file("/" + f.name, lambda f=f: layer.extractfile(f).read())
+                            # cap by tar metadata before reading: an untrusted image could ship a huge/bomb member
+                            read = (lambda f=f: layer.extractfile(f).read()) if f.size < MAX_READ else (lambda: b"")
+                            r, b = inspect_file("/" + f.name, read)
                             rows += [(i, f"{label}:{p}", *rest) for i, p, *rest in r]
                             bundles += [(f"{label}:{p}", n, a) for p, n, a in b]
             except tarfile.ReadError:  # manifest/config json, or a layer format tarfile can't read
@@ -267,12 +270,18 @@ def scan_image_tar(label, stream):
 
 
 def check_docker(scan_images):
+    if not shutil.which("docker"):
+        return [("Docker", "-", "-", "NOT FOUND", "docker not installed")]
     out = run("docker", "images", "--digests", "--format", "{{.ID}} {{.Repository}}:{{.Tag}} {{.Digest}}")
-    if not shutil.which("docker") or "Cannot connect" in out or "error" in out.lower():
-        return [("Docker", "-", "-", "UNKNOWN" if scan_images else "NOT FOUND", "docker not installed or not running")]
+    # daemon-down / permission errors go to the daemon, not per-image output; match those, not an image named "error"
+    if any(s in out.lower() for s in ("cannot connect", "permission denied", "is the docker daemon running")):
+        return [("Docker", "-", "-", "UNKNOWN", "docker is installed but not reachable (daemon down or no permission)")]
     rows, bundles, ids = [], [], {}
     for line in out.splitlines():
-        image_id, name, digest = line.split()
+        parts = line.split()
+        if len(parts) != 3:  # unexpected format; don't crash the whole scan
+            continue
+        image_id, name, digest = parts
         ids.setdefault(image_id, name if not name.startswith("<none>") else image_id)
         for pkg in PACKAGES:
             if digest.startswith(tuple(pkg.get("image_digests", []))):
