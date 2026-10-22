@@ -4,7 +4,7 @@ import tarfile
 import tempfile
 
 from secinspect import (ADVISORIES, AAA, INTERMEDIATES, ROOTS, by_branch, chain_accepts, check_overrides, fix_hint,
-                        html_report, pem, roots_in, scan_files, scan_image_tar, test_bundle, version_status)
+                        fix_plan, html_report, pem, roots_in, scan_files, scan_image_tar, test_bundle, version_status)
 
 PHP = [(8, 5, 12), (8, 4, 27), (8, 3, 36), (8, 2, 35)]
 ADV = {a["name"]: a for a in ADVISORIES["versions"]}
@@ -59,6 +59,27 @@ def test_overrides(monkeypatch=None):
         assert by_path[bad][3] == ("AFFECTED" if chain_accepts(pem(ROOTS[AAA])) else "REVIEW"), rows
         assert "REQUESTS_CA_BUNDLE" in by_path[bad][1]
         assert by_path[gone][3] == "REVIEW"  # missing bundle flagged, not silently skipped
+
+
+def test_fix_plan():
+    rows = [
+        ("Node.js", "/Users/x/.nvm/versions/node/v18/bin/node", "18.0.0", "AFFECTED", "eol"),
+        ("Node.js", "/Users/y/.nvm/versions/node/v20/bin/node", "20.0.0", "AFFECTED", "eol"),
+        ("Node.js", "/opt/homebrew/Cellar/node/26.7.0/bin/node", "26.7.0", "AFFECTED", "upgrade"),
+        ("eMudhra CA", "81 app CA bundles, e.g. /x/certifi/cacert.pem", "emSign", "AFFECTED", "certifi"),
+        ("eMudhra CA", "macOS Keychain", "AAA", "REVIEW", "comodo"),
+        ("LiteLLM", "/x/litellm-1.72.6.dist-info", "1.72.6", "OK", ""),  # OK rows produce no fix
+    ]
+    plan = fix_plan(rows)
+    titles = {t for _, t, _, _, _ in plan}
+    assert "Replace end-of-life Node versions under nvm" in titles
+    assert "Upgrade Homebrew Node to a patched release" in titles
+    assert plan[0][0] == "AFFECTED"  # affected sorted before review
+    nvm = next(p for p in plan if "nvm" in p[1])
+    assert nvm[3] == 2, nvm  # both nvm rows collapse into one job of count 2
+    certifi = next(p for p in plan if "certifi" in p[1].lower())
+    assert certifi[3] == 81, certifi  # "81 app CA bundles" parsed as count
+    assert all(t != "" for _, t, _, _, _ in plan)  # no OK rows leaked in
 
 
 def fake_venv(files):
@@ -125,6 +146,7 @@ if __name__ == "__main__":
     test_versions()
     test_ca()
     test_overrides()
+    test_fix_plan()
     test_scan_files()
     test_docker_image()
     test_docker_oversized_member_skipped()

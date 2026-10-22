@@ -382,13 +382,108 @@ def check_stores():
 STATUSES = ("AFFECTED", "REVIEW", "UNKNOWN", "OK", "NOT FOUND")
 
 
+def fix_for(item, where):
+    """One (title, command) for an actionable row, or None. Rows with the same command collapse into
+    one job in the fix plan, so 15 Node installs or 80 venvs become a single step."""
+    w = where.lower()
+    if item == "Node.js":
+        if ".nvm" in w:
+            return ("Replace end-of-life Node versions under nvm",
+                    "nvm install --lts && nvm alias default 'lts/*'   # then: nvm uninstall <each old version>")
+        if ".volta" in w:
+            return ("Upgrade the Volta-managed Node", "volta install node@22")
+        return ("Upgrade Homebrew Node to a patched release", "brew upgrade node")
+    if item == "eMudhra CA":
+        if "keychain" in w:
+            return ("Install pending macOS updates (system Keychain trust)", "softwareupdate --install --all")
+        if "nss" in w or "firefox" in w or "thunderbird" in w:
+            return ("Update Firefox / Thunderbird (they carry their own roots)", "update Firefox/Thunderbird to the latest version")
+        if "cacerts" in w or "/java/" in w or "jvm" in w:
+            return ("Update the Java trust store", "update the JDK, or: keytool -delete -alias <cracked alias> -keystore <cacerts>")
+        if "certifi" in w:  # before site-packages and /vendor/: pip ships certifi under pip/_vendor/certifi
+            return ("Update certifi in affected virtualenvs (after a fixed release ships)", "pip install -U certifi   # run in each affected venv")
+        if "/vendor/" in w:  # composer convention; note /vendor/ not _vendor/ (python)
+            return ("Refresh vendored CA bundles (e.g. PHP/composer packages)", "composer update   # in each project shipping its own cacert.pem")
+        if "site-packages" in w:
+            return ("Update Python packages that ship their own CA bundle", "pip install -U <package>   # e.g. botocore, once it drops the root")
+        if "(via" in where:
+            return ("Fix the custom CA bundle pointed to by an env var / tool config", "point the override at a patched bundle, or unset it to use the system store")
+        return ("Update the system CA bundle (OpenSSL / curl / git)",
+                "brew upgrade ca-certificates   # Linux: sudo update-ca-certificates  (Red Hat: sudo update-ca-trust)")
+    if item == "PHP":
+        return ("Upgrade PHP and restart workers", "upgrade to 8.5.12 / 8.4.27 / 8.3.36 / 8.2.35, then restart PHP-FPM")
+    if item == "BIND":
+        return ("Upgrade BIND", "upgrade to 9.20.30+ / 9.21.27+")
+    if item == "GitLab":
+        return ("Upgrade self-managed GitLab", "upgrade to 19.5.1 (or the latest patch for your branch, back to 18.11.13)")
+    if item == "LiteLLM":
+        return ("Remove the backdoored LiteLLM and rotate credentials",
+                "don't pip install first; delete cook.pth/cook.py/sitecustomize.py, kill the daemon, rebuild pinned to 1.106.2, rotate keys")
+    if item == "Docker":
+        return ("Rebuild the affected Docker image", "remove the image, rebuild from a patched base, rotate any keys it held")
+    return None
+
+
+def bundle_count(where):
+    m = re.match(r"(\d+) app CA bundles", where)
+    return int(m.group(1)) if m else 1
+
+
+def fix_plan(rows):
+    """Deduplicated, prioritized actions from AFFECTED/REVIEW rows: [(worst_status, title, command, count, examples)]."""
+    groups = {}
+    for item, where, _, status, _ in rows:
+        if status not in ("AFFECTED", "REVIEW"):
+            continue
+        fix = fix_for(item, str(where))
+        if not fix:
+            continue
+        title, command = fix
+        g = groups.setdefault(command, {"title": title, "statuses": set(), "count": 0, "examples": []})
+        g["statuses"].add(status)
+        g["count"] += bundle_count(str(where))
+        if len(g["examples"]) < 3 and str(where) not in g["examples"]:
+            g["examples"].append(str(where))
+    plan = [("AFFECTED" if "AFFECTED" in g["statuses"] else "REVIEW", g["title"], cmd, g["count"], g["examples"])
+            for cmd, g in groups.items()]
+    return sorted(plan, key=lambda x: (STATUSES.index(x[0]), -x[3]))
+
+
 def html_report(rows, path):
     e = html.escape
-    counts = "".join(f'<div class="stat {s.replace(" ", "")}"><b>{sum(r[3] == s for r in rows)}</b>{s.lower()}</div>' for s in STATUSES)
-    body = "".join(
-        f'<tr><td>{e(r[0])}</td><td><span class="pill {r[3].replace(" ", "")}">{e(r[3])}</span></td>'
-        f'<td>{e(str(r[2]))}</td><td class="path">{e(str(r[1]))}</td><td>{e(r[4])}</td></tr>'
-        for r in sorted(rows, key=lambda r: STATUSES.index(r[3])))
+    cls = lambda s: s.replace(" ", "")
+    counts = "".join(f'<div class="stat {cls(s)}"><b>{sum(r[3] == s for r in rows)}</b>{s.lower()}</div>' for s in STATUSES)
+
+    # Fix plan: one card per distinct job, affected first
+    plan = fix_plan(rows)
+    if plan:
+        cards = "".join(
+            f'<div class="fix {cls(status)}"><div class="fixhead"><span class="pill {cls(status)}">{e(status)}</span>'
+            f'<b>{e(title)}</b><span class="count">{count} item{"s" if count != 1 else ""}</span></div>'
+            f'<pre>{e(command)}</pre>'
+            f'<details><summary>where</summary><ul>' + "".join(f'<li class="path">{e(x)}</li>' for x in examples)
+            + (f'<li class="path">… and more</li>' if count > len(examples) else '') + '</ul></details></div>'
+            for status, title, command, count, examples in plan)
+        fixhtml = f'<h2>Fix plan</h2><p class="sub">{len(plan)} distinct actions, most urgent first.</p>{cards}'
+    else:
+        fixhtml = '<h2>Fix plan</h2><p class="sub">Nothing affected. No action needed.</p>'
+
+    # Issue tree: item → status → rows
+    tree = ""
+    for item in sorted({r[0] for r in rows}, key=lambda i: min(STATUSES.index(r[3]) for r in rows if r[0] == i)):
+        irows = [r for r in rows if r[0] == item]
+        worst = min(irows, key=lambda r: STATUSES.index(r[3]))[3]
+        tally = " ".join(f'<span class="pill {cls(s)}">{sum(r[3] == s for r in irows)} {s.lower()}</span>'
+                         for s in STATUSES if any(r[3] == s for r in irows))
+        leaves = "".join(
+            f'<li><span class="pill {cls(r[3])}">{e(r[3])}</span> '
+            f'<b>{e(str(r[2]))}</b> <span class="path">{e(str(r[1]))}</span>'
+            + (f'<div class="note">{e(r[4])}</div>' if r[4] else '') + '</li>'
+            for r in sorted(irows, key=lambda r: STATUSES.index(r[3])))
+        openattr = " open" if worst in ("AFFECTED", "REVIEW") else ""
+        tree += (f'<details class="node {cls(worst)}"{openattr}><summary><b>{e(item)}</b> {tally}</summary>'
+                 f'<ul class="leaves">{leaves}</ul></details>')
+
     sources = "".join(f'<li><a href="{e(a["source"])}">{e(a["name"])}</a>: {e(a["about"])}</li>'
                       for a in ADVISORIES["versions"] + PACKAGES + [{"name": "eMudhra CA", **ADVISORIES["ca"]}])
     when = datetime.datetime.now().strftime("%d %b %Y, %H:%M")
@@ -397,20 +492,30 @@ def html_report(rows, path):
 :root{{--bg:#fafaf9;--fg:#1c1917;--muted:#78716c;--card:#fff;--line:#e7e5e4;--bad:#b91c1c;--warn:#b45309;--ok:#15803d;--na:#a8a29e}}
 @media (prefers-color-scheme:dark){{:root{{--bg:#1c1917;--fg:#f5f5f4;--muted:#a8a29e;--card:#292524;--line:#44403c;--bad:#f87171;--warn:#fbbf24;--ok:#4ade80;--na:#78716c}}}}
 body{{margin:0;padding:32px 16px;background:var(--bg);color:var(--fg);font:14px/1.5 system-ui,sans-serif}}
-main{{max-width:1200px;margin:auto}} h1{{margin:0;font-size:24px}} h2{{font-size:16px;margin:32px 0 8px}} .sub{{color:var(--muted);margin:4px 0 24px}}
-a{{color:inherit}} li{{margin:4px 0;color:var(--muted)}} li a{{color:var(--fg)}}
-.stats{{display:flex;gap:12px;flex-wrap:wrap;margin-bottom:24px}}
+main{{max-width:1000px;margin:auto}} h1{{margin:0;font-size:24px}} h2{{font-size:16px;margin:32px 0 8px}} .sub{{color:var(--muted);margin:4px 0 16px}}
+a{{color:inherit}} li{{margin:4px 0}} .sources li{{color:var(--muted)}} .sources li a{{color:var(--fg)}}
+.stats{{display:flex;gap:12px;flex-wrap:wrap;margin-bottom:8px}}
 .stat{{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:12px 18px;color:var(--muted)}}
 .stat b{{display:block;font-size:26px;color:var(--fg)}} .stat.AFFECTED b{{color:var(--bad)}} .stat.REVIEW b{{color:var(--warn)}}
-.wrap{{overflow-x:auto;background:var(--card);border:1px solid var(--line);border-radius:10px}}
-table{{border-collapse:collapse;width:100%}} th,td{{text-align:left;padding:10px 12px;border-bottom:1px solid var(--line);vertical-align:top}}
-th{{color:var(--muted);font-weight:500}} .path{{font:12px ui-monospace,monospace;word-break:break-all;color:var(--muted)}}
 .pill{{font-size:11px;font-weight:600;padding:2px 8px;border-radius:99px;border:1px solid;white-space:nowrap}}
 .AFFECTED{{color:var(--bad)}} .REVIEW,.UNKNOWN{{color:var(--warn)}} .OK{{color:var(--ok)}} .NOTFOUND{{color:var(--na)}}
+.path{{font:12px ui-monospace,monospace;word-break:break-all;color:var(--muted)}}
+.fix{{background:var(--card);border:1px solid var(--line);border-left:4px solid var(--warn);border-radius:10px;padding:14px 16px;margin:10px 0}}
+.fix.AFFECTED{{border-left-color:var(--bad)}}
+.fixhead{{display:flex;align-items:center;gap:10px;flex-wrap:wrap}} .fixhead b{{font-size:15px}} .count{{color:var(--muted);font-size:12px;margin-left:auto}}
+.fix pre{{background:var(--bg);border:1px solid var(--line);border-radius:8px;padding:10px 12px;margin:10px 0 6px;overflow-x:auto;font:12px ui-monospace,monospace;white-space:pre-wrap}}
+details.node{{background:var(--card);border:1px solid var(--line);border-left:4px solid var(--na);border-radius:10px;margin:8px 0;padding:4px 14px}}
+details.node.AFFECTED{{border-left-color:var(--bad)}} details.node.REVIEW{{border-left-color:var(--warn)}} details.node.OK{{border-left-color:var(--ok)}}
+summary{{cursor:pointer;padding:8px 0;display:flex;gap:8px;align-items:center;flex-wrap:wrap}} summary b{{font-size:15px}}
+.leaves{{list-style:none;padding-left:14px;border-left:1px solid var(--line);margin:4px 0 10px}}
+.leaves li{{padding:6px 0;border-bottom:1px solid var(--line)}} .leaves li:last-child{{border-bottom:0}}
+.note{{color:var(--muted);font-size:13px;margin-top:3px}}
+.fix details summary{{color:var(--muted);font-size:12px}} .fix ul{{margin:6px 0 0;padding-left:18px}}
 </style></head><body><main><h1>Security Inspector</h1>
 <p class="sub">{e(platform.node())} · {e(platform.platform())} · {when}</p><div class="stats">{counts}</div>
-<div class="wrap"><table><tr><th>Item</th><th>Status</th><th>Version / root</th><th>Where</th><th>What to do</th></tr>{body}</table></div>
-<h2>Advisories checked</h2><ul>{sources}</ul></main></body></html>""")
+{fixhtml}
+<h2>Issues by component</h2>{tree}
+<h2>Advisories checked</h2><ul class="sources">{sources}</ul></main></body></html>""")
 
 
 def main(argv):
