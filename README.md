@@ -47,6 +47,21 @@ So for every store it finds, the tool runs the real test instead of looking for 
 
 Don't just delete the AAA root. Many legitimate Sectigo sites still chain to it.
 
+### Package managers and custom bundles
+
+Anything that fetches over TLS trusts one of these bundles, so the exposure is wider than browsers:
+pip/uv/poetry use `certifi`, npm/pnpm/yarn use Node's built-in store (upgrade Node to fix it),
+Homebrew and `git`/`curl` use the system OpenSSL bundle, and Go/cargo/apt/dnf use the system roots.
+The tool covers all of these through the bundle and version checks above.
+
+A custom bundle can also be wired in through an env var or config, replacing the system store for
+that tool — so a machine can look clean while its real trust anchor is still compromised. The tool
+reads `SSL_CERT_FILE`, `CURL_CA_BUNDLE`, `NODE_EXTRA_CA_CERTS`, `REQUESTS_CA_BUNDLE`, `AWS_CA_BUNDLE`,
+`GIT_SSL_CAINFO`, `PIP_CERT`, `DENO_CERT`, `CARGO_HTTP_CAINFO`, and the `cafile`/`cert`/`sslCAInfo`
+config of npm, pip, git and yarn, then runs the same chain test on whatever bundle they point at.
+Once a fix ships, the usual patch is to update `ca-certificates` / `certifi` / the JDK and let these
+tools pick it up, rather than maintaining a hand-edited bundle.
+
 ## Adding an advisory
 
 Everything the checks need lives in [`advisories.json`](advisories.json): fixed versions per

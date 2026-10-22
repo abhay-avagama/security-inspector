@@ -3,8 +3,8 @@ import os
 import tarfile
 import tempfile
 
-from secinspect import (ADVISORIES, AAA, INTERMEDIATES, ROOTS, by_branch, chain_accepts, fix_hint, html_report, pem,
-                        roots_in, scan_files, scan_image_tar, version_status)
+from secinspect import (ADVISORIES, AAA, INTERMEDIATES, ROOTS, by_branch, chain_accepts, check_overrides, fix_hint,
+                        html_report, pem, roots_in, scan_files, scan_image_tar, test_bundle, version_status)
 
 PHP = [(8, 5, 12), (8, 4, 27), (8, 3, 36), (8, 2, 35)]
 ADV = {a["name"]: a for a in ADVISORIES["versions"]}
@@ -42,6 +42,23 @@ def test_ca():
     if accepted is not None:  # needs openssl
         assert accepted == list(INTERMEDIATES), accepted
         assert chain_accepts(pem(ROOTS["emSign ECC Root CA - G3"])) == []
+
+
+def test_overrides(monkeypatch=None):
+    with tempfile.TemporaryDirectory() as d:
+        bad = os.path.realpath(f"{d}/custom.pem")
+        gone = os.path.realpath(f"{d}/gone.pem")
+        open(bad, "wb").write(pem(ROOTS[AAA]))
+        os.environ["REQUESTS_CA_BUNDLE"] = bad
+        os.environ["SSL_CERT_FILE"] = gone  # points at a missing file
+        try:
+            rows = check_overrides()
+        finally:
+            del os.environ["REQUESTS_CA_BUNDLE"], os.environ["SSL_CERT_FILE"]
+        by_path = {r[1].split(" (")[0]: r for r in rows}
+        assert by_path[bad][3] == ("AFFECTED" if chain_accepts(pem(ROOTS[AAA])) else "REVIEW"), rows
+        assert "REQUESTS_CA_BUNDLE" in by_path[bad][1]
+        assert by_path[gone][3] == "REVIEW"  # missing bundle flagged, not silently skipped
 
 
 def fake_venv(files):
@@ -94,6 +111,7 @@ def test_docker_image():
 if __name__ == "__main__":
     test_versions()
     test_ca()
+    test_overrides()
     test_scan_files()
     test_docker_image()
     print("ok")

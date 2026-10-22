@@ -316,16 +316,55 @@ def check_os_store():
     return []  # Linux system trust is covered by the extracted bundles in STORES
 
 
-def check_stores():
-    rows = check_os_store()
-    for p in sorted({os.path.realpath(p) for g in STORES for p in glob.glob(g)}):
-        try:
-            data = open(p, "rb").read()
-        except OSError:
+def test_bundle(path, label=None):
+    """One eMudhra row for a PEM bundle on disk, or None if it can't be read."""
+    try:
+        data = open(path, "rb").read()
+    except OSError:
+        return None
+    names = roots_in(data)
+    status, note = store_status(path, names, chain_accepts(data) if names else None)
+    return ("eMudhra CA", label or path, ", ".join(names) or "-", status, note)
+
+
+# CA-bundle overrides: a custom bundle here replaces the system store for that tool, so a machine can
+# look clean while its real trust anchor is still compromised. Env vars read by curl/OpenSSL, Node,
+# Python requests, Git, the AWS SDKs; plus config a tool keeps in its own file.
+CA_ENV_VARS = ["SSL_CERT_FILE", "CURL_CA_BUNDLE", "NODE_EXTRA_CA_CERTS", "REQUESTS_CA_BUNDLE",
+               "AWS_CA_BUNDLE", "GIT_SSL_CAINFO", "PIP_CERT", "DENO_CERT", "CARGO_HTTP_CAINFO"]
+CA_CONFIG_CMDS = {  # tool: argv that prints the configured bundle path (empty/null if unset)
+    "npm": ["npm", "config", "get", "cafile"],
+    "pip": ["pip", "config", "get", "global.cert"],
+    "git": ["git", "config", "--global", "--get", "http.sslCAInfo"],
+    "yarn": ["yarn", "config", "get", "cafile"],
+}
+
+
+def check_overrides():
+    found = {}  # path -> source label, so one custom bundle shared by several tools is tested once
+    for var in CA_ENV_VARS:
+        if os.environ.get(var):
+            found.setdefault(os.path.realpath(os.path.expanduser(os.environ[var])), []).append(f"${var}")
+    for tool, cmd in CA_CONFIG_CMDS.items():
+        if not shutil.which(cmd[0]):
             continue
-        names = roots_in(data)
-        status, note = store_status(p, names, chain_accepts(data) if names else None)
-        rows.append(("eMudhra CA", p, ", ".join(names) or "-", status, note))
+        out = run(*cmd).strip()
+        # tools print their own "unset" marker: npm/yarn "null", pip "ERROR: No such key", git nothing
+        if out and out.lower() not in ("null", "undefined", "none", "") and "error" not in out.lower() and "no such key" not in out.lower():
+            found.setdefault(os.path.realpath(os.path.expanduser(out)), []).append(f"{tool} config")
+    rows = []
+    for path, sources in found.items():
+        label = f"{path} (via {', '.join(sources)})"
+        rows.append(test_bundle(path, label) or ("eMudhra CA", label, "-", "REVIEW", "configured CA bundle is missing or unreadable; the tool may fall back to the system store"))
+    return rows
+
+
+def check_stores():
+    rows = check_os_store() + check_overrides()
+    for p in sorted({os.path.realpath(p) for g in STORES for p in glob.glob(g)}):
+        row = test_bundle(p)
+        if row:
+            rows.append(row)
     return rows
 
 
