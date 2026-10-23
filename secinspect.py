@@ -2,7 +2,7 @@
 """Am I affected? Checks this machine for the issues listed in advisories.json (Oct 2026: PHP,
 Node.js, BIND, LiteLLM, GitLab, eMudhra). Stdlib only. Exit code 1 if anything is affected.
 
-Usage: python3 secinspect.py [dirs ...] [--docker] [--html report.html]
+Usage: python3 secinspect.py [dirs ...] [--docker] [--html report.html] [--no-update-check]
   With no dirs, searches your home folder and system Python paths for envs, lockfiles and CA bundles.
   With dirs, searches only those. Installed programs and system trust stores are always checked.
 """
@@ -22,6 +22,7 @@ import sys
 import tarfile
 import tempfile
 import textwrap
+import urllib.request
 
 HOME = os.path.expanduser("~")
 ADVISORIES = json.load(open(os.path.join(os.path.dirname(os.path.abspath(__file__)), "advisories.json")))
@@ -518,14 +519,62 @@ summary{{cursor:pointer;padding:8px 0;display:flex;gap:8px;align-items:center;fl
 <h2>Advisories checked</h2><ul class="sources">{sources}</ul></main></body></html>""")
 
 
+FEED_URL = "https://cve.now/feed?tech={}&format=json"
+
+
+def _dt(s):
+    return datetime.datetime.fromisoformat(s.replace("Z", "").split("+")[0])
+
+
+def new_cves(items, checked):
+    """CVE ids in a cve.now JSON-feed newer than the 'checked' watermark."""
+    cut = _dt(checked)
+    out = []
+    for it in items:
+        try:
+            if _dt(it["date_modified"]) > cut:
+                out.append(it["id"].split("#")[0])
+        except (KeyError, ValueError):
+            continue  # ponytail: skip malformed items, the feed shape is not ours to trust
+    return out
+
+
+def check_feed_updates(advs, timeout=6):
+    """Best-effort: one 'data may be stale' line per tech with CVEs newer than its watermark.
+
+    Read-only GET of the public cve.now feed; nothing about this machine is sent. Any
+    network/parse error is swallowed so the offline scan never depends on it."""
+    lines = []
+    for adv in advs:
+        slug, checked = adv.get("feed"), adv.get("checked")
+        if not slug or not checked:
+            continue  # no feed slug (e.g. BIND) -> not feed-tracked
+        try:
+            with urllib.request.urlopen(FEED_URL.format(slug), timeout=timeout) as r:
+                items = json.load(r).get("items", [])
+        except Exception:
+            continue
+        fresh = new_cves(items, checked)
+        if fresh:
+            shown = ", ".join(fresh[:5]) + (f" +{len(fresh) - 5} more" if len(fresh) > 5 else "")
+            lines.append(f"{adv['name']}: {len(fresh)} CVE(s) on cve.now newer than {checked[:10]} "
+                         f"({shown}) -- secinspect data may be stale, see cve.now")
+    return lines
+
+
 def main(argv):
     ap = argparse.ArgumentParser(description="Am I affected by the issues in advisories.json?")
     ap.add_argument("dirs", nargs="*", help="search only these folders for Python envs, lockfiles and CA bundles")
     ap.add_argument("--docker", action="store_true", help="also look inside every local Docker image (slow)")
     ap.add_argument("--html", metavar="FILE", help="also write an HTML report")
+    ap.add_argument("--no-update-check", action="store_true",
+                    help="skip the cve.now advisory-freshness check (offline/CI; also $SECINSPECT_NO_UPDATE_CHECK)")
     args = ap.parse_args(argv)
     roots = args.dirs or [HOME, "/usr/local/lib", "/opt/homebrew/lib", *glob.glob("/usr/lib/python3*")]
     print(f"Scanning {', '.join(roots)} for Python envs, lockfiles and CA bundles, give it a minute...", file=sys.stderr)
+    if not (args.no_update_check or os.environ.get("SECINSPECT_NO_UPDATE_CHECK")):
+        for line in check_feed_updates(ADVISORIES["versions"]):
+            print("update: " + line, file=sys.stderr)
     if not OPENSSL:
         print("openssl not found: CA bundles are judged by which roots they hold, not by a chain test", file=sys.stderr)
     rows = [r for adv in ADVISORIES["versions"] for r in check_version(adv)]

@@ -4,7 +4,8 @@ import tarfile
 import tempfile
 
 from secinspect import (ADVISORIES, AAA, INTERMEDIATES, ROOTS, by_branch, chain_accepts, check_overrides, fix_hint,
-                        fix_plan, html_report, pem, roots_in, scan_files, scan_image_tar, test_bundle, version_status)
+                        fix_plan, html_report, new_cves, pem, roots_in, scan_files, scan_image_tar, test_bundle,
+                        version_status)
 
 PHP = [(8, 5, 12), (8, 4, 27), (8, 3, 36), (8, 2, 35)]
 ADV = {a["name"]: a for a in ADVISORIES["versions"]}
@@ -82,6 +83,17 @@ def test_fix_plan():
     assert all(t != "" for _, t, _, _, _ in plan)  # no OK rows leaked in
 
 
+def test_new_cves():
+    items = [
+        {"id": "CVE-2026-99999#2026-10-24T09:00:00.1Z", "date_modified": "2026-10-24T09:00:00.1Z"},  # newer
+        {"id": "CVE-2026-109618", "date_modified": "2026-10-23T00:16:34.627Z"},  # older, already handled
+        {"id": "CVE-2026-88888", "date_modified": "2026-10-23T12:00:00Z"},  # equal to watermark, not newer
+        {"id": "CVE-2026-77777"},  # malformed (no date) -> skipped, must not raise
+    ]
+    assert new_cves(items, "2026-10-23T12:00:00Z") == ["CVE-2026-99999"]
+    assert new_cves(items, "2026-10-25T00:00:00Z") == []  # watermark past everything
+
+
 def fake_venv(files):
     sp = "home/app/.venv/lib/site-packages"
     files.update({
@@ -147,6 +159,7 @@ if __name__ == "__main__":
     test_ca()
     test_overrides()
     test_fix_plan()
+    test_new_cves()
     test_scan_files()
     test_docker_image()
     test_docker_oversized_member_skipped()

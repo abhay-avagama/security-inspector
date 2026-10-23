@@ -3,16 +3,29 @@
 Am I affected? One Python file that checks your machine for the October 2026 PHP, Node.js, BIND,
 LiteLLM, GitLab and eMudhra issues and tells you what to do about each one.
 
-No dependencies, nothing sent anywhere. Python 3.8+ on macOS or Linux (Windows partly, see below).
+No dependencies, and nothing about your machine is sent anywhere. The only network call is an
+optional read-only check of the public cve.now feed (see Staying current; disable with
+`--no-update-check`). Python 3.8+ on macOS or Linux (Windows partly, see below).
 
 ```
 python3 secinspect.py                       # whole machine
 python3 secinspect.py ~/work ~/clients      # only search these folders for envs and bundles
 python3 secinspect.py --docker              # also look inside every local Docker image
 python3 secinspect.py --html report.html    # also write an HTML report
+python3 secinspect.py --no-update-check      # don't phone cve.now (offline/CI)
 ```
 
 Exit code is `1` if anything is affected, so it can fail a CI job.
+
+## Staying current
+
+On every run (unless `--no-update-check` or `SECINSPECT_NO_UPDATE_CHECK` is set) the tool does a
+read-only GET of the public [cve.now](https://cve.now) feed for PHP, Node.js and GitLab and prints a
+one-line notice to stderr if any CVE there is newer than the `checked` watermark in
+[`advisories.json`](advisories.json) — a hint that the bundled data (and the tool's checks) may be
+stale. Nothing about your machine is sent, it only reads the feed; any network error is ignored so
+an offline scan still works, and it never changes the exit code. BIND, LiteLLM and eMudhra aren't
+version-feed technologies, so they aren't tracked this way — refresh them from the vendor advisory.
 
 ## What it checks
 
