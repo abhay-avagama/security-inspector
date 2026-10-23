@@ -1,6 +1,6 @@
-# Security Inspector
+# Am I affected?
 
-Am I affected? One Python file that checks your machine for the October 2026 PHP, Node.js, BIND,
+One Python file that checks your machine for the October 2026 PHP, Node.js, BIND,
 LiteLLM, GitLab and eMudhra issues and tells you what to do about each one.
 
 No dependencies, and nothing about your machine is sent anywhere. The only network call is an

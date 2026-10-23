@@ -489,7 +489,7 @@ def html_report(rows, path):
                       for a in ADVISORIES["versions"] + PACKAGES + [{"name": "eMudhra CA", **ADVISORIES["ca"]}])
     when = datetime.datetime.now().strftime("%d %b %Y, %H:%M")
     open(path, "w").write(f"""<!doctype html><html><head><meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1"><title>Security Inspector Report</title><style>
+<meta name="viewport" content="width=device-width, initial-scale=1"><title>Am I affected? — report</title><style>
 :root{{--bg:#fafaf9;--fg:#1c1917;--muted:#78716c;--card:#fff;--line:#e7e5e4;--bad:#b91c1c;--warn:#b45309;--ok:#15803d;--na:#a8a29e}}
 @media (prefers-color-scheme:dark){{:root{{--bg:#1c1917;--fg:#f5f5f4;--muted:#a8a29e;--card:#292524;--line:#44403c;--bad:#f87171;--warn:#fbbf24;--ok:#4ade80;--na:#78716c}}}}
 body{{margin:0;padding:32px 16px;background:var(--bg);color:var(--fg);font:14px/1.5 system-ui,sans-serif}}
@@ -512,7 +512,7 @@ summary{{cursor:pointer;padding:8px 0;display:flex;gap:8px;align-items:center;fl
 .leaves li{{padding:6px 0;border-bottom:1px solid var(--line)}} .leaves li:last-child{{border-bottom:0}}
 .note{{color:var(--muted);font-size:13px;margin-top:3px}}
 .fix details summary{{color:var(--muted);font-size:12px}} .fix ul{{margin:6px 0 0;padding-left:18px}}
-</style></head><body><main><h1>Security Inspector</h1>
+</style></head><body><main><h1>Am I affected?</h1>
 <p class="sub">{e(platform.node())} · {e(platform.platform())} · {when}</p><div class="stats">{counts}</div>
 {fixhtml}
 <h2>Issues by component</h2>{tree}
