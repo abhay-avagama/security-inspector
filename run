@@ -1,0 +1,10 @@
+#!/bin/sh
+# curl -fsSL https://amiaffected.now/run | sh            (args: ... | sh -s -- --html report.html)
+# Downloads secinspect.py + advisories.json to a temp dir, runs them, cleans up.
+set -e
+d=$(mktemp -d)
+trap 'rm -rf "$d"' EXIT
+for f in secinspect.py advisories.json; do
+  curl -fsSL "https://amiaffected.now/$f" -o "$d/$f"
+done
+python3 "$d/secinspect.py" "$@"

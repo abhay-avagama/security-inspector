@@ -7,6 +7,14 @@ No dependencies, and nothing about your machine is sent anywhere. The only netwo
 optional read-only check of the public cve.now feed (see Staying current; disable with
 `--no-update-check`). Python 3.8+ on macOS or Linux (Windows partly, see below).
 
+Quickest way, without cloning:
+
+```
+curl -fsSL https://amiaffected.now/run | sh                 # options go after: sh -s -- --html report.html
+```
+
+Or from a clone:
+
 ```
 python3 secinspect.py                       # whole machine
 python3 secinspect.py ~/work ~/clients      # only search these folders for envs and bundles
