@@ -1,7 +1,9 @@
 # Am I affected?
 
 One Python file that checks your machine for the October 2026 PHP, Node.js, BIND,
-LiteLLM, GitLab and eMudhra issues and tells you what to do about each one.
+LiteLLM, GitLab and eMudhra issues and tells you what to do about each one. On a Linux VPS it also
+checks the kernel and the usual server software (nginx, Apache, MariaDB, MongoDB, WordPress and
+more) for the bugs being exploited right now.
 
 No dependencies, and nothing about your machine is sent anywhere. The only network call is an
 optional read-only check of the public cve.now feed (see Staying current; disable with
@@ -48,6 +50,32 @@ version-feed technologies, so they aren't tracked this way — refresh them from
 
 With `--docker`, every local image is streamed through `docker save` and the same file checks run
 on each layer (LiteLLM, malware files, lockfiles, CA bundles), without starting a container.
+
+## Servers (Ubuntu, Debian, RHEL family)
+
+On a VPS most software comes from apt or dnf, and the distros fix bugs without changing the
+upstream version: a patched Ubuntu nginx still says 1.24.0. So for these the tool reads
+`/etc/os-release`, asks `dpkg` or `rpm` what is installed, and compares it with the distro's own
+fixed build for that release (Ubuntu 22.04 / 24.04 / 26.04, Debian 12 / 13, RHEL / AlmaLinux /
+Rocky 9 / 10), letting `dpkg` and `rpm` decide which version is newer. Packages from a vendor
+repo (nginx.org, MariaDB, MongoDB, Plex) carry a different upstream version and are checked
+against the upstream fixes instead.
+
+| Issue | How |
+|---|---|
+| **Linux kernel**: CVE-2026-46300, CVE-2026-53266, CVE-2025-39964, CVE-2025-39682 (all CISA KEV) | The *running* kernel, matched to its flavour (generic, HWE, KVM, AWS, Azure, GCP, Oracle). A fix only counts after a reboot. |
+| **Linux kernel**: CVE-2026-98432 (CVSS 9.8, remote over IPv4 TCP) | Same. Ubuntu has announced the fix but not shipped it yet. |
+| **nginx** CVE-2026-15176 and 4 more | Distro or nginx.org package. Fixed upstream in 1.30.6 / 1.31.7. |
+| **Apache httpd** 2.4.69 fixes (CVE-2026-57941 mod_http2 and 4 more) | `apache2` / `httpd`, plus `mod_http2` on RHEL-family systems, where it is a separate package. |
+| **MariaDB** CVE-2026-85746 and 4 more | Distro or MariaDB repo package. |
+| **MongoDB** CVE-2026-82067 (authorization can end up off) and 4 more | `mongodb-org-server`. |
+| **Brotli** CVE-2026-111497 (CISA KEV) | The system library that web servers, curl and PHP use. |
+| **Plex**, **Zammad** (CISA KEV) | Their vendor packages. |
+| **WordPress** CVE-2026-87902 (CISA KEV), CVE-2026-119977 | `wp-includes/version.php` under `/var/www`, `/srv` and `~/public_html`. |
+| **Nextcloud** built-in Collabora CODE, CVE-2026-110447 (CISA KEV) | The `richdocumentscode` app in the same web roots. |
+
+The fix plan gives the `apt` or `dnf` command for each one, and says when a distro hasn't shipped a
+fix yet and what to do in the meantime.
 
 ## The eMudhra check
 
@@ -98,6 +126,10 @@ advisory in `source`.
 - Docker layers compressed with zstd, and files deleted in a later layer are still reported
 - GitLab installs on other machines
 - The Windows store check has not been tested on Windows yet
+- Server checks: other distros (Fedora, Arch, Alpine, SUSE), software in Docker containers, and
+  MySQL (its one high Server CVE this quarter needs a database login and doesn't run code)
+- Rocky Linux builds are assumed to match RHEL's; AlmaLinux sometimes ships an earlier fixed build
+  of its own, which shows up as affected
 
 ## Tests
 

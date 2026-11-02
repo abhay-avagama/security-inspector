@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Am I affected? Checks this machine for the issues listed in advisories.json (Oct 2026: PHP,
-Node.js, BIND, LiteLLM, GitLab, eMudhra). Stdlib only. Exit code 1 if anything is affected.
+Node.js, BIND, LiteLLM, GitLab, eMudhra; on Linux servers also the kernel, nginx, Apache, MariaDB,
+MongoDB, WordPress and more). Stdlib only. Exit code 1 if anything is affected.
 
 Usage: python3 secinspect.py [dirs ...] [--docker] [--html report.html] [--no-update-check]
   With no dirs, searches your home folder and system Python paths for envs, lockfiles and CA bundles.
@@ -78,7 +79,15 @@ def version_status(adv, v):
 
 def check_version(adv):
     name = adv["name"]
-    if "version_file" in adv:
+    if "version_files" in adv:  # apps in web roots (WordPress, Nextcloud apps): one row per install
+        found = []
+        for p in sorted({p for g in adv["version_files"] for p in glob.glob(os.path.expanduser(g))}):
+            try:
+                m = re.search(adv["version_regex"], open(p, errors="replace").read(MAX_READ))
+            except OSError:
+                m = None
+            found.append((os.path.dirname(os.path.dirname(p)), nums(m[1]) if m else None))
+    elif "version_file" in adv:
         found = [(adv["version_file"], ver(open(adv["version_file"]).read()))] if os.path.exists(adv["version_file"]) else []
     else:
         found = [(b, ver(run(b, adv["flag"]))) for b in binaries(adv["binary"], *adv.get("globs", []))]
@@ -86,6 +95,125 @@ def check_version(adv):
         return [(name, "-", "-", "NOT FOUND", adv.get("not_found", ""))]
     return [(name, p, fmt(v) if v else "?", *(version_status(adv, v) if v else ("UNKNOWN", "couldn't read version")))
             for p, v in found]
+
+
+# --- Linux server packages (apt / dnf) ----------------------------------------------------------
+# Distros backport fixes without changing the upstream version (a patched Ubuntu nginx still says
+# 1.24.0), so these compare the installed package against the distro's own fixed build, using
+# dpkg/rpm themselves to order versions. Builds from vendor repos (nginx.org, PGDG, MongoDB, Docker)
+# carry a different upstream version and fall back to the upstream fixed versions.
+
+DISTRO = ADVISORIES.get("distro", [])
+
+
+def os_release(text):
+    """'ubuntu:24.04', 'debian:12', 'el:9' (RHEL, Alma, Rocky, CentOS Stream, Oracle) or None."""
+    d = dict(re.findall(r'^(\w+)="?([^"\n]*)"?$', text, re.M))
+    os_id, like, v = d.get("ID", ""), d.get("ID_LIKE", "").split(), d.get("VERSION_ID", "")
+    if os_id == "ubuntu":
+        return f"ubuntu:{v}"
+    if os_id == "debian" and v:
+        return f"debian:{v.split('.')[0]}"
+    if os_id != "fedora" and {"rhel", "centos"} & {os_id, *like} and v:
+        return f"el:{v.split('.')[0]}"
+    return None
+
+
+def upstream(v):
+    """'1:9.6p1-3ubuntu13.5' -> '9.6p1': drop the epoch and the distro revision."""
+    v = re.sub(r"^\d+:", "", v)
+    return v.rsplit("-", 1)[0] if "-" in v else v
+
+
+def nums(v):
+    return tuple(int(x) for x in re.findall(r"\d+", v))
+
+
+def deb_lt(a, b):
+    return subprocess.run(["dpkg", "--compare-versions", a, "lt", b]).returncode == 0
+
+
+def rpm_lt(a, b):
+    """EVR comparison with rpm's own rpmvercmp, applied to epoch, version and release in turn."""
+    def evr(s):
+        e, _, vr = s.rpartition(":") if ":" in s else ("0", "", s)
+        v, _, r = vr.partition("-")
+        return [e or "0", v, r]
+    for x, y in zip(evr(a), evr(b)):
+        c = run("rpm", "--eval", f'%{{lua:print(rpm.vercmp("{x}", "{y}"))}}').strip()
+        if c != "0":
+            return c == "-1"
+    return False
+
+
+def installed(fam, names):
+    """[(package, version, source package)] for the installed ones."""
+    if fam == "deb":
+        out = run("dpkg-query", "-W", "-f", "${db:Status-Abbrev}\t${Package}\t${Version}\t${source:Package}\n", *names)
+        rows = [l.split("\t") for l in out.splitlines()]
+        return [tuple(r[1:]) for r in rows if len(r) == 4 and r[0].startswith("ii")]
+    out = run("rpm", "-q", "--qf", "%{NAME}\t%|EPOCH?{%{EPOCH}:}:{}|%{VERSION}-%{RELEASE}\t%{NAME}\n", *names)
+    return [tuple(l.split("\t")) for l in out.splitlines() if l.count("\t") == 2]
+
+
+def running_kernel(fam):
+    """(package, version, source) of the kernel actually booted: a fixed one only counts after a reboot."""
+    rel = platform.release()
+    if fam == "deb":
+        owner = run("dpkg-query", "-S", f"/boot/vmlinuz-{rel}").split(": ")[0].split(":")[0].strip()
+        found = installed("deb", [owner]) if owner and " " not in owner else []
+        # linux-signed-hwe-6.8 / linux-signed-amd64 ship the image; the advisory names linux-hwe-6.8 / linux
+        return [(p, v, re.sub(r"-signed(-(amd64|arm64|i386))?", "", s)) for p, v, s in found]
+    out = run("rpm", "-qf", "--qf", "%{NAME}\t%|EPOCH?{%{EPOCH}:}:{}|%{VERSION}-%{RELEASE}\t%{NAME}\n", f"/lib/modules/{rel}/vmlinuz")
+    return [tuple(l.split("\t")) for l in out.splitlines() if l.count("\t") == 2]
+
+
+def distro_status(adv, release, version, source, lt):
+    """Status for one installed package. adv["fixed"][release] is the first fixed build, a
+    {source package: build} map (kernel flavours), "not-affected" or "unfixed"."""
+    fixed = adv.get("fixed", {}).get(release)
+    if isinstance(fixed, dict):
+        fixed = fixed.get(source) or fixed.get("*")
+    ups = [nums(f) for f in adv.get("upstream_fixed", [])]
+    after = (", " + adv["after_fix"]) if adv.get("after_fix") else ""
+    if fixed == "not-affected":
+        return "OK", f"{release} isn't affected"
+    if fixed and fixed != "unfixed" and (not ups or upstream(version) == upstream(fixed)):
+        return ("AFFECTED", f"update to {fixed}+{after}") if lt(version, fixed) else ("OK", "")
+    unfixed = ("AFFECTED", f"no fixed {release} package yet: {adv.get('mitigation', 'watch for the update')}")
+    if ups:  # vendor build, or the distro moved to a new upstream release
+        status, note = by_branch(nums(upstream(version)), ups, adv.get("branch_width", 2))
+        if status == "AFFECTED" and fixed == "unfixed":
+            return unfixed
+        return status, (note + after if status == "AFFECTED" else note)
+    if fixed == "unfixed":
+        return unfixed
+    return "UNKNOWN", f"no fixed version known for {release or 'this distro'}"
+
+
+def check_distro(os_text=None):
+    if os_text is None:
+        try:
+            os_text = open("/etc/os-release").read()
+        except OSError:
+            return []  # not Linux: nothing to say about server packages
+    fam = "deb" if shutil.which("dpkg-query") else "rpm" if shutil.which("rpm") else None
+    release = os_release(os_text)
+    if not fam:
+        return [("Server packages", "-", "-", "UNKNOWN", "only apt (Ubuntu/Debian) and dnf (RHEL family) systems are checked")]
+    lt = deb_lt if fam == "deb" else rpm_lt
+    rows = []
+    for adv in DISTRO:
+        found = running_kernel(fam) if adv.get("kernel") else installed(fam, adv.get(f"{fam}_packages", []))
+        if not found:
+            rows.append((adv["name"], "-", "-", "NOT FOUND", ""))
+            continue
+        # one row per advisory: nginx + nginx-core or mariadb-server + -core are one thing to fix
+        checked = [(pkg, version, *distro_status(adv, release, version, source, lt)) for pkg, version, source in found]
+        worst = min(checked, key=lambda c: STATUSES.index(c[2]))
+        pkgs = " ".join(sorted({c[0] for c in checked}))
+        rows.append((adv["name"], f"{pkgs} ({'apt' if fam == 'deb' else 'dnf'})", worst[1], worst[2], worst[3]))
+    return rows
 
 
 # --- CA bundles ---------------------------------------------------------------------------------
@@ -383,7 +511,7 @@ def check_stores():
 STATUSES = ("AFFECTED", "REVIEW", "UNKNOWN", "OK", "NOT FOUND")
 
 
-def fix_for(item, where):
+def fix_for(item, where, note=""):
     """One (title, command) for an actionable row, or None. Rows with the same command collapse into
     one job in the fix plan, so 15 Node installs or 80 venvs become a single step."""
     w = where.lower()
@@ -422,6 +550,17 @@ def fix_for(item, where):
                 "don't pip install first; delete cook.pth/cook.py/sitecustomize.py, kill the daemon, rebuild pinned to 1.106.2, rotate keys")
     if item == "Docker":
         return ("Rebuild the affected Docker image", "remove the image, rebuild from a patched base, rotate any keys it held")
+    adv = next((a for a in DISTRO if a["name"] == item), None)
+    if adv and where.endswith(("(apt)", "(dnf)")):
+        if note.startswith("no fixed"):  # upgrading won't help yet: the workaround is the job
+            return (f"Work around {item} until your distro ships a fix", adv.get("mitigation", "watch for the update"))
+        if adv.get("kernel"):
+            cmd = "sudo apt update && sudo apt full-upgrade" if where.endswith("(apt)") else "sudo dnf upgrade 'kernel*'"
+            return (f"Update the kernel and reboot ({item})", cmd + " && sudo reboot")
+        pkg = where.rsplit(" (", 1)[0]
+        cmd = (f"sudo apt update && sudo apt install --only-upgrade {pkg}" if where.endswith("(apt)")
+               else f"sudo dnf upgrade {pkg}")
+        return (f"Update {item}" + (f", then {adv['after_fix']}" if adv.get("after_fix") else ""), cmd)
     return None
 
 
@@ -433,10 +572,10 @@ def bundle_count(where):
 def fix_plan(rows):
     """Deduplicated, prioritized actions from AFFECTED/REVIEW rows: [(worst_status, title, command, count, examples)]."""
     groups = {}
-    for item, where, _, status, _ in rows:
+    for item, where, _, status, note in rows:
         if status not in ("AFFECTED", "REVIEW"):
             continue
-        fix = fix_for(item, str(where))
+        fix = fix_for(item, str(where), note or "")
         if not fix:
             continue
         title, command = fix
@@ -486,7 +625,7 @@ def html_report(rows, path):
                  f'<ul class="leaves">{leaves}</ul></details>')
 
     sources = "".join(f'<li><a href="{e(a["source"])}">{e(a["name"])}</a>: {e(a["about"])}</li>'
-                      for a in ADVISORIES["versions"] + PACKAGES + [{"name": "eMudhra CA", **ADVISORIES["ca"]}])
+                      for a in ADVISORIES["versions"] + DISTRO + PACKAGES + [{"name": "eMudhra CA", **ADVISORIES["ca"]}])
     when = datetime.datetime.now().strftime("%d %b %Y, %H:%M")
     open(path, "w").write(f"""<!doctype html><html><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1"><title>Am I affected? — report</title><style>
@@ -526,15 +665,20 @@ def _dt(s):
     return datetime.datetime.fromisoformat(s.replace("Z", "").split("+")[0])
 
 
-def new_cves(items, checked):
-    """CVE ids in a cve.now JSON-feed newer than the 'checked' watermark."""
+def new_cves(items, checked, known=()):
+    """CVE ids in a cve.now JSON-feed changed after the 'checked' watermark that the advisory doesn't
+    already cover. The feed re-lists a CVE whenever its record changes (KEV listing, CVSS rescore),
+    so known ids and ids from before last year are updates, not new issues.
+    ponytail: the year cut can hide a genuinely late old-year CVE; cve.now has no published date to do better."""
     cut = _dt(checked)
     out = []
     for it in items:
         try:
-            if _dt(it["date_modified"]) > cut:
-                out.append(it["id"].split("#")[0])
-        except (KeyError, ValueError):
+            cve = it["id"].split("#")[0]
+            if _dt(it["date_modified"]) > cut and cve not in known and int(cve.split("-")[1]) >= cut.year - 1 \
+                    and cve not in out:
+                out.append(cve)
+        except (KeyError, ValueError, IndexError):
             continue  # ponytail: skip malformed items, the feed shape is not ours to trust
     return out
 
@@ -554,7 +698,7 @@ def check_feed_updates(advs, timeout=6):
                 items = json.load(r).get("items", [])
         except Exception:
             continue
-        fresh = new_cves(items, checked)
+        fresh = new_cves(items, checked, adv.get("cves", ()))
         if fresh:
             shown = ", ".join(fresh[:5]) + (f" +{len(fresh) - 5} more" if len(fresh) > 5 else "")
             lines.append(f"{adv['name']}: {len(fresh)} CVE(s) on cve.now newer than {checked[:10]} "
@@ -577,7 +721,7 @@ def main(argv):
             print("update: " + line, file=sys.stderr)
     if not OPENSSL:
         print("openssl not found: CA bundles are judged by which roots they hold, not by a chain test", file=sys.stderr)
-    rows = [r for adv in ADVISORIES["versions"] for r in check_version(adv)]
+    rows = [r for adv in ADVISORIES["versions"] for r in check_version(adv)] + check_distro()
     rows += scan_files(roots) + check_docker(args.docker) + check_stores()
     widths = [max(len(str(r[i])) for r in rows) for i in range(4)]
     for r in rows:

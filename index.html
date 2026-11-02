@@ -2,7 +2,7 @@
 <html lang="en"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Am I affected?</title>
-<meta name="description" content="One Python file that checks your machine for the October 2026 PHP, Node.js, BIND, LiteLLM, GitLab and eMudhra issues.">
+<meta name="description" content="One Python file that checks your laptop or Linux server for the October 2026 PHP, Node.js, BIND, LiteLLM, GitLab and eMudhra issues, plus exploited kernel, nginx, Apache, database and WordPress bugs.">
 <style>
 :root{--bg:#fbfaf7;--fg:#1c1b19;--muted:#6b675f;--line:#e4e0d8;--code:#f1eee8;--accent:#b4361c}
 @media (prefers-color-scheme:dark){:root{--bg:#161513;--fg:#ece9e3;--muted:#9c978d;--line:#2e2c28;--code:#211f1c;--accent:#f0805f}}
@@ -39,6 +39,16 @@ curl -fsSL https://amiaffected.now/run | sh -s -- ~/work               # only se
 <tr><td>GitLab</td><td>CVE-2026-110264 and 11 more on self-managed Omnibus</td></tr>
 <tr><td>LiteLLM</td><td>The 1.107.0 backdoor: installed copies, lockfiles, malware files and bad Docker image digests</td></tr>
 <tr><td>eMudhra CA</td><td>Whether each trust store (OpenSSL, certifi, Keychain, Java, Firefox, Windows) would accept the cracked intermediates</td></tr>
+</table>
+
+<h2>On a Linux server</h2>
+<p>On Ubuntu, Debian and RHEL/AlmaLinux/Rocky it also checks the running kernel and the usual VPS software against each distro's own fixed packages, so a patched server isn't flagged just because the version number looks old.</p>
+<table>
+<tr><td>Linux kernel</td><td>Four bugs on CISA KEV (CVE-2026-46300 and others) and the remote TCP bug CVE-2026-98432</td></tr>
+<tr><td>Web servers</td><td>nginx (CVE-2026-15176 and more), Apache httpd 2.4.69 fixes incl. mod_http2</td></tr>
+<tr><td>Databases</td><td>MariaDB (CVE-2026-85746 and more), MongoDB (CVE-2026-82067)</td></tr>
+<tr><td>Libraries</td><td>Brotli (CVE-2026-111497, CISA KEV)</td></tr>
+<tr><td>Apps</td><td>WordPress core, Nextcloud's built-in Collabora server, Plex and Zammad (all CISA KEV)</td></tr>
 </table>
 
 <footer>MIT licensed. Source, details and pull requests on <a href="https://github.com/abhay-avagama/security-inspector">GitHub</a>. Newer CVEs are tracked via <a href="https://cve.now">cve.now</a>.</footer>

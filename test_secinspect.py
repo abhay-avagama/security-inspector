@@ -3,9 +3,9 @@ import os
 import tarfile
 import tempfile
 
-from secinspect import (ADVISORIES, AAA, INTERMEDIATES, ROOTS, by_branch, chain_accepts, check_overrides, fix_hint,
-                        fix_plan, html_report, new_cves, pem, roots_in, scan_files, scan_image_tar, test_bundle,
-                        version_status)
+from secinspect import (ADVISORIES, AAA, INTERMEDIATES, ROOTS, by_branch, chain_accepts, check_overrides, distro_status,
+                        fix_hint, fix_plan, html_report, new_cves, nums, os_release, pem, roots_in, scan_files,
+                        scan_image_tar, test_bundle, upstream, version_status)
 
 PHP = [(8, 5, 12), (8, 4, 27), (8, 3, 36), (8, 2, 35)]
 ADV = {a["name"]: a for a in ADVISORIES["versions"]}
@@ -92,6 +92,12 @@ def test_new_cves():
     ]
     assert new_cves(items, "2026-10-23T12:00:00Z") == ["CVE-2026-99999"]
     assert new_cves(items, "2026-10-25T00:00:00Z") == []  # watermark past everything
+    updates = [
+        {"id": "CVE-2026-109618#2026-10-26T00:00:00Z", "date_modified": "2026-10-26T00:00:00Z"},  # KEV update to a covered CVE
+        {"id": "CVE-2023-3932#2026-10-28T00:00:00Z", "date_modified": "2026-10-28T00:00:00Z"},  # old CVE rescored
+        {"id": "CVE-2025-11969#2026-11-02T00:00:00Z", "date_modified": "2026-11-02T00:00:00Z"},  # last year's id, new
+    ]
+    assert new_cves(updates, "2026-10-23T12:00:00Z", ["CVE-2026-109618"]) == ["CVE-2025-11969"]
 
 
 def fake_venv(files):
@@ -154,7 +160,60 @@ def test_docker_oversized_member_skipped():
     assert not any(r[2] == "1.107.0" and "requirements" in r[1] for r in rows), rows
 
 
+def test_distro():
+    # real dpkg/rpm ordering is exercised in containers; a numeric stand-in is enough for the decisions
+    lt = lambda a, b: nums(a) < nums(b)
+    DIST = {a["name"]: a for a in ADVISORIES["distro"]}
+    assert os_release('ID=ubuntu\nVERSION_ID="24.04"') == "ubuntu:24.04"
+    assert os_release('ID="rocky"\nID_LIKE="rhel centos fedora"\nVERSION_ID="9.6"') == "el:9"
+    assert os_release('ID=debian\nVERSION_ID="12"') == "debian:12"
+    assert os_release('ID=fedora\nID_LIKE=""\nVERSION_ID=41') is None
+    assert upstream("1:9.6p1-3ubuntu13.5") == "9.6p1" and upstream("8.0.15") == "8.0.15"
+    st = lambda name, rel, v, src="": distro_status(DIST[name], rel, v, src, lt)[0]
+    # distro backport: same upstream base, compare the build
+    assert st("nginx", "ubuntu:24.04", "1.24.0-2ubuntu7.5") == "AFFECTED"
+    assert st("nginx", "ubuntu:24.04", "1.24.0-2ubuntu7.19") == "OK"
+    # nginx.org build on the same box: upstream rule
+    assert st("nginx", "ubuntu:24.04", "1.30.5-1~noble") == "AFFECTED"
+    assert st("nginx", "ubuntu:24.04", "1.30.6-1~noble") == "OK"
+    # no distro fix yet: say so, but a fixed vendor build is still OK
+    assert "no fixed" in distro_status(DIST["nginx"], "debian:12", "1.22.1-9+deb12u10", "", lt)[1]
+    assert st("nginx", "el:9", "1:1.31.7-1.el9.ngx") == "OK"
+    # vendor-only software
+    assert st("MongoDB", None, "8.0.31") == "AFFECTED" and st("MongoDB", "ubuntu:24.04", "8.0.32") == "OK"
+    assert st("Plex Media Server", "debian:12", "1.42.9.1000-abc") == "AFFECTED"
+    # kernels: flavour from the source package, unknown flavour is UNKNOWN, Ubuntu remote bug unfixed
+    k = "Linux kernel (exploited)"
+    assert st(k, "ubuntu:24.04", "6.8.0-87.88", "linux") == "AFFECTED"
+    assert st(k, "ubuntu:24.04", "6.8.0-146.146", "linux") == "OK"
+    assert st(k, "ubuntu:22.04", "6.8.0-124.124~22.04.1", "linux-hwe-6.8") == "AFFECTED"  # unfixed flavour
+    assert st(k, "ubuntu:24.04", "6.8.0-1.1", "linux-lowlatency-weird") == "UNKNOWN"
+    assert st(k, "debian:12", "6.1.158-1") == "AFFECTED" and st(k, "debian:12", "6.1.176-1") == "OK"
+    assert st("Linux kernel (remote TCP)", "ubuntu:24.04", "6.8.0-146.146", "linux") == "AFFECTED"
+    assert st("Linux kernel (remote TCP)", "el:9", "5.14.0-687.64.1.el9_8") == "OK"
+    # fix plan: one apt/dnf command per advisory, kernel reboots
+    plan = fix_plan([("nginx", "nginx nginx-core (apt)", "1", "AFFECTED", ""), (k, "kernel-core (dnf)", "1", "AFFECTED", "")])
+    assert any("apt install --only-upgrade nginx nginx-core" in p[2] for p in plan)
+    assert any("reboot" in p[2] and "dnf" in p[2] for p in plan)
+    plan = fix_plan([("nginx", "nginx (dnf)", "1", "AFFECTED", "no fixed el:9 package yet: ...")])
+    assert plan[0][2] == DIST["nginx"]["mitigation"], plan
+
+
+def test_web_apps():
+    from secinspect import check_version
+    ADV_WP = dict(ADV["WordPress"])
+    with tempfile.TemporaryDirectory() as d:
+        for site, v in (("old", "7.1.3"), ("new", "7.1.4"), ("ancient", "4.6")):
+            os.makedirs(f"{d}/{site}/wp-includes")
+            open(f"{d}/{site}/wp-includes/version.php", "w").write(f"<?php\n$wp_version = '{v}';\n")
+        ADV_WP["version_files"] = [f"{d}/*/wp-includes/version.php"]
+        got = {os.path.basename(r[1]): r[3] for r in check_version(ADV_WP)}
+    assert got == {"old": "AFFECTED", "new": "OK", "ancient": "AFFECTED"}, got
+
+
 if __name__ == "__main__":
+    test_distro()
+    test_web_apps()
     test_versions()
     test_ca()
     test_overrides()

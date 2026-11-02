@@ -2,8 +2,12 @@
   "versions": [
     {
       "name": "PHP",
-      "about": "CVE-2026-109618, CVE-2026-109619 (PHP2Shell): unauthenticated RCE",
+      "about": "CVE-2026-109618, CVE-2026-109619 (PHP2Shell): unauthenticated RCE, exploited in the wild (CISA KEV)",
       "source": "https://nvd.nist.gov/vuln/detail/cve-2026-109618",
+      "cves": [
+        "CVE-2026-109618",
+        "CVE-2026-109619"
+      ],
       "binary": "php",
       "flag": "-v",
       "globs": [
@@ -26,6 +30,23 @@
       "name": "Node.js",
       "about": "Oct 21 2026 release: 10 CVEs incl. CVE-2026-111497 (Brotli RCE); also refreshes Node's bundled CA store for eMudhra",
       "source": "https://nodejs.org/en/blog/vulnerability/october-2026-security-releases",
+      "cves": [
+        "CVE-2026-105481",
+        "CVE-2026-105482",
+        "CVE-2026-105483",
+        "CVE-2026-106069",
+        "CVE-2026-106070",
+        "CVE-2026-106071",
+        "CVE-2026-106072",
+        "CVE-2026-106073",
+        "CVE-2026-106074",
+        "CVE-2026-111497",
+        "CVE-2026-21715",
+        "CVE-2026-48618",
+        "CVE-2026-48930",
+        "CVE-2026-48931",
+        "CVE-2026-58043"
+      ],
       "binary": "node",
       "flag": "-v",
       "globs": [
@@ -47,6 +68,9 @@
       "name": "BIND",
       "about": "CVE-2026-94300: GSS-TSIG replay can corrupt memory in named",
       "source": "https://kb.isc.org/docs/cve-2026-94300",
+      "cves": [
+        "CVE-2026-94300"
+      ],
       "binary": "named",
       "flag": "-v",
       "globs": [
@@ -73,8 +97,23 @@
     },
     {
       "name": "GitLab",
-      "about": "CVE-2026-110264 (CVSS 10.0, regex compiler RCE, affects everything from 7.0) + 11 more",
+      "about": "CVE-2026-110264 (CVSS 10.0, regex compiler RCE, affects everything from 7.0) + 11 more; the fixed versions also cover the exploited CVE-2026-97229 (CISA KEV, public Metasploit module)",
       "source": "https://docs.gitlab.com/releases/patches/patch-release-gitlab-19-5-1-released/",
+      "cves": [
+        "CVE-2026-110264",
+        "CVE-2026-103515",
+        "CVE-2026-105711",
+        "CVE-2026-105777",
+        "CVE-2026-112212",
+        "CVE-2026-112326",
+        "CVE-2026-112378",
+        "CVE-2026-12664",
+        "CVE-2026-13319",
+        "CVE-2026-14288",
+        "CVE-2026-15723",
+        "CVE-2026-16255",
+        "CVE-2026-97229"
+      ],
       "version_file": "/opt/gitlab/embedded/service/gitlab-rails/VERSION",
       "not_found": "self-managed only; GitLab.com is already patched",
       "fixed": [
@@ -89,6 +128,88 @@
       "branch_width": 2,
       "feed": "gitlab",
       "checked": "2026-10-23T12:00:00Z"
+    },
+    {
+      "name": "WordPress",
+      "about": "CVE-2026-87902 (CISA KEV) and CVE-2026-119977: unauthenticated remote code execution in core",
+      "source": "https://wordpress.org/news/2026/10/wordpress-7-1-4/",
+      "cves": [
+        "CVE-2026-87902",
+        "CVE-2026-119977"
+      ],
+      "version_files": [
+        "/var/www/*/wp-includes/version.php",
+        "/var/www/*/*/wp-includes/version.php",
+        "/srv/*/wp-includes/version.php",
+        "/srv/*/*/wp-includes/version.php",
+        "/home/*/public_html/wp-includes/version.php",
+        "/home/*/*/public_html/wp-includes/version.php",
+        "/usr/share/wordpress/wp-includes/version.php"
+      ],
+      "version_regex": "\\$wp_version\\s*=\\s*'([^']+)'",
+      "fixed": [
+        "7.1.4",
+        "7.0.8",
+        "6.9.11",
+        "6.8.12",
+        "6.7.11",
+        "6.6.11",
+        "6.5.14",
+        "6.4.14",
+        "6.3.14",
+        "6.2.15",
+        "6.1.16",
+        "6.0.18",
+        "5.9.20",
+        "5.8.19",
+        "5.7.21",
+        "5.6.23",
+        "5.5.24",
+        "5.4.25",
+        "5.3.27",
+        "5.2.30",
+        "5.1.28",
+        "5.0.31",
+        "4.9.35",
+        "4.8.34",
+        "4.7.39"
+      ],
+      "branch_width": 2,
+      "after_fix": "block PHP under wp-content/upgrade/ while upgrading, then check for unknown plugins and admin users",
+      "not_found": "no WordPress found in /var/www, /srv or ~/public_html"
+    },
+    {
+      "name": "Nextcloud Collabora CODE",
+      "about": "CVE-2026-110447 (CISA KEV): unauthenticated command injection in the built-in CODE server app (richdocumentscode)",
+      "source": "https://help.nextcloud.com/t/to-collabora-built-in-user-update-asap/250516",
+      "cves": [
+        "CVE-2026-110447"
+      ],
+      "version_files": [
+        "/var/www/*/apps/richdocumentscode*/appinfo/info.xml",
+        "/var/www/*/custom_apps/richdocumentscode*/appinfo/info.xml",
+        "/var/www/*/*/apps/richdocumentscode*/appinfo/info.xml",
+        "/var/www/*/*/custom_apps/richdocumentscode*/appinfo/info.xml",
+        "/srv/*/apps/richdocumentscode*/appinfo/info.xml",
+        "/srv/*/custom_apps/richdocumentscode*/appinfo/info.xml",
+        "/srv/*/*/apps/richdocumentscode*/appinfo/info.xml",
+        "/srv/*/*/custom_apps/richdocumentscode*/appinfo/info.xml",
+        "/home/*/public_html/apps/richdocumentscode*/appinfo/info.xml",
+        "/home/*/public_html/custom_apps/richdocumentscode*/appinfo/info.xml",
+        "/home/*/*/public_html/apps/richdocumentscode*/appinfo/info.xml",
+        "/home/*/*/public_html/custom_apps/richdocumentscode*/appinfo/info.xml",
+        "/var/www/html/nextcloud/apps/richdocumentscode*/appinfo/info.xml",
+        "/var/www/html/nextcloud/custom_apps/richdocumentscode*/appinfo/info.xml",
+        "/snap/nextcloud/current/htdocs/apps/richdocumentscode*/appinfo/info.xml",
+        "/snap/nextcloud/current/htdocs/custom_apps/richdocumentscode*/appinfo/info.xml"
+      ],
+      "version_regex": "<version>([^<]+)</version>",
+      "fixed": [
+        "26.4.303"
+      ],
+      "branch_width": 0,
+      "after_fix": "occ app:update richdocumentscode",
+      "not_found": "no Nextcloud built-in CODE app found"
     }
   ],
   "packages": [
@@ -149,5 +270,314 @@
         "der": "MIIDzTCCArWgAwIBAgIRANj4aF5PK9nYJAKoWhwetzEwDQYJKoZIhvcNAQELBQAwezELMAkGA1UEBhMCR0IxGzAZBgNVBAgMEkdyZWF0ZXIgTWFuY2hlc3RlcjEQMA4GA1UEBwwHU2FsZm9yZDEaMBgGA1UECgwRQ29tb2RvIENBIExpbWl0ZWQxITAfBgNVBAMMGEFBQSBDZXJ0aWZpY2F0ZSBTZXJ2aWNlczAeFw0yNTA1MTQwMDAwMDBaFw0yODEyMzEyMzU5NTlaMD8xCzAJBgNVBAYTAk5MMRMwEQYDVQQKDAplTXVkaHJhIEJWMRswGQYDVQQDDBJFTSBFViBUTFMgQ0EgLSBHM0IwdjAQBgcqhkjOPQIBBgUrgQQAIgNiAAQl26haZNOX2gsQUunqVG5Ie+/qnJ2daKDF6tz+73Wmm7XW/AH0K/vKbrQLzWTAdn42/9Bdl6gTxaoMbJUw55z18IZkaPE4BkIKpchRhAseJSVA55DktlTDhS7WSvHoZX2jggE0MIIBMDAfBgNVHSMEGDAWgBSgEQojPpbxB+zirynvgqV/0DCktDAdBgNVHQ4EFgQUPtwg2YlGmId7hz/YgUeyXBXYRwYwDgYDVR0PAQH/BAQDAgEGMBIGA1UdEwEB/wQIMAYBAf8CAQAwHQYDVR0lBBYwFAYIKwYBBQUHAwEGCCsGAQUFBwMCMDAGA1UdIAQpMCcwBwYFZ4EMAQEwDQYLKwYBBAGDjiEBAAEwDQYLKwYBBAGDjiEBAngwQwYDVR0fBDwwOjA4oDagNIYyaHR0cDovL2NybC5jb21vZG9jYS5jb20vQUFBQ2VydGlmaWNhdGVTZXJ2aWNlcy5jcmwwNAYIKwYBBQUHAQEEKDAmMCQGCCsGAQUFBzABhhhodHRwOi8vb2NzcC5jb21vZG9jYS5jb20wDQYJKoZIhvcNAQELBQADggEBAJNFuAFW9Gnw/8+kCO4KIlZdnM1Sh2u+8cK0EYAHhXpb5FlGvYkcARigo5oS7VoM7FOYlTueV6yICZKNAYawZPJPhNCGK+rp3cQBEz6d0n8OZEYZov9lb3ll8ORgSDufFVIW6Gagg/UnOamLBTOR8eD5V73SCme/B2cHUDw+m5E8cc+0Ujzz3Cn3ex5JrhXk2T3s8PoVzEmhTgGboFfcWO1EYhPPrYwdxPYRQIXAXUXhLEOVNL9ASbZJLFI8E1IMm7NwxVN2s38jWpaCUaaF0tg7hfiy7oe13rzJfHsdqldJVTTUTPWVx8TC4ju0VLetbAlwhwFT6AP8uIVMGUHNw24="
       }
     ]
-  }
+  },
+  "distro": [
+    {
+      "name": "Linux kernel (exploited)",
+      "about": "CVE-2026-46300, CVE-2026-53266, CVE-2025-39964, CVE-2025-39682: four kernel bugs on CISA KEV that let a local user or a web shell become root",
+      "source": "https://ubuntu.com/security/CVE-2026-46300",
+      "cves": [
+        "CVE-2026-46300",
+        "CVE-2026-53266",
+        "CVE-2025-39964",
+        "CVE-2025-39682"
+      ],
+      "kernel": true,
+      "fixed": {
+        "ubuntu:22.04": {
+          "linux": "5.15.0-198.208",
+          "linux-hwe-6.8": "unfixed",
+          "linux-kvm": "5.15.0-1109.114",
+          "linux-aws": "5.15.0-1117.124",
+          "linux-azure": "5.15.0-1123.132",
+          "linux-gcp": "5.15.0-1118.128",
+          "linux-oracle": "5.15.0-1114.120"
+        },
+        "ubuntu:24.04": {
+          "linux": "6.8.0-146.146",
+          "linux-hwe-6.17": "unfixed",
+          "linux-hwe-7.0": "7.0.0-31.31~24.04.1",
+          "linux-aws": "6.8.0-1066.69",
+          "linux-azure": "6.8.0-1070.78",
+          "linux-gcp": "6.8.0-1070.78",
+          "linux-oracle": "6.8.0-1063.66"
+        },
+        "ubuntu:26.04": {
+          "linux": "7.0.0-31.31",
+          "linux-aws": "7.0.0-1012.12",
+          "linux-azure": "7.0.0-1014.14",
+          "linux-gcp": "7.0.0-1011.11",
+          "linux-oracle": "7.0.0-1011.11"
+        },
+        "debian:12": "6.1.176-1",
+        "debian:13": "6.12.94-1",
+        "el:9": "5.14.0-687.50.1.el9_8",
+        "el:10": "6.12.0-211.59.1.el10_2"
+      },
+      "after_fix": "reboot into it (AlmaLinux's own ALSA-2026:A009/A010 builds also fix CVE-2026-46300)",
+      "mitigation": "no fixed build for this kernel flavour yet; the release's main 'linux' kernel is fixed, consider switching to it"
+    },
+    {
+      "name": "Linux kernel (remote TCP)",
+      "about": "CVE-2026-98432 (CVSS 9.8): timed IPv4 TCP connections trigger a use-after-free, crashing the server or worse; reachable through any open port",
+      "source": "https://access.redhat.com/security/cve/CVE-2026-98432",
+      "cves": [
+        "CVE-2026-98432"
+      ],
+      "kernel": true,
+      "fixed": {
+        "ubuntu:22.04": {
+          "*": "unfixed"
+        },
+        "ubuntu:24.04": {
+          "*": "unfixed"
+        },
+        "ubuntu:26.04": {
+          "*": "unfixed"
+        },
+        "debian:12": "6.1.190-1",
+        "debian:13": "6.12.113-1",
+        "el:9": "5.14.0-687.64.1.el9_8",
+        "el:10": "6.12.0-211.72.1.el10_2"
+      },
+      "after_fix": "reboot into it",
+      "mitigation": "Ubuntu has announced fixed builds (linux 5.15.0-203.213 / 6.8.0-149.149 / 7.0.0-43.43) but not released them yet: update and reboot as soon as they land"
+    },
+    {
+      "name": "nginx",
+      "about": "CVE-2026-15176, -97205, -93479 (CVSS 8.1): crafted requests overflow worker memory with alias+rewrite, SSI+aio or regex map configs",
+      "source": "https://nginx.org/en/security_advisories.html",
+      "cves": [
+        "CVE-2026-15176",
+        "CVE-2026-97205",
+        "CVE-2026-93479",
+        "CVE-2026-97629",
+        "CVE-2026-95101"
+      ],
+      "deb_packages": [
+        "nginx",
+        "nginx-core",
+        "nginx-full",
+        "nginx-light",
+        "nginx-extras"
+      ],
+      "rpm_packages": [
+        "nginx",
+        "nginx-core"
+      ],
+      "upstream_fixed": [
+        "1.31.7",
+        "1.30.6"
+      ],
+      "branch_width": 2,
+      "fixed": {
+        "ubuntu:22.04": "1.18.0-6ubuntu14.22",
+        "ubuntu:24.04": "1.24.0-2ubuntu7.19",
+        "ubuntu:26.04": "1.28.3-2ubuntu1.12",
+        "debian:12": "unfixed",
+        "debian:13": "1.26.3-3+deb13u10",
+        "el:9": "unfixed",
+        "el:10": "unfixed"
+      },
+      "after_fix": "restart nginx",
+      "mitigation": "check the config for alias+rewrite with $request_filename, SSI 'include virtual' with aio, and regex map captures; or use nginx.org's packages (1.30.6+)"
+    },
+    {
+      "name": "Apache httpd",
+      "about": "CVE-2026-57941 (CVSS 9.8 CISA) mod_http2 use-after-free plus 4 more fixed in 2.4.69",
+      "source": "https://httpd.apache.org/security/vulnerabilities_24.html",
+      "cves": [
+        "CVE-2026-57941",
+        "CVE-2026-63292",
+        "CVE-2026-56154",
+        "CVE-2026-56153",
+        "CVE-2026-63718"
+      ],
+      "deb_packages": [
+        "apache2",
+        "apache2-bin"
+      ],
+      "rpm_packages": [
+        "httpd",
+        "httpd-core"
+      ],
+      "upstream_fixed": [
+        "2.4.69"
+      ],
+      "branch_width": 2,
+      "fixed": {
+        "ubuntu:22.04": "2.4.52-1ubuntu4.25",
+        "ubuntu:24.04": "2.4.58-1ubuntu8.17",
+        "ubuntu:26.04": "2.4.66-2ubuntu2.6",
+        "debian:12": "unfixed",
+        "debian:13": "2.4.69-1~deb13u1",
+        "el:9": "2.4.62-13.el9_8.9",
+        "el:10": "2.4.63-13.el10_2.8"
+      },
+      "after_fix": "restart apache2/httpd",
+      "mitigation": "turn HTTP/2 off ('Protocols http/1.1') until the update ships"
+    },
+    {
+      "name": "Apache mod_http2",
+      "about": "CVE-2026-57941: RHEL-family servers get HTTP/2 from the separate mod_http2 package, still unfixed",
+      "source": "https://access.redhat.com/security/cve/CVE-2026-57941",
+      "cves": [
+        "CVE-2026-57941"
+      ],
+      "deb_packages": [],
+      "rpm_packages": [
+        "mod_http2"
+      ],
+      "fixed": {
+        "el:9": "unfixed",
+        "el:10": "unfixed"
+      },
+      "after_fix": "restart httpd",
+      "mitigation": "turn HTTP/2 off ('Protocols http/1.1'); AlmaLinux may already ship a fixed build, check its errata"
+    },
+    {
+      "name": "MariaDB",
+      "about": "CVE-2026-85746, -92262, -85748 (CVSS 9.9) and more: any logged-in user can corrupt server memory, reach files or escalate privileges",
+      "source": "https://github.com/MariaDB/server/security/advisories/GHSA-8fvj-c57c-pggx",
+      "cves": [
+        "CVE-2026-85746",
+        "CVE-2026-92262",
+        "CVE-2026-97380",
+        "CVE-2026-85748",
+        "CVE-2026-102523"
+      ],
+      "deb_packages": [
+        "mariadb-server",
+        "mariadb-server-core",
+        "mariadb-server-10.6",
+        "mariadb-server-core-10.6"
+      ],
+      "rpm_packages": [
+        "mariadb-server",
+        "mariadb11.8-server",
+        "MariaDB-server"
+      ],
+      "upstream_fixed": [
+        "10.6.28",
+        "10.11.19",
+        "11.4.13",
+        "11.8.9",
+        "12.3.3",
+        "13.0.2"
+      ],
+      "branch_width": 2,
+      "fixed": {
+        "ubuntu:22.04": "unfixed",
+        "ubuntu:24.04": "unfixed",
+        "ubuntu:26.04": "unfixed",
+        "debian:13": "unfixed",
+        "el:9": "unfixed",
+        "el:10": "unfixed"
+      },
+      "after_fix": "restart mariadb",
+      "mitigation": "limit database accounts to trusted apps, or use MariaDB's own repo (10.6.28 / 10.11.19 / 11.4.13 / 11.8.9+)"
+    },
+    {
+      "name": "MongoDB",
+      "about": "CVE-2026-82067 (CVSS 9.2): a config validation bug can leave authorization off, so anyone reaching the port is admin; plus 4 more",
+      "source": "https://cve.now/CVE-2026-82067",
+      "cves": [
+        "CVE-2026-82067",
+        "CVE-2026-89099",
+        "CVE-2026-82074",
+        "CVE-2026-82070",
+        "CVE-2026-82053"
+      ],
+      "deb_packages": [
+        "mongodb-org-server"
+      ],
+      "rpm_packages": [
+        "mongodb-org-server"
+      ],
+      "upstream_fixed": [
+        "7.0.43",
+        "8.0.32",
+        "8.3.11",
+        "9.0.1"
+      ],
+      "branch_width": 2,
+      "after_fix": "restart mongod (and mongos)"
+    },
+    {
+      "name": "Brotli",
+      "about": "CVE-2026-111497 (CISA KEV): crafted Brotli data overflows the decoder in anything that decompresses it (web servers, curl, PHP)",
+      "source": "https://github.com/google/brotli/releases/tag/v1.2.1",
+      "cves": [
+        "CVE-2026-111497"
+      ],
+      "deb_packages": [
+        "libbrotli1",
+        "brotli",
+        "python3-brotli"
+      ],
+      "rpm_packages": [
+        "brotli",
+        "libbrotli",
+        "python3-brotli"
+      ],
+      "upstream_fixed": [
+        "1.0.10",
+        "1.1.1",
+        "1.2.1"
+      ],
+      "branch_width": 2,
+      "fixed": {
+        "ubuntu:22.04": "1.0.9-2ubuntu0.1",
+        "ubuntu:24.04": "1.1.0-2ubuntu0.1",
+        "ubuntu:26.04": "1.2.0-3ubuntu0.1",
+        "debian:12": "1.0.9-2+deb12u1",
+        "debian:13": "1.1.0-2+deb13u1",
+        "el:9": "1.0.9-10.el9_8.1",
+        "el:10": "1.1.0-8.el10_2.1"
+      },
+      "after_fix": "restart services that use it (needrestart, or reboot)"
+    },
+    {
+      "name": "Plex Media Server",
+      "about": "CVE-2026-96652 and 3 more (CISA KEV): chained SSRF and file write lead to code execution on the host",
+      "source": "https://forums.plex.tv/t/important-security-update-for-plex-media-server-v1-43-2-and-earlier/942319",
+      "cves": [
+        "CVE-2026-96652",
+        "CVE-2026-96654",
+        "CVE-2026-96655",
+        "CVE-2026-96656"
+      ],
+      "deb_packages": [
+        "plexmediaserver"
+      ],
+      "rpm_packages": [
+        "plexmediaserver"
+      ],
+      "upstream_fixed": [
+        "1.43.3.10861"
+      ],
+      "branch_width": 0,
+      "after_fix": "restart plexmediaserver"
+    },
+    {
+      "name": "Zammad",
+      "about": "CVE-2026-102489, -102490 (CISA KEV): session fixation to RCE, chained with root escalation in the packages",
+      "source": "https://zammad.com/en/advisories/cve-2026-102489-cve-2026-102490",
+      "cves": [
+        "CVE-2026-102489",
+        "CVE-2026-102490"
+      ],
+      "deb_packages": [
+        "zammad"
+      ],
+      "rpm_packages": [
+        "zammad"
+      ],
+      "upstream_fixed": [
+        "7.2.2"
+      ],
+      "branch_width": 0,
+      "after_fix": "check systemctl status zammad"
+    }
+  ]
 }
