@@ -137,4 +137,6 @@ advisory in `source`.
 python3 test_secinspect.py
 ```
 
-Built and maintained by [Avagama Consulting](https://avagama.co). MIT licensed.
+Built and maintained by [Avagama Consulting](https://avagama.co), who also do fixed-scope
+[security reviews](https://avagama.co/services/) of agents, MCP servers and the machines they run on.
+MIT licensed.
