@@ -137,4 +137,4 @@ advisory in `source`.
 python3 test_secinspect.py
 ```
 
-MIT licensed.
+Built and maintained by [Avagama Consulting](https://avagama.co). MIT licensed.
