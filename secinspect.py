@@ -148,6 +148,8 @@ def rpm_lt(a, b):
 
 def installed(fam, names):
     """[(package, version, source package)] for the installed ones."""
+    if not names:
+        return []  # dpkg-query/rpm with no names list every package
     if fam == "deb":
         out = run("dpkg-query", "-W", "-f", "${db:Status-Abbrev}\t${Package}\t${Version}\t${source:Package}\n", *names)
         rows = [l.split("\t") for l in out.splitlines()]
@@ -204,6 +206,8 @@ def check_distro(os_text=None):
     lt = deb_lt if fam == "deb" else rpm_lt
     rows = []
     for adv in DISTRO:
+        if not adv.get("kernel") and not adv.get(f"{fam}_packages"):
+            continue  # e.g. mod_http2 is its own package only on RHEL; apache2 covers it on Debian
         found = running_kernel(fam) if adv.get("kernel") else installed(fam, adv.get(f"{fam}_packages", []))
         if not found:
             rows.append((adv["name"], "-", "-", "NOT FOUND", ""))

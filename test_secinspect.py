@@ -3,7 +3,7 @@ import os
 import tarfile
 import tempfile
 
-from secinspect import (ADVISORIES, AAA, INTERMEDIATES, ROOTS, by_branch, chain_accepts, check_overrides, distro_status,
+from secinspect import (ADVISORIES, AAA, INTERMEDIATES, ROOTS, by_branch, chain_accepts, check_overrides, distro_status, installed,
                         fix_hint, fix_plan, html_report, new_cves, nums, os_release, pem, roots_in, scan_files,
                         scan_image_tar, test_bundle, upstream, version_status)
 
@@ -163,6 +163,7 @@ def test_docker_oversized_member_skipped():
 def test_distro():
     # real dpkg/rpm ordering is exercised in containers; a numeric stand-in is enough for the decisions
     lt = lambda a, b: nums(a) < nums(b)
+    assert installed("deb", []) == installed("rpm", []) == []
     DIST = {a["name"]: a for a in ADVISORIES["distro"]}
     assert os_release('ID=ubuntu\nVERSION_ID="24.04"') == "ubuntu:24.04"
     assert os_release('ID="rocky"\nID_LIKE="rhel centos fedora"\nVERSION_ID="9.6"') == "el:9"
