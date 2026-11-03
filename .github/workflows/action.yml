@@ -1,0 +1,33 @@
+name: action self-test and v1 tag
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+permissions:
+  contents: write
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: python3 test_secinspect.py
+      - name: Make a fixture repo with a backdoored pin and an archived MCP server
+        run: |
+          mkdir -p "$RUNNER_TEMP/fixture"
+          echo "litellm==1.107.0" > "$RUNNER_TEMP/fixture/requirements.txt"
+          echo '{"mcpServers": {"b": {"command": "npx", "args": ["-y", "@modelcontextprotocol/server-puppeteer"]}}}' > "$RUNNER_TEMP/fixture/.mcp.json"
+      - name: The action on a fixture repo that should fail
+        id: bad
+        uses: ./
+        continue-on-error: true
+        with:
+          path: ${{ runner.temp }}/fixture
+      - name: Check it failed for the right reason
+        run: |
+          test "${{ steps.bad.outcome }}" = "success" && { echo "expected the fixture to fail"; exit 1; } || true
+      - name: The action on this repo, report only
+        uses: ./
+        with:
+          fail-on: never
+      # @v1 always points at the newest tested main, so users get new advisories without changing their workflow
+      - run: git tag -f v1 && git push -f origin v1

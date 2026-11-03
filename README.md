@@ -61,6 +61,24 @@ version-feed technologies, so they aren't tracked this way — refresh them from
 With `--docker`, every local image is streamed through `docker save` and the same file checks run
 on each layer (LiteLLM, malware files, lockfiles, CA bundles), without starting a container.
 
+## GitHub Action
+
+Check every push for backdoored or vulnerable pinned packages (Python and npm lockfiles), archived or
+unpinned MCP servers, risky agent skills and `.env` files in agent folders:
+
+```yaml
+- uses: actions/checkout@v4
+- uses: abhay-avagama/security-inspector@v1
+  with:
+    fail-on: affected   # or: review, never
+```
+
+It runs with `--files-only`, so only the repository is judged, not the runner's own Chrome or Node. It uses
+the action's pinned copy of the tool (no `curl | sh`), writes a summary on the run page, and sends nothing
+anywhere. `@v1` moves to each tested release, so new advisories arrive without changing your workflow.
+Inputs: `path` (default `.`), `fail-on`, `docker: true` to also check images built earlier in the job,
+`html` for a report file.
+
 ## AI agent setup
 
 Coding agents (Claude Code, Codex, Cursor, Gemini) and their MCP servers run as you, so anything they

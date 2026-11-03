@@ -1,0 +1,55 @@
+name: Am I affected? security check
+description: Checks a repository for backdoored or vulnerable pinned packages, risky agent skills and MCP configs, and .env files where agents work. Offline; nothing is sent.
+author: Avagama Consulting
+branding:
+  icon: shield
+  color: blue
+inputs:
+  path:
+    description: Folder to check
+    default: "."
+  fail-on:
+    description: "affected (default): fail on AFFECTED findings; review: also fail on REVIEW findings; never: report only"
+    default: affected
+  docker:
+    description: "true to also check Docker images built earlier in the job"
+    default: "false"
+  html:
+    description: Optional path for an HTML report (upload it with actions/upload-artifact)
+    default: ""
+runs:
+  using: composite
+  steps:
+    - shell: bash
+      env:
+        SCAN_PATH: ${{ inputs.path }}
+        FAIL_ON: ${{ inputs.fail-on }}
+        DOCKER: ${{ inputs.docker }}
+        HTML: ${{ inputs.html }}
+      run: |
+        set +e
+        out="$RUNNER_TEMP/amiaffected.txt"
+        args=(--files-only)
+        [ "$DOCKER" = "true" ] && args+=(--docker)
+        [ -n "$HTML" ] && args+=(--html "$HTML")
+        # the action's own pinned copy of the tool and its data, no curl | sh
+        python3 "$GITHUB_ACTION_PATH/secinspect.py" "${args[@]}" "$SCAN_PATH" > "$out"
+        code=$?
+        cat "$out"
+        affected=$(grep -c '  AFFECTED  ' "$out")
+        review=$(grep -c '  REVIEW  ' "$out")
+        {
+          echo "### Am I affected?"
+          echo
+          echo "**$affected affected, $review to review** in \`$SCAN_PATH\`."
+          if [ $((affected + review)) -gt 0 ]; then
+            echo; echo '```'; grep -E '  (AFFECTED|REVIEW)  ' "$out" | head -100; echo '```'
+          fi
+          echo; echo "[amiaffected.now](https://amiaffected.now) · nothing about this repository was sent anywhere"
+        } >> "$GITHUB_STEP_SUMMARY"
+        [ "$code" -gt 1 ] && exit "$code"  # the tool itself failed
+        case "$FAIL_ON" in
+          never) exit 0 ;;
+          review) [ $((affected + review)) -gt 0 ] && exit 1; exit 0 ;;
+          *) exit "$code" ;;
+        esac

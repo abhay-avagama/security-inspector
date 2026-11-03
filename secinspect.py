@@ -1186,6 +1186,9 @@ def main(argv):
     ap.add_argument("dirs", nargs="*", help="search only these folders for Python envs, lockfiles and CA bundles")
     ap.add_argument("--docker", action="store_true", help="also look inside every local Docker image (slow)")
     ap.add_argument("--html", metavar="FILE", help="also write an HTML report")
+    ap.add_argument("--files-only", action="store_true",
+                    help="only check files in the folders given (lockfiles, MCP configs, skills, .env, CA bundles), not this "
+                         "machine's programs; for CI, where the runner's own Chrome or Node aren't yours to fix")
     ap.add_argument("--skills-baseline", metavar="FILE",
                     help="remember a fingerprint of every installed skill in FILE and report what changed since the last run")
     ap.add_argument("--no-update-check", action="store_true",
@@ -1198,9 +1201,13 @@ def main(argv):
             print("update: " + line, file=sys.stderr)
     if not OPENSSL:
         print("openssl not found: CA bundles are judged by which roots they hold, not by a chain test", file=sys.stderr)
-    rows = [r for adv in ADVISORIES["versions"] for r in check_version(adv)] + check_distro()
-    rows += check_chromium_cache() + scan_files(roots) + check_docker(args.docker) + check_stores()
-    rows += check_mcp(rows) + check_iocs() + check_skills(extra=FOUND_SKILL_DIRS) + check_hooks()
+    if args.files_only:  # the repo, not the runner: no binaries, caches, trust stores, keys or home configs
+        rows = scan_files(roots) + check_docker(args.docker)
+        rows += check_skills(home=os.path.join(roots[0], ".no-home"), extra=FOUND_SKILL_DIRS)
+    else:
+        rows = [r for adv in ADVISORIES["versions"] for r in check_version(adv)] + check_distro()
+        rows += check_chromium_cache() + scan_files(roots) + check_docker(args.docker) + check_stores()
+        rows += check_mcp(rows) + check_iocs() + check_skills(extra=FOUND_SKILL_DIRS) + check_hooks()
     if args.skills_baseline:
         rows += check_skill_changes(skill_dirs(extra=FOUND_SKILL_DIRS), os.path.expanduser(args.skills_baseline))
     widths = [max(len(str(r[i])) for r in rows) for i in range(4)]
