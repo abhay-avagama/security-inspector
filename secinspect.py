@@ -631,12 +631,12 @@ def fix_for(item, where, note=""):
             return ("Update Chrome and relaunch it", "Chrome menu > Settings > About Chrome, let it update, then click Relaunch")
         return ("Update Chrome / Chromium and restart it",
                 "sudo apt update && sudo apt upgrade   # dnf: sudo dnf upgrade   snap: sudo snap refresh chromium")
-    if item == CHROMIUM["name"]:
+    if item == CHROMIUM["name"]:  # ponytail: the latest Playwright/Puppeteer lag Chrome, so upgrading them isn't the fix
         if "puppeteer" in w:
-            return ("Upgrade Puppeteer and delete its old browsers",
-                    "rm -rf ~/.cache/puppeteer && npm i puppeteer@latest   # in each project; it downloads a patched Chrome")
-        return ("Upgrade Playwright and delete its old browsers",
-                "npm i -D @playwright/test@latest && npx playwright install chromium   # Python: pip install -U playwright && playwright install chromium; then delete old chromium* folders in the ms-playwright cache")
+            return ("Run Puppeteer on your installed Chrome and delete its cached browsers",
+                    "puppeteer.launch({ channel: 'chrome' })   # keep Chrome updated; then: rm -rf ~/.cache/puppeteer")
+        return ("Run Playwright on your installed Chrome, sandbox on, and delete its cached browsers",
+                "chromium.launch({ channel: 'chrome', chromiumSandbox: true })   # MCP: npx @playwright/mcp@<pinned> --browser chrome; then delete the chromium* folders in the ms-playwright cache")
     if item == MCP["name"]:
         if note.startswith("remote code"):
             return ("Remove the Puppeteer MCP server (no fix is coming)",

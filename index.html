@@ -33,8 +33,8 @@ curl -fsSL https://amiaffected.now/run | sh -s -- ~/work               # only se
 
 <h2>What it checks</h2>
 <table>
-<tr><td>Chrome / Chromium</td><td>CVE-2026-87491 and CVE-2026-85046, V8 bugs on CISA KEV, fixed in 153.0.8010.36; on macOS also <a href="https://pwn.ai/blog/chrome-escape">CVE-2026-106378</a>, the GPU sandbox escape fixed in 155.0.8059.39</td></tr>
-<tr><td>Puppeteer / Playwright</td><td>The Chromium builds they download into their caches, which never update themselves. Most machines that have ever run a scraper or a browser test have a few</td></tr>
+<tr><td>Chrome / Chromium</td><td>CVE-2026-87491 and CVE-2026-85046, V8 bugs on CISA KEV, fixed in 153.0.8010.36; on macOS also <a href="https://pwn.ai/blog/chrome-escape">CVE-2026-106378</a>, the GPU sandbox escape fixed in 155.0.8059.39; and the four critical bugs fixed on 27 Oct in 156.0.8078.73 (CVE-2026-118306, 118331, 118348, 118344)</td></tr>
+<tr><td>Puppeteer / Playwright</td><td>The Chromium builds they download into their caches, which never update themselves. Even the latest Playwright (1.64.1) and Puppeteer (25.16.0) ship builds without the 27 Oct fixes, and Playwright turns Chrome's sandbox off by default. If your agent browses the web, point it at your installed Chrome with <code>channel: 'chrome'</code> and <code>chromiumSandbox: true</code></td></tr>
 <tr><td>MCP servers</td><td>Configs for Claude, Cursor, VS Code, Windsurf, Gemini and Codex that still run the archived Puppeteer MCP server (remote code execution, no fix coming) or other archived reference servers</td></tr>
 <tr><td>PHP</td><td>CVE-2026-109618 / 109619 (PHP2Shell), every PHP on PATH and in Homebrew</td></tr>
 <tr><td>Node.js</td><td>The Oct 21 2026 release (10 CVEs incl. Brotli RCE) across PATH, nvm, Volta, fnm and Homebrew</td></tr>

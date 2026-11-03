@@ -61,10 +61,12 @@ def feed_candidates(known):
         except Exception as e:  # one feed down shouldn't stop the rest
             print(f"skip {adv['name']} feed: {e}", file=sys.stderr)
             continue
-        for cve in new_cves(items, adv["checked"], known):
-            out.append({"cve": cve, "title": f'{adv["name"]}: new CVE since our data was checked',
+        fresh = new_cves(items, adv["checked"], known)
+        if fresh:  # one issue per tech: Chrome alone lists a dozen CVEs per release
+            out.append({"cve": fresh[0], "title": f'{adv["name"]}: {len(fresh)} new CVE(s) since {adv["checked"][:10]}',
                         "why": f'Listed on cve.now for {adv["name"]} after {adv["checked"][:10]}.',
-                        "detail": "", "fix": "", "source": f"https://nvd.nist.gov/vuln/detail/{cve}"})
+                        "detail": "\n".join(f"- https://nvd.nist.gov/vuln/detail/{c}" for c in fresh), "fix": "",
+                        "source": f'https://cve.now/feed?tech={adv["feed"]}'})
     return out
 
 

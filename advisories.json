@@ -213,12 +213,16 @@
     },
     {
       "name": "Google Chrome / Chromium",
-      "about": "CVE-2026-87491 and CVE-2026-85046: V8 bugs exploited in the wild (CISA KEV), fixed in 153.0.8010.36; on macOS also CVE-2026-106378, a GPU sandbox escape fixed in 155.0.8059.39",
+      "about": "CVE-2026-87491 and CVE-2026-85046: V8 bugs exploited in the wild (CISA KEV), fixed in 153.0.8010.36; on macOS also CVE-2026-106378, a GPU sandbox escape fixed in 155.0.8059.39; and four critical bugs fixed on 27 Oct 2026 in 156.0.8078.73 (CVE-2026-118306 escapes the sandbox, CVE-2026-118331/118348/118344 run code inside it)",
       "source": "https://www.cisa.gov/known-exploited-vulnerabilities-catalog?field_cve=CVE-2026-87491",
       "cves": [
         "CVE-2026-87491",
         "CVE-2026-85046",
-        "CVE-2026-106378"
+        "CVE-2026-106378",
+        "CVE-2026-118306",
+        "CVE-2026-118331",
+        "CVE-2026-118348",
+        "CVE-2026-118344"
       ],
       "binary": "google-chrome",
       "flag": "--version",
@@ -233,16 +237,22 @@
         [
           "0.0.0.0",
           "153.0.8010.35",
-          "update to the latest stable (153.0.8010.36+ fixes the exploited V8 bugs; macOS needs 155.0.8059.39+) and relaunch the browser"
+          "update to 156.0.8078.73+ (fixes the exploited V8 bugs and the Oct 27 critical ones) and relaunch the browser"
         ],
         [
           "153.0.8010.36",
           "155.0.8059.38",
-          "macOS sandbox escape CVE-2026-106378: update to 155.0.8059.39+ and relaunch the browser",
+          "macOS sandbox escape CVE-2026-106378: update to 156.0.8078.73+ and relaunch the browser",
           "darwin"
+        ],
+        [
+          "0.0.0.0",
+          "156.0.8078.72",
+          "four critical bugs fixed on 27 Oct 2026: update to 156.0.8078.73+ and relaunch the browser"
         ]
       ],
-      "checked": "2026-11-03T12:00:00Z"
+      "checked": "2026-11-03T12:00:00Z",
+      "feed": "chrome"
     }
   ],
   "packages": [
@@ -615,24 +625,33 @@
   ],
   "chromium_cache": {
     "name": "Puppeteer / Playwright Chromium",
-    "about": "Browsers that Puppeteer and Playwright download never update themselves. CVE-2026-87491 and CVE-2026-85046: V8 bugs exploited in the wild (CISA KEV), fixed in 153.0.8010.36; on macOS also CVE-2026-106378, a GPU sandbox escape fixed in 155.0.8059.39",
+    "about": "Browsers that Puppeteer and Playwright download never update themselves, and Playwright starts Chromium with the sandbox off unless told otherwise. Even Playwright 1.64.1 (Chromium 156.0.8078.4) and Puppeteer 25.16.0 (156.0.8078.47) ship builds older than 156.0.8078.73. CVE-2026-87491 and CVE-2026-85046: V8 bugs exploited in the wild (CISA KEV), fixed in 153.0.8010.36; on macOS also CVE-2026-106378, a GPU sandbox escape fixed in 155.0.8059.39; and four critical bugs fixed on 27 Oct 2026 in 156.0.8078.73 (CVE-2026-118306 escapes the sandbox, CVE-2026-118331/118348/118344 run code inside it)",
     "source": "https://www.cisa.gov/known-exploited-vulnerabilities-catalog?field_cve=CVE-2026-87491",
     "cves": [
       "CVE-2026-87491",
       "CVE-2026-85046",
-      "CVE-2026-106378"
+      "CVE-2026-106378",
+      "CVE-2026-118306",
+      "CVE-2026-118331",
+      "CVE-2026-118348",
+      "CVE-2026-118344"
     ],
     "affected": [
       [
         "0.0.0.0",
         "153.0.8010.35",
-        "update to the latest stable (153.0.8010.36+ fixes the exploited V8 bugs; macOS needs 155.0.8059.39+)"
+        "carries exploited V8 bugs: point it at your installed, updated Chrome (channel: 'chrome'; in Playwright also chromiumSandbox: true)"
       ],
       [
         "153.0.8010.36",
         "155.0.8059.38",
-        "macOS sandbox escape CVE-2026-106378: update to 155.0.8059.39+",
+        "macOS sandbox escape CVE-2026-106378: point it at your installed, updated Chrome (channel: 'chrome'; in Playwright also chromiumSandbox: true)",
         "darwin"
+      ],
+      [
+        "0.0.0.0",
+        "156.0.8078.72",
+        "four critical bugs fixed on 27 Oct 2026, and the latest Playwright and Puppeteer still ship older builds: point it at your installed, updated Chrome (channel: 'chrome'; in Playwright also chromiumSandbox: true)"
       ]
     ],
     "dirs": [

@@ -218,14 +218,16 @@ def test_chrome():
     assert ver("Google Chrome for Testing 153.0.8010.12") == (153, 0, 8010, 12)
     assert ver("v24.22.1") == (24, 22, 1)
     assert status("Google Chrome / Chromium", (153, 0, 8010, 35)) == "AFFECTED"
-    assert status("Google Chrome / Chromium", (155, 0, 8059, 39)) == "OK"
+    assert status("Google Chrome / Chromium", (155, 0, 8059, 39)) == "AFFECTED"  # Oct 27 critical fixes
+    assert status("Google Chrome / Chromium", (156, 0, 8078, 73)) == "OK"
     assert version_status(CHROMIUM, (142, 0, 7444, 175))[0] == "AFFECTED"
-    assert version_status(CHROMIUM, (156, 0, 8078, 47))[0] == "OK"
-    mac = version_status(CHROMIUM, (154, 0, 1, 1))[0]
-    assert mac == ("AFFECTED" if sys.platform == "darwin" else "OK"), mac  # CVE-2026-106378 is macOS-only
+    assert version_status(CHROMIUM, (156, 0, 8078, 47))[0] == "AFFECTED"  # Puppeteer 25.16.0's build
+    assert version_status(CHROMIUM, (156, 0, 8078, 73))[0] == "OK"
+    note = version_status(CHROMIUM, (154, 0, 1, 1))[1]
+    assert ("106378" in note) == (sys.platform == "darwin"), note  # macOS-only range matches first there
     assert chromium_version("/x/.cache/puppeteer/chrome/mac_arm-142.0.7444.175") == (142, 0, 7444, 175)
     assert "puppeteer" in fix_for(CHROMIUM["name"], "/home/a/.cache/puppeteer/chrome/linux-140.0.1.2")[1]
-    assert "playwright" in fix_for(CHROMIUM["name"], "/home/a/.cache/ms-playwright/chromium-1234")[1]
+    assert "chromiumSandbox: true" in fix_for(CHROMIUM["name"], "/home/a/.cache/ms-playwright/chromium-1234")[1]
 
 
 def test_mcp():
