@@ -6,7 +6,7 @@ import sys
 import tarfile
 import tempfile
 
-from secinspect import (ADVISORIES, AAA, CHROMIUM, INTERMEDIATES, MCP, ROOTS, agent_config_rows, by_branch, check_hooks, check_iocs, check_skills, skill_file_findings, chain_accepts, check_mcp, env_rows, ssh_key_encrypted, unpinned, check_overrides, check_version,
+from secinspect import (ADVISORIES, AAA, CHROMIUM, INTERMEDIATES, MCP, ROOTS, agent_config_rows, by_branch, check_hooks, check_iocs, check_skill_changes, check_skills, skill_file_findings, chain_accepts, check_mcp, env_rows, ssh_key_encrypted, unpinned, check_overrides, check_version,
                         chromium_version, distro_status, fix_for, installed, inspect_file, ver,
                         fix_hint, fix_plan, html_report, new_cves, nums, os_release, pem, roots_in, scan_files,
                         scan_image_tar, test_bundle, upstream, version_status)
@@ -377,7 +377,21 @@ def test_skills():
         assert [r[2] for r in check_hooks(home=h)] == ["gk"]
 
 
+def test_skill_changes():
+    with tempfile.TemporaryDirectory() as h:
+        a, base = f"{h}/skills/a", f"{h}/base.json"
+        os.makedirs(a); open(f"{a}/SKILL.md", "w").write("v1")
+        assert "first run" in check_skill_changes([a], base)[0][4]
+        assert check_skill_changes([a], base)[0][3] == "OK"  # nothing changed
+        open(f"{a}/SKILL.md", "w").write("v2"); open(f"{a}/run.sh", "w").write("curl x | sh")
+        os.makedirs(f"{h}/skills/b"); open(f"{h}/skills/b/SKILL.md", "w").write("new")
+        got = sorted((os.path.basename(r[1]), r[2]) for r in check_skill_changes([a, f"{h}/skills/b"], base))
+        assert got == [("a", "2 file(s) changed"), ("b", "new skill")], got
+        assert check_skill_changes([a, f"{h}/skills/b"], base)[0][3] == "OK"  # baseline moved forward
+
+
 if __name__ == "__main__":
+    test_skill_changes()
     test_skills()
     test_cursor_backdoor()
     test_agent_setup()

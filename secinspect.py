@@ -302,13 +302,59 @@ def skill_file_findings(path, data):
     return found
 
 
-def check_skills(home=HOME, extra=()):
-    name = SKILLS["name"]
+def skill_dirs(home=HOME, extra=()):
     dirs = set(extra)
     for r in SKILLS["roots"]:
         for p in glob.glob(os.path.join(r.replace("~", home, 1), "**", "SKILL.md"), recursive=True):
             dirs.add(os.path.dirname(p))
-    dirs = sorted(d for d in dirs if not re.search(r"/plugins/marketplaces/|/\.tmp/|/node_modules/", d))
+    return sorted(d for d in dirs if not re.search(r"/plugins/marketplaces/|/\.tmp/|/node_modules/", d))
+
+
+def skill_fingerprint(d):
+    """{relative path: sha256} for every file in one skill (node_modules and .git skipped)."""
+    out = {}
+    for root, subdirs, files in os.walk(d):
+        subdirs[:] = [x for x in subdirs if x not in SKIP]
+        for f in files[:500]:
+            p = os.path.join(root, f)
+            try:
+                with open(p, "rb") as fh:
+                    out[os.path.relpath(p, d)] = hashlib.sha256(fh.read(MAX_READ)).hexdigest()
+            except OSError:
+                pass
+    return out
+
+
+def check_skill_changes(dirs, baseline):
+    """Opt-in (--skills-baseline FILE): compares every skill with the last run recorded in FILE, then
+    rewrites FILE. The only file the tool writes besides --html, and only because you named it."""
+    name, now = "AI agent: skill changes", datetime.datetime.now().strftime("%Y-%m-%d %H:%M")
+    try:
+        old = json.load(open(baseline))
+    except (OSError, ValueError):
+        old = None
+    current = {d: skill_fingerprint(d) for d in dirs}
+    rows = []
+    if old:
+        since = old.get("when", "the last run")
+        for d, files in current.items():
+            before = old.get("skills", {}).get(d)
+            if before is None:
+                rows.append((name, d, "new skill", "REVIEW", f"installed since {since}: read it before you rely on it"))
+                continue
+            changed = sorted(f for f in files if before.get(f) != files[f])
+            if changed:
+                rows.append((name, d, f"{len(changed)} file(s) changed", "REVIEW",
+                             f"changed since {since}: {', '.join(changed[:5])}{' ...' if len(changed) > 5 else ''}"))
+    with open(baseline, "w") as fh:
+        json.dump({"when": now, "skills": current}, fh)
+    first = "" if old else f"first run: recorded {len(current)} skills, changes show from the next run"
+    return rows or [(name, baseline, "-", "OK", first or f"no skill changed since {old.get('when')}")]
+
+
+def check_skills(home=HOME, extra=()):
+    name = SKILLS["name"]
+    dirs = skill_dirs(home, extra)
     rows, bad = [], [b.lower() for b in SKILLS["bad_authors"]]
     for d in dirs:
         if os.path.basename(d) in SKILLS["bad_names"]:
@@ -958,6 +1004,8 @@ def fix_for(item, where, note=""):
         if note.startswith(("named in", "matches an")):
             return ("Remove known-malicious skills and rotate keys", "delete the skill folder, check SOUL.md / MEMORY.md for changes, rotate every key it could reach")
         return ("Read the flagged skill files before you keep using them", "open each file listed; remove the skill if you can't explain what it does")
+    if item == "AI agent: skill changes":
+        return ("Read what changed in your skills", "open each skill listed and diff it against its source; remove it if you can't explain the change")
     if item == "AI agent: hooks":
         return ("Check what each hook runs", "read the hooks.json listed; remove the plugin if a hook runs something you don't recognise")
     if item == "AI agent: unpinned MCP servers":
@@ -1138,6 +1186,8 @@ def main(argv):
     ap.add_argument("dirs", nargs="*", help="search only these folders for Python envs, lockfiles and CA bundles")
     ap.add_argument("--docker", action="store_true", help="also look inside every local Docker image (slow)")
     ap.add_argument("--html", metavar="FILE", help="also write an HTML report")
+    ap.add_argument("--skills-baseline", metavar="FILE",
+                    help="remember a fingerprint of every installed skill in FILE and report what changed since the last run")
     ap.add_argument("--no-update-check", action="store_true",
                     help="skip the cve.now advisory-freshness check (offline/CI; also $SECINSPECT_NO_UPDATE_CHECK)")
     args = ap.parse_args(argv)
@@ -1151,6 +1201,8 @@ def main(argv):
     rows = [r for adv in ADVISORIES["versions"] for r in check_version(adv)] + check_distro()
     rows += check_chromium_cache() + scan_files(roots) + check_docker(args.docker) + check_stores()
     rows += check_mcp(rows) + check_iocs() + check_skills(extra=FOUND_SKILL_DIRS) + check_hooks()
+    if args.skills_baseline:
+        rows += check_skill_changes(skill_dirs(extra=FOUND_SKILL_DIRS), os.path.expanduser(args.skills_baseline))
     widths = [max(len(str(r[i])) for r in rows) for i in range(4)]
     for r in rows:
         print("  ".join(str(c).ljust(w) for c, w in zip(r, widths)), r[4])

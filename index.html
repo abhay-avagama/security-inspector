@@ -28,7 +28,8 @@ footer{margin-top:3rem;padding-top:1rem;border-top:1px solid var(--line);font-si
 <p class="muted">Rather read it first? <a href="/run">run</a> is ten lines; it fetches <a href="/secinspect.py">secinspect.py</a> and <a href="/advisories.json">advisories.json</a> into a temp folder and runs them. Pass options after <code>sh -s --</code>:</p>
 <pre>curl -fsSL https://amiaffected.now/run | sh -s -- --html report.html   # HTML report
 curl -fsSL https://amiaffected.now/run | sh -s -- --docker             # also scan Docker images
-curl -fsSL https://amiaffected.now/run | sh -s -- ~/work               # only search this folder</pre>
+curl -fsSL https://amiaffected.now/run | sh -s -- ~/work               # only search this folder
+curl -fsSL https://amiaffected.now/run | sh -s -- --skills-baseline ~/.amiaffected-skills.json   # also show what changed in your agent skills since last time</pre>
 <p class="muted">Exit code is 1 if anything is affected, so it can fail a CI job.</p>
 
 <h2>What it checks</h2>
