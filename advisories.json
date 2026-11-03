@@ -423,6 +423,154 @@
         "Update Control Web Panel to 1.29+",
         "update CWP from the admin panel (CWP Settings > Update), then confirm webpanel_version is 1.29 or later"
       ]
+    },
+    {
+      "name": "PostgreSQL server",
+      "about": "Aug 2026 release: 24 server and extension CVEs, a dozen of them code execution by a logged-in user (to_char, regexp, plperl, cursor CLOSE, pg_stat_statements and more)",
+      "source": "https://www.postgresql.org/support/security/",
+      "cves": [
+        "CVE-2026-16239",
+        "CVE-2026-15741",
+        "CVE-2026-14680",
+        "CVE-2026-14679",
+        "CVE-2026-14677",
+        "CVE-2026-14670",
+        "CVE-2026-14669",
+        "CVE-2026-14668",
+        "CVE-2026-14664",
+        "CVE-2026-14662",
+        "CVE-2026-16238",
+        "CVE-2026-14676",
+        "CVE-2026-15742",
+        "CVE-2026-14671",
+        "CVE-2026-14663",
+        "CVE-2026-6471",
+        "CVE-2026-18024",
+        "CVE-2026-14681",
+        "CVE-2026-14672",
+        "CVE-2026-14678",
+        "CVE-2026-14673",
+        "CVE-2026-14666",
+        "CVE-2026-6470",
+        "CVE-2026-6469"
+      ],
+      "binary": "postgres",
+      "flag": "--version",
+      "version_regex": "\\(PostgreSQL\\)\\s+(\\d+(?:\\.\\d+)?)",
+      "globs": [
+        "/usr/lib/postgresql/*/bin/postgres",
+        "/usr/pgsql-*/bin/postgres",
+        "/opt/homebrew/opt/postgresql@*/bin/postgres",
+        "/usr/local/opt/postgresql@*/bin/postgres",
+        "/Applications/Postgres.app/Contents/Versions/*/bin/postgres"
+      ],
+      "fixed": [
+        "18.6",
+        "17.11",
+        "16.15",
+        "15.19",
+        "14.24"
+      ],
+      "branch_width": 1,
+      "after_fix": "restart PostgreSQL",
+      "feed": "postgresql",
+      "checked": "2026-11-03T12:00:00Z",
+      "plan": [
+        "Update PostgreSQL to 18.6 / 17.11 / 16.15 / 15.19 / 14.24 and restart it",
+        "sudo apt update && sudo apt upgrade   # dnf: sudo dnf upgrade 'postgresql*'   Homebrew: brew upgrade postgresql@<major>; then restart the server"
+      ]
+    },
+    {
+      "name": "PostgreSQL client (psql, pg_dump)",
+      "about": "Aug 2026 release: pg_dump heap overflow and psql \\unrestrict let a malicious server run code on the client (CVE-2026-19385, CVE-2026-18408), and two more",
+      "source": "https://www.postgresql.org/support/security/",
+      "cves": [
+        "CVE-2026-19385",
+        "CVE-2026-18408",
+        "CVE-2026-6464",
+        "CVE-2026-16241"
+      ],
+      "binary": "psql",
+      "flag": "--version",
+      "version_regex": "\\(PostgreSQL\\)\\s+(\\d+(?:\\.\\d+)?)",
+      "globs": [
+        "/usr/lib/postgresql/*/bin/psql",
+        "/usr/pgsql-*/bin/psql",
+        "/opt/homebrew/opt/libpq/bin/psql",
+        "/opt/homebrew/opt/postgresql@*/bin/psql",
+        "/usr/local/opt/libpq/bin/psql",
+        "/Applications/Postgres.app/Contents/Versions/*/bin/psql"
+      ],
+      "fixed": [
+        "18.6",
+        "17.11",
+        "16.15",
+        "15.19",
+        "14.24"
+      ],
+      "branch_width": 1,
+      "plan": [
+        "Update the PostgreSQL client tools",
+        "brew upgrade libpq   # or postgresql@<major>; Linux: sudo apt update && sudo apt upgrade"
+      ]
+    },
+    {
+      "name": "psqlODBC",
+      "about": "12 CVEs published 2 Nov 2026 (CVE-2026-120057 to 120067 and more): a malicious or spoofed server can corrupt memory in apps using the ODBC driver; fixed in 18.00.0006",
+      "source": "https://github.com/postgresql-interfaces/psqlodbc/security/advisories/GHSA-6rmx-9q62-4w6m",
+      "cves": [
+        "CVE-2026-120057",
+        "CVE-2026-120058",
+        "CVE-2026-120059",
+        "CVE-2026-120060",
+        "CVE-2026-120061",
+        "CVE-2026-120062",
+        "CVE-2026-120063",
+        "CVE-2026-120064",
+        "CVE-2026-120065",
+        "CVE-2026-120066",
+        "CVE-2026-120067"
+      ],
+      "present_paths": [
+        "/usr/lib/*/odbc/psqlodbc*.so",
+        "/usr/lib64/psqlodbc*.so",
+        "/usr/lib/psqlodbc*.so",
+        "/opt/homebrew/opt/psqlodbc/lib/psqlodbc*.so",
+        "/usr/local/opt/psqlodbc/lib/psqlodbc*.so"
+      ],
+      "review_note": "the PostgreSQL ODBC driver is installed: make sure it's 18.00.0006 or later (distro packages may lag), and only connect it to servers you trust over verified TLS",
+      "plan": [
+        "Update psqlODBC to 18.00.0006+",
+        "brew upgrade psqlodbc   # Linux: sudo apt update && sudo apt upgrade (odbc-postgresql)  dnf: sudo dnf upgrade postgresql-odbc"
+      ]
+    },
+    {
+      "name": "pgAdmin 4",
+      "about": "CVE-2026-116249 to 116252 and more (Oct 30 2026): path escape between users' storage, sessions surviving a password change, connection redirect; fixes merged after 9.18 but not released yet",
+      "source": "https://github.com/pgadmin-org/pgadmin4/issues/10650",
+      "cves": [
+        "CVE-2026-116249",
+        "CVE-2026-116250",
+        "CVE-2026-116251",
+        "CVE-2026-116252"
+      ],
+      "version_files": [
+        "/Applications/pgAdmin 4.app/Contents/Info.plist"
+      ],
+      "version_regex": "CFBundleShortVersionString</key>\\s*<string>([\\d.]+)",
+      "match_required": true,
+      "affected": [
+        [
+          "0",
+          "9.18",
+          "fixes are merged but not released yet: update to the next release as soon as it's out; until then don't expose pgAdmin in server mode to people you don't trust"
+        ]
+      ],
+      "status": "REVIEW",
+      "plan": [
+        "Update pgAdmin 4 when the release after 9.18 ships",
+        "watch https://www.pgadmin.org/news/ ; until then keep server-mode pgAdmin off the public internet"
+      ]
     }
   ],
   "packages": [
@@ -490,6 +638,26 @@
         "Update @fastify/http-proxy",
         "npm i @fastify/http-proxy@^11.6.6   # in each project listed"
       ]
+    },
+    {
+      "name": "pgAdmin 4 (pip)",
+      "package": "pgadmin4",
+      "ecosystem": "pypi",
+      "about": "pgAdmin 4 installed with pip: same Oct 30 2026 CVEs, fixes not released after 9.18 yet",
+      "source": "https://github.com/pgadmin-org/pgadmin4/issues/10650",
+      "cves": [
+        "CVE-2026-116249",
+        "CVE-2026-116250",
+        "CVE-2026-116251",
+        "CVE-2026-116252"
+      ],
+      "bad_range": [
+        "0",
+        "9.18"
+      ],
+      "status": "REVIEW",
+      "cleanup": "fixes are merged but not released: update when the release after 9.18 ships; keep server mode off the public internet until then",
+      "lock_note": "pins pgadmin4 9.18 or older: update when the next release ships"
     }
   ],
   "ca": {

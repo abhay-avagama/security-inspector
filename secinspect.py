@@ -74,9 +74,9 @@ def by_branch(v, fixed, width):
 
 def version_status(adv, v):
     if "affected" in adv:  # explicit inclusive ranges, e.g. BIND
-        return next((("AFFECTED", fix) for lo, hi, fix, *only in adv["affected"]  # optional 4th item: sys.platform
+        return next(((adv.get("status", "AFFECTED"), fix) for lo, hi, fix, *only in adv["affected"]  # optional 4th item: sys.platform
                      if nums(lo) <= v <= nums(hi) and (not only or sys.platform in only)), ("OK", ""))
-    status, note = by_branch(v, [ver(f) for f in adv["fixed"]], adv["branch_width"])
+    status, note = by_branch(v, [nums(f) for f in adv["fixed"]], adv["branch_width"])
     if status == "AFFECTED" and adv.get("after_fix"):
         note += ", " + adv["after_fix"]
     return status, note
@@ -85,7 +85,7 @@ def version_status(adv, v):
 def check_version(adv):
     name = adv["name"]
     if "present_paths" in adv:  # no reliable version on disk (Control Web Panel): installed means check it by hand
-        here = [p for p in adv["present_paths"] if os.path.exists(p)]
+        here = sorted({p for g in adv["present_paths"] for p in glob.glob(g)})
         return [(name, p, "installed", "REVIEW", adv["review_note"]) for p in here] or [(name, "-", "-", "NOT FOUND", "")]
     if "version_files" in adv:  # apps in web roots (WordPress, Nextcloud apps, plugins): one row per install
         found = []
@@ -99,7 +99,10 @@ def check_version(adv):
     elif "version_file" in adv:
         found = [(adv["version_file"], ver(open(adv["version_file"]).read()))] if os.path.exists(adv["version_file"]) else []
     else:
-        found = [(b, ver(run(b, adv["flag"]))) for b in binaries(adv["binary"], *adv.get("globs", []))]
+        def parse(out):  # PostgreSQL says 16.10: two parts, so it brings its own pattern
+            m = re.search(adv["version_regex"], out) if "version_regex" in adv else None
+            return nums(m[1]) if m else ver(out) if "version_regex" not in adv else None
+        found = [(b, parse(run(b, adv["flag"]))) for b in binaries(adv["binary"], *adv.get("globs", []))]
     if not found:
         return [(name, "-", "-", "NOT FOUND", adv.get("not_found", ""))]
     return [(name, p, fmt(v) if v else "?", *(version_status(adv, v) if v else ("UNKNOWN", "couldn't read version")))

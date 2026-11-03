@@ -272,7 +272,26 @@ def test_queue_nov3():
     assert fix_for("python-jose", "/p/requirements.txt")[0].startswith("Move off python-jose")
 
 
+def test_postgres():
+    assert status("PostgreSQL server", (16, 10)) == "AFFECTED"
+    assert status("PostgreSQL server", (16, 15)) == "OK"
+    assert status("PostgreSQL server", (13, 22)) == "AFFECTED"  # end-of-life
+    assert status("PostgreSQL client (psql, pg_dump)", (18, 6)) == "OK"
+    assert version_status(ADV["pgAdmin 4"], (9, 18))[0] == "REVIEW"
+    with tempfile.TemporaryDirectory() as d:
+        exe = os.path.join(d, "postgres")
+        open(exe, "w").write("#!/bin/sh\necho 'postgres (PostgreSQL) 17.6 (Homebrew)'\n")
+        os.chmod(exe, 0o755)
+        row = check_version(dict(ADV["PostgreSQL server"], binary="no-such-binary", globs=[exe]))[0]
+        assert row[2:4] == ("17.6", "AFFECTED"), row
+        open(os.path.join(d, "psqlodbcw.so"), "w").write("")
+        assert check_version(dict(ADV["psqlODBC"], present_paths=[d + "/psqlodbc*.so"]))[0][3] == "REVIEW"
+    rows = [(r[0], r[2], r[3]) for r in inspect_file("/v/site-packages/pgadmin4-9.18.dist-info/METADATA", lambda: b"")[0]]
+    assert rows == [("pgAdmin 4 (pip)", "9.18", "REVIEW")], rows
+
+
 if __name__ == "__main__":
+    test_postgres()
     test_queue_nov3()
     test_chrome()
     test_mcp()

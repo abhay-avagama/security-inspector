@@ -53,6 +53,9 @@ version-feed technologies, so they aren't tracked this way — refresh them from
 | **python-jose** CVE-2026-120459 (empty HMAC key accepted) | Installed copies in every venv and lockfiles. Every release through 3.5.0 is affected and there's no fix, so it's flagged for review: make sure HMAC keys can't be empty, or move to PyJWT / joserfc. |
 | **@fastify/http-proxy** CVE-2026-120213 | Resolved versions in `package-lock.json`, `pnpm-lock.yaml`, `yarn.lock` and `bun.lock`. 9.0.0 to 11.6.5 affected, fixed in 11.6.6. |
 | **FreeRDP** CVE-2026-121392 | `--version` of xfreerdp / sdl-freerdp on PATH, Homebrew and `/usr/bin`. Fixed in 3.32.2; distro builds may carry a backported fix. |
+| **PostgreSQL** Aug 2026 release (CVE-2026-16239, CVE-2026-14669 and 22 more; client: CVE-2026-19385, CVE-2026-18408) | `postgres --version` and `psql --version` in Debian/Ubuntu (`/usr/lib/postgresql/*`), PGDG (`/usr/pgsql-*`), Homebrew and Postgres.app. Fixed in 18.6 / 17.11 / 16.15 / 15.19 / 14.24; 13 and older are end-of-life. |
+| **psqlODBC** CVE-2026-120057 to 120067 | Flags the installed driver library for review: fixed in 18.00.0006, distro packages may lag. |
+| **pgAdmin 4** CVE-2026-116249 to 116252 | The macOS app's version and pip installs. Fixes are merged after 9.18 but not released yet, so 9.18 and older are flagged for review. |
 | **eMudhra CA** (RHSB-2026-012) | Tests whether each trust store would accept the cracked eMudhra intermediates. See below. |
 
 With `--docker`, every local image is streamed through `docker save` and the same file checks run
