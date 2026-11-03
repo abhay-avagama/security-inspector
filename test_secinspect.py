@@ -405,6 +405,10 @@ def test_watch():
         assert new == ["Linux kernel | linux (apt) | AFFECTED"] and fixed == ["nginx | nginx (apt) | AFFECTED"], (new, fixed)
         msg = watch_message(new, fixed, first, day3)
         assert msg.splitlines()[0].endswith("1 new, 1 fixed since the last run") and "FIXED  nginx" in msg
+        # a kernel update that doesn't fix the bug is not news (seen on our own server: 139 -> 147)
+        day4 = [("nginx", "nginx (apt)", "1.24", "OK", ""), ("Linux kernel", "linux-image-6.8.0-147-generic (apt)", "6.8", "AFFECTED", "")]
+        watch_diff([("Linux kernel", "linux-image-6.8.0-139-generic (apt)", "6.8", "AFFECTED", "")], st)
+        assert watch_diff(day4, st) == ([], [], False)
 
 
 if __name__ == "__main__":

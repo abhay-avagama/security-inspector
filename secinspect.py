@@ -1188,16 +1188,18 @@ def check_feed_updates(advs, timeout=6):
 def watch_diff(rows, state_file):
     """(new findings, fixed findings, first run?) against the last run, then records this run.
     A finding is item + where + status, so AFFECTED -> OK shows as fixed and OK -> AFFECTED as new."""
-    now = {f"{r[0]} | {r[1]} | {r[3]}" for r in rows if r[3] in ("AFFECTED", "REVIEW")}
+    # compare with version numbers blanked: a kernel going 6.8.0-139 -> 147 while still affected is the same finding
+    same = lambda k: re.sub(r"\d+(?:[.\-]\d+)+", "#", k)
+    now = {same(k): k for k in (f"{r[0]} | {r[1]} | {r[3]}" for r in rows if r[3] in ("AFFECTED", "REVIEW"))}
     try:
-        before = set(json.load(open(state_file))["findings"])
+        before = {same(k): k for k in json.load(open(state_file))["findings"]}
         first = False
     except (OSError, ValueError, KeyError, TypeError):
-        before, first = set(), True
+        before, first = {}, True
     os.makedirs(os.path.dirname(os.path.abspath(state_file)), exist_ok=True)
     with open(state_file, "w") as fh:
-        json.dump({"when": datetime.datetime.now().isoformat(timespec="seconds"), "findings": sorted(now)}, fh, indent=1)
-    return sorted(now - before), sorted(before - now), first
+        json.dump({"when": datetime.datetime.now().isoformat(timespec="seconds"), "findings": sorted(now.values())}, fh, indent=1)
+    return sorted(now[k] for k in now.keys() - before.keys()), sorted(before[k] for k in before.keys() - now.keys()), first
 
 
 def watch_message(new, fixed, first, rows):
