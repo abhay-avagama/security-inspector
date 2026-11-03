@@ -1,0 +1,19 @@
+name: watch for new CVEs
+on:
+  schedule:
+    - cron: "30 3 * * *"  # daily, 09:00 IST
+  workflow_dispatch:
+permissions:
+  contents: read
+  issues: write
+jobs:
+  watch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: gh label create queue --color 0e8a16 --description "CVE to add to the tool" --force
+        env:
+          GH_TOKEN: ${{ github.token }}
+      - run: python3 .github/watch.py
+        env:
+          GH_TOKEN: ${{ github.token }}
