@@ -3,7 +3,8 @@ import os
 import tarfile
 import tempfile
 
-from secinspect import (ADVISORIES, AAA, INTERMEDIATES, ROOTS, by_branch, chain_accepts, check_overrides, distro_status, installed,
+from secinspect import (ADVISORIES, AAA, CHROMIUM, INTERMEDIATES, MCP, ROOTS, by_branch, chain_accepts, check_mcp, check_overrides,
+                        chromium_version, distro_status, fix_for, installed, inspect_file, ver,
                         fix_hint, fix_plan, html_report, new_cves, nums, os_release, pem, roots_in, scan_files,
                         scan_image_tar, test_bundle, upstream, version_status)
 
@@ -212,7 +213,33 @@ def test_web_apps():
     assert got == {"old": "AFFECTED", "new": "OK", "ancient": "AFFECTED"}, got
 
 
+def test_chrome():
+    assert ver("Google Chrome for Testing 153.0.8010.12") == (153, 0, 8010, 12)
+    assert ver("v24.22.1") == (24, 22, 1)
+    assert status("Google Chrome / Chromium", (153, 0, 8010, 35)) == "AFFECTED"
+    assert status("Google Chrome / Chromium", (153, 0, 8010, 36)) == "OK"
+    assert version_status(CHROMIUM, (142, 0, 7444, 175))[0] == "AFFECTED"
+    assert version_status(CHROMIUM, (156, 0, 8078, 47))[0] == "OK"
+    assert chromium_version("/x/.cache/puppeteer/chrome/mac_arm-142.0.7444.175") == (142, 0, 7444, 175)
+    assert "puppeteer" in fix_for(CHROMIUM["name"], "/home/a/.cache/puppeteer/chrome/linux-140.0.1.2")[1]
+    assert "playwright" in fix_for(CHROMIUM["name"], "/home/a/.cache/ms-playwright/chromium-1234")[1]
+
+
+def test_mcp():
+    with tempfile.TemporaryDirectory() as d:
+        cfg = os.path.join(d, ".mcp.json")
+        data = b'{"mcpServers": {"b": {"args": ["-y", "@modelcontextprotocol/server-puppeteer"]},' \
+               b' "g": {"args": ["@modelcontextprotocol/server-github"]}, "f": {"args": ["@modelcontextprotocol/server-filesystem"]}}}'
+        rows, _ = inspect_file(cfg, lambda: data)
+        assert [(r[2], r[3]) for r in rows] == [("server-github", "REVIEW"), ("server-puppeteer", "AFFECTED")], rows
+        assert "remove the puppeteer" in fix_for(MCP["name"], cfg, rows[1][4])[0].lower()
+        assert check_mcp(rows) == [] or all(r[1] != cfg for r in check_mcp(rows))
+    assert check_mcp([])[-1][3] in ("NOT FOUND", "AFFECTED", "REVIEW")
+
+
 if __name__ == "__main__":
+    test_chrome()
+    test_mcp()
     test_distro()
     test_web_apps()
     test_versions()

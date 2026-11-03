@@ -210,6 +210,32 @@
       "branch_width": 0,
       "after_fix": "occ app:update richdocumentscode",
       "not_found": "no Nextcloud built-in CODE app found"
+    },
+    {
+      "name": "Google Chrome / Chromium",
+      "about": "CVE-2026-87491 and CVE-2026-85046: V8 bugs exploited in the wild (CISA KEV), fixed in Chrome 153.0.8010.36",
+      "source": "https://www.cisa.gov/known-exploited-vulnerabilities-catalog?field_cve=CVE-2026-87491",
+      "cves": [
+        "CVE-2026-87491",
+        "CVE-2026-85046"
+      ],
+      "binary": "google-chrome",
+      "flag": "--version",
+      "globs": [
+        "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome",
+        "/Applications/Chromium.app/Contents/MacOS/Chromium",
+        "/usr/bin/google-chrome-stable",
+        "/usr/bin/chromium",
+        "/snap/bin/chromium"
+      ],
+      "affected": [
+        [
+          "0.0.0.0",
+          "153.0.8010.35",
+          "update to 153.0.8010.36+ and relaunch the browser"
+        ]
+      ],
+      "checked": "2026-11-03T12:00:00Z"
     }
   ],
   "packages": [
@@ -579,5 +605,66 @@
       "branch_width": 0,
       "after_fix": "check systemctl status zammad"
     }
-  ]
+  ],
+  "chromium_cache": {
+    "name": "Puppeteer / Playwright Chromium",
+    "about": "Browsers that Puppeteer and Playwright download never update themselves; builds before 153.0.8010.36 carry the exploited V8 bugs CVE-2026-87491 and CVE-2026-85046",
+    "source": "https://www.cisa.gov/known-exploited-vulnerabilities-catalog?field_cve=CVE-2026-87491",
+    "cves": [
+      "CVE-2026-87491",
+      "CVE-2026-85046"
+    ],
+    "affected": [
+      [
+        "0.0.0.0",
+        "153.0.8010.35",
+        "update to 153.0.8010.36+ (better: the latest stable)"
+      ]
+    ],
+    "dirs": [
+      "~/.cache/puppeteer/chrome*/*",
+      "~/.cache/puppeteer/chromium/*",
+      "~/.cache/ms-playwright/chromium*",
+      "~/Library/Caches/ms-playwright/chromium*"
+    ]
+  },
+  "mcp": {
+    "name": "Deprecated MCP servers",
+    "about": "The archived @modelcontextprotocol/server-puppeteer lets a prompt injection start any program instead of a browser (remote code execution); the reference servers were archived in May 2025 and get no fixes",
+    "source": "https://www.helpnetsecurity.com/2026/11/03/mcphantom-deprecated-mcp-servers/",
+    "rce": [
+      "server-puppeteer"
+    ],
+    "deprecated": [
+      "server-aws-kb-retrieval",
+      "server-brave-search",
+      "server-everart",
+      "server-gdrive",
+      "server-github",
+      "server-gitlab",
+      "server-google-maps",
+      "server-postgres",
+      "server-redis",
+      "server-sentry",
+      "server-slack",
+      "server-sqlite"
+    ],
+    "files": [
+      ".mcp.json",
+      "mcp.json",
+      "claude_desktop_config.json",
+      "mcp_config.json",
+      ".claude.json"
+    ],
+    "configs": [
+      "~/Library/Application Support/Claude/claude_desktop_config.json",
+      "~/Library/Application Support/Code/User/mcp.json",
+      "~/Library/Application Support/Code/User/settings.json",
+      "~/Library/Application Support/Cursor/User/settings.json",
+      "~/.config/Code/User/settings.json",
+      "~/.claude/settings.json",
+      "~/.gemini/settings.json",
+      "~/.codex/config.toml"
+    ]
+  }
 }

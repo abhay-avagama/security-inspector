@@ -2,7 +2,7 @@
 <html lang="en"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Am I affected?</title>
-<meta name="description" content="One Python file that checks your laptop or Linux server for the October 2026 PHP, Node.js, BIND, LiteLLM, GitLab and eMudhra issues, plus exploited kernel, nginx, Apache, database and WordPress bugs.">
+<meta name="description" content="One Python file that checks your laptop or Linux server for exploited Chrome bugs, stale Puppeteer and Playwright browsers, the Puppeteer MCP server, the October 2026 PHP, Node.js, BIND, LiteLLM, GitLab and eMudhra issues, plus exploited kernel, nginx, Apache, database and WordPress bugs.">
 <style>
 :root{--bg:#fbfaf7;--fg:#1c1b19;--muted:#6b675f;--line:#e4e0d8;--code:#f1eee8;--accent:#b4361c}
 @media (prefers-color-scheme:dark){:root{--bg:#161513;--fg:#ece9e3;--muted:#9c978d;--line:#2e2c28;--code:#211f1c;--accent:#f0805f}}
@@ -21,7 +21,7 @@ footer{margin-top:3rem;padding-top:1rem;border-top:1px solid var(--line);font-si
 </style></head>
 <body><main>
 <h1>Am I affected?</h1>
-<p>One Python file that checks your machine for the October 2026 PHP, Node.js, BIND, LiteLLM, GitLab and eMudhra issues, and tells you what to do about each one.</p>
+<p>One Python file that checks your machine for the Chrome bugs being exploited right now, the old browsers Puppeteer and Playwright leave behind, and the October 2026 PHP, Node.js, BIND, LiteLLM, GitLab and eMudhra issues, and tells you what to do about each one.</p>
 <p class="muted">No dependencies, and nothing about your machine is sent anywhere. Python 3.8+ on macOS or Linux.</p>
 
 <div class="run"><pre id="cmd">curl -fsSL https://amiaffected.now/run | sh</pre><button type="button" onclick="navigator.clipboard.writeText(document.getElementById('cmd').textContent).then(()=>{this.textContent='Copied'})">Copy</button></div>
@@ -33,6 +33,9 @@ curl -fsSL https://amiaffected.now/run | sh -s -- ~/work               # only se
 
 <h2>What it checks</h2>
 <table>
+<tr><td>Chrome / Chromium</td><td>CVE-2026-87491 and CVE-2026-85046, V8 bugs on CISA KEV, fixed in 153.0.8010.36</td></tr>
+<tr><td>Puppeteer / Playwright</td><td>The Chromium builds they download into their caches, which never update themselves. Most machines that have ever run a scraper or a browser test have a few</td></tr>
+<tr><td>MCP servers</td><td>Configs for Claude, Cursor, VS Code, Windsurf, Gemini and Codex that still run the archived Puppeteer MCP server (remote code execution, no fix coming) or other archived reference servers</td></tr>
 <tr><td>PHP</td><td>CVE-2026-109618 / 109619 (PHP2Shell), every PHP on PATH and in Homebrew</td></tr>
 <tr><td>Node.js</td><td>The Oct 21 2026 release (10 CVEs incl. Brotli RCE) across PATH, nvm, Volta, fnm and Homebrew</td></tr>
 <tr><td>BIND 9</td><td>CVE-2026-94300 against ISC's affected ranges</td></tr>
@@ -53,5 +56,5 @@ curl -fsSL https://amiaffected.now/run | sh -s -- ~/work               # only se
 
 <p class="muted">Running agents or MCP servers in production? Avagama Consulting does fixed-scope <a href="https://avagama.co/services/">security reviews</a> of agents, their tools and the servers they run on.</p>
 
-<footer>Built and maintained by <a href="https://avagama.co">Avagama Consulting</a>. MIT licensed. Source, details and pull requests on <a href="https://github.com/abhay-avagama/security-inspector">GitHub</a>. Newer CVEs are tracked via <a href="https://cve.now">cve.now</a>.</footer>
+<footer>Built and maintained by <a href="https://avagama.co">Avagama Consulting</a>. MIT licensed. Source, details and pull requests on <a href="https://github.com/abhay-avagama/security-inspector">GitHub</a>. Found a problem? See the <a href="https://github.com/abhay-avagama/security-inspector/blob/main/SECURITY.md">security policy</a>. Newer CVEs are tracked via <a href="https://cve.now">cve.now</a>.</footer>
 </main></body></html>

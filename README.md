@@ -1,6 +1,7 @@
 # Am I affected?
 
-One Python file that checks your machine for the October 2026 PHP, Node.js, BIND,
+One Python file that checks your machine for exploited Chrome bugs, the stale browsers Puppeteer and
+Playwright leave behind, the archived Puppeteer MCP server, and the October 2026 PHP, Node.js, BIND,
 LiteLLM, GitLab and eMudhra issues and tells you what to do about each one. On a Linux VPS it also
 checks the kernel and the usual server software (nginx, Apache, MariaDB, MongoDB, WordPress and
 more) for the bugs being exploited right now.
@@ -41,6 +42,9 @@ version-feed technologies, so they aren't tracked this way — refresh them from
 
 | Issue | How |
 |---|---|
+| **Chrome / Chromium** CVE-2026-87491, CVE-2026-85046 (CISA KEV) | `--version` of Google Chrome and Chromium in /Applications, /usr/bin and snap. Fixed in 153.0.8010.36; relaunch after updating. |
+| **Puppeteer / Playwright browsers** | Every Chromium in `~/.cache/puppeteer`, `~/.cache/ms-playwright` and `~/Library/Caches/ms-playwright` (and `$PUPPETEER_CACHE_DIR` / `$PLAYWRIGHT_BROWSERS_PATH`). They never update themselves, so builds before 153.0.8010.36 are flagged. The version comes from the folder name or Info.plist where possible. |
+| **Archived MCP servers** | `.mcp.json`, `mcp.json`, `claude_desktop_config.json`, `~/.claude.json` and the Claude, VS Code, Cursor, Windsurf, Gemini and Codex configs. `@modelcontextprotocol/server-puppeteer` is affected (prompt injection can start any program, and [no fix is coming](https://www.helpnetsecurity.com/2026/11/03/mcphantom-deprecated-mcp-servers/)); the other archived reference servers are flagged for review. |
 | **PHP** CVE-2026-109618 / 109619 (PHP2Shell) | `php -v` for every PHP on PATH and in Homebrew. Fixed in 8.5.12 / 8.4.27 / 8.3.36 / 8.2.35; older branches are affected with no fix. |
 | **Node.js** Oct 21 2026 release (10 CVEs incl. Brotli RCE) | Every `node` on PATH, nvm, Volta, fnm and Homebrew. Fixed in 26.12.1 / 24.22.1 / 22.23.4; end-of-life lines are always affected. |
 | **BIND 9** CVE-2026-94300 | `named -v` against ISC's affected ranges. |
@@ -140,3 +144,7 @@ python3 test_secinspect.py
 Built and maintained by [Avagama Consulting](https://avagama.co), who also do fixed-scope
 [security reviews](https://avagama.co/services/) of agents, MCP servers and the machines they run on.
 MIT licensed.
+
+## Security
+
+Found a problem with the tool itself? See [SECURITY.md](SECURITY.md).

@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
 """Am I affected? Checks this machine for the issues listed in advisories.json (Oct 2026: PHP,
-Node.js, BIND, LiteLLM, GitLab, eMudhra; on Linux servers also the kernel, nginx, Apache, MariaDB,
-MongoDB, WordPress and more). Stdlib only. Exit code 1 if anything is affected.
+Node.js, BIND, LiteLLM, GitLab, eMudhra; Nov 2026: exploited Chrome bugs, stale Puppeteer/Playwright
+browsers and the deprecated Puppeteer MCP server; on Linux servers also the kernel, nginx, Apache,
+MariaDB, MongoDB, WordPress and more). Stdlib only. Exit code 1 if anything is affected.
 
 Usage: python3 secinspect.py [dirs ...] [--docker] [--html report.html] [--no-update-check]
   With no dirs, searches your home folder and system Python paths for envs, lockfiles and CA bundles.
@@ -16,6 +17,7 @@ import html
 import json
 import os
 import platform
+import plistlib
 import re
 import shutil
 import subprocess
@@ -28,6 +30,8 @@ import urllib.request
 HOME = os.path.expanduser("~")
 ADVISORIES = json.load(open(os.path.join(os.path.dirname(os.path.abspath(__file__)), "advisories.json")))
 PACKAGES = ADVISORIES["packages"]
+CHROMIUM = ADVISORIES["chromium_cache"]
+MCP = ADVISORIES["mcp"]
 ROOTS = {r["name"]: base64.b64decode(r["der"]) for r in ADVISORIES["ca"]["roots"]}
 INTERMEDIATES = {i["name"]: base64.b64decode(i["der"]) for i in ADVISORIES["ca"]["intermediates"]}
 AAA = "AAA Certificate Services"
@@ -35,8 +39,8 @@ OPENSSL = shutil.which("openssl")
 
 
 def ver(s):
-    m = re.search(r"(\d+)\.(\d+)\.(\d+)", s or "")
-    return tuple(map(int, m.groups())) if m else None
+    m = re.search(r"(\d+)\.(\d+)\.(\d+)(?:\.(\d+))?", s or "")  # Chrome has four parts
+    return tuple(int(x) for x in m.groups() if x is not None) if m else None
 
 
 def fmt(v):
@@ -95,6 +99,73 @@ def check_version(adv):
         return [(name, "-", "-", "NOT FOUND", adv.get("not_found", ""))]
     return [(name, p, fmt(v) if v else "?", *(version_status(adv, v) if v else ("UNKNOWN", "couldn't read version")))
             for p, v in found]
+
+
+# --- Browsers Puppeteer and Playwright download --------------------------------------------------
+# They sit in a cache and never update, so a laptop with an up-to-date Chrome can still drive a
+# year-old Chromium that any page it opens can exploit.
+
+def chromium_version(d):
+    m = re.search(r"\d+\.\d+\.\d+\.\d+$", d)  # Puppeteer names folders by version: mac_arm-142.0.7444.175
+    if m:
+        return ver(m[0])
+    for plist in glob.glob(os.path.join(d, "*", "*.app", "Contents", "Info.plist")):  # macOS, no need to start it
+        try:
+            return ver(plistlib.load(open(plist, "rb")).get("CFBundleShortVersionString"))
+        except (OSError, plistlib.InvalidFileException, AttributeError):
+            pass
+    for exe in glob.glob(os.path.join(d, "*", "chrome")) + glob.glob(os.path.join(d, "*", "*headless*shell")):
+        v = ver(run(exe, "--version"))
+        if v:
+            return v
+    return None
+
+
+def check_chromium_cache():
+    name = CHROMIUM["name"]
+    globs = CHROMIUM["dirs"] + [os.path.join(os.environ[e], "chrom*", "*") if e == "PUPPETEER_CACHE_DIR"
+                                else os.path.join(os.environ[e], "chromium*")
+                                for e in ("PUPPETEER_CACHE_DIR", "PLAYWRIGHT_BROWSERS_PATH") if os.environ.get(e)]
+    dirs = sorted({os.path.realpath(p) for g in globs for p in glob.glob(os.path.expanduser(g)) if os.path.isdir(p)})
+    rows = []
+    for d in dirs:
+        v = chromium_version(d)
+        if v:
+            status, note = version_status(CHROMIUM, v)
+            rows.append((name, d, fmt(v), status, "never updates itself: " + note if status == "AFFECTED" else note))
+        elif re.search(r"-\d{6,7}$", d):  # revision-numbered builds are from Puppeteer < 20 (2023)
+            rows.append((name, d, "old revision", "AFFECTED", "a 2023-or-older build: delete it"))
+        else:
+            rows.append((name, d, "?", "UNKNOWN", "couldn't read version"))
+    return rows or [(name, "-", "-", "NOT FOUND", "")]
+
+
+# --- MCP servers that will never be patched -------------------------------------------------------
+
+def mcp_rows(path, data):
+    rows = []
+    for server in sorted(set(re.findall(rb"@modelcontextprotocol/(server-[a-z0-9-]+)", data))):
+        server = server.decode()
+        if server in MCP["rce"]:
+            rows.append((MCP["name"], path, server, "AFFECTED",
+                         "remote code execution through prompt injection, and no fix is coming: remove it"))
+        elif server in MCP["deprecated"]:
+            rows.append((MCP["name"], path, server, "REVIEW", "archived, gets no security fixes: switch to the vendor's own server"))
+    return rows
+
+
+def check_mcp(rows):
+    """Configs outside the walked folders (~/Library is skipped, and some names are too generic to match)."""
+    out = []
+    for p in sorted({os.path.expanduser(c) for c in MCP["configs"]}):
+        if os.path.isfile(p) and os.path.getsize(p) < MAX_READ and not any(r[1] == p for r in rows):
+            try:
+                out += mcp_rows(p, open(p, "rb").read())
+            except OSError:
+                pass
+    if not any(r[0] == MCP["name"] for r in rows + out):
+        out.append((MCP["name"], "-", "-", "NOT FOUND", ""))
+    return out
 
 
 # --- Linux server packages (apt / dnf) ----------------------------------------------------------
@@ -344,6 +415,8 @@ def inspect_file(path, read):
             for bad in pkg["bad"]:
                 if re.search(rf"{re.escape(pkg['package'])}.{{0,80}}?{re.escape(bad)}".encode(), data(), re.S | re.I):
                     rows.append((name, path, bad, "AFFECTED", f"lockfile pins the backdoored build: pin {pkg['safe']}"))
+    if base in MCP["files"]:
+        rows += mcp_rows(path, data())
     if base in BUNDLE_FILES:
         names = roots_in(data())
         if names:
@@ -552,6 +625,22 @@ def fix_for(item, where, note=""):
     if item == "LiteLLM":
         return ("Remove the backdoored LiteLLM and rotate credentials",
                 "don't pip install first; delete cook.pth/cook.py/sitecustomize.py, kill the daemon, rebuild pinned to 1.106.2, rotate keys")
+    if item == "Google Chrome / Chromium":
+        if w.startswith(("/applications", "/users")):
+            return ("Update Chrome and relaunch it", "Chrome menu > Settings > About Chrome, let it update, then click Relaunch")
+        return ("Update Chrome / Chromium and restart it",
+                "sudo apt update && sudo apt upgrade   # dnf: sudo dnf upgrade   snap: sudo snap refresh chromium")
+    if item == CHROMIUM["name"]:
+        if "puppeteer" in w:
+            return ("Upgrade Puppeteer and delete its old browsers",
+                    "rm -rf ~/.cache/puppeteer && npm i puppeteer@latest   # in each project; it downloads a patched Chrome")
+        return ("Upgrade Playwright and delete its old browsers",
+                "npm i -D @playwright/test@latest && npx playwright install chromium   # Python: pip install -U playwright && playwright install chromium; then delete old chromium* folders in the ms-playwright cache")
+    if item == MCP["name"]:
+        if note.startswith("remote code"):
+            return ("Remove the Puppeteer MCP server (no fix is coming)",
+                    "delete the server-puppeteer entry from the config; for a browser use @playwright/mcp or chrome-devtools-mcp")
+        return ("Replace archived @modelcontextprotocol servers", "switch each one to the vendor's own server, e.g. github/github-mcp-server")
     if item == "Docker":
         return ("Rebuild the affected Docker image", "remove the image, rebuild from a patched base, rotate any keys it held")
     adv = next((a for a in DISTRO if a["name"] == item), None)
@@ -629,7 +718,7 @@ def html_report(rows, path):
                  f'<ul class="leaves">{leaves}</ul></details>')
 
     sources = "".join(f'<li><a href="{e(a["source"])}">{e(a["name"])}</a>: {e(a["about"])}</li>'
-                      for a in ADVISORIES["versions"] + DISTRO + PACKAGES + [{"name": "eMudhra CA", **ADVISORIES["ca"]}])
+                      for a in ADVISORIES["versions"] + DISTRO + PACKAGES + [CHROMIUM, MCP, {"name": "eMudhra CA", **ADVISORIES["ca"]}])
     when = datetime.datetime.now().strftime("%d %b %Y, %H:%M")
     open(path, "w").write(f"""<!doctype html><html><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1"><title>Am I affected? — report</title><style>
@@ -726,7 +815,8 @@ def main(argv):
     if not OPENSSL:
         print("openssl not found: CA bundles are judged by which roots they hold, not by a chain test", file=sys.stderr)
     rows = [r for adv in ADVISORIES["versions"] for r in check_version(adv)] + check_distro()
-    rows += scan_files(roots) + check_docker(args.docker) + check_stores()
+    rows += check_chromium_cache() + scan_files(roots) + check_docker(args.docker) + check_stores()
+    rows += check_mcp(rows)
     widths = [max(len(str(r[i])) for r in rows) for i in range(4)]
     for r in rows:
         print("  ".join(str(c).ljust(w) for c, w in zip(r, widths)), r[4])
