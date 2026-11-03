@@ -234,6 +234,127 @@ def ssh_key_encrypted(text):
     return "ENCRYPTED" in text  # PEM: "Proc-Type: 4,ENCRYPTED" or "BEGIN ENCRYPTED PRIVATE KEY"
 
 
+# --- Agent skills: what an installed skill could make your agent do --------------------------------
+# A skill is a folder with a SKILL.md the agent reads as instructions, often with scripts it runs.
+# ponytail: pattern checks, not a sandbox; they find the shapes Snyk's ToxicSkills research names, and
+# a clean result means "nothing obvious", not "safe". Findings are REVIEW unless a known-bad author/name matches.
+
+SKILLS = ADVISORIES["skills"]
+FOUND_SKILL_DIRS = set()  # ponytail: filled by the home walk so project skills don't need a second walk
+SCRIPT_EXT = (".sh", ".bash", ".zsh", ".py", ".js", ".mjs", ".cjs", ".ts", ".rb", ".pl", ".ps1", ".bat", ".cmd")
+SKILL_TEXT_CHECKS = [  # (label, pattern, scripts only?)
+    # the lookbehind skips quoted examples: defensive skills quote "ignore previous instructions" to warn about it
+    ("hidden instruction", r"(?i)(?<![\"'\u201c\u2018(])\b(ignore (all |any )?(previous|prior|above|earlier) (instructions|prompts)|"
+     r"disregard (all |the )?(previous|prior|above) (instructions|prompts)|(do not|don't|never) (tell|inform|alert) the user(?! to\b)|"
+     r"hide (this|it) from the user|you are now (DAN|in developer mode))", False),
+    ("invisible characters", "[\u200b\u200c\u200e\u200f\u202a-\u202e\u2060-\u2064\u2066-\u2069\U000e0000-\U000e007f]", False),
+    ("pipes a download into a shell", r"(?i)\b(curl|wget)\b[^\n|;]*\|\s*(sudo\s+)?(ba|z|da)?sh\b|\biex\s*\(\s*(irm|iwr|invoke-)", False),
+    ("sends data to a capture service", r"(?i)webhook\.site|requestbin|pipedream\.net|ngrok(-free)?\.(io|app)|interact\.sh|"
+     r"oast\.(fun|pro|live)|burpcollaborator|discord(app)?\.com/api/webhooks|api\.telegram\.org/bot|pastebin\.com/raw", False),
+    ("hard-coded secret", r"AKIA[0-9A-Z]{16}|\bsk-(ant-|proj-)?[A-Za-z0-9_-]{32,}|\bgh[pousr]_[A-Za-z0-9]{36}\b|"
+     r"\bxox[abpr]-[A-Za-z0-9-]{20,}|-----BEGIN (RSA |EC |OPENSSH )?PRIVATE KEY-----", False),
+    ("reads credentials", r"(?i)\.ssh/(id_|authorized_keys)|\.aws/credentials|\.config/gcloud|\.kube/config|\.docker/config\.json|"
+     r"\.netrc|\.npmrc|\.pypirc|Login Data|Cookies\.binarycookies|security find-(generic|internet)-password", True),
+    ("sets up something that survives a restart", r"(?i)LaunchAgents|LaunchDaemons|crontab\b|systemctl (--user )?enable|"
+     r"/etc/systemd|>>\s*\S*\.(bashrc|zshrc|profile|bash_profile)|authorized_keys", True),
+    ("hides what it runs", r"(?i)eval\s*\(\s*(atob|Buffer\.from)|base64\s+(-d|--decode)[^\n]*\|\s*(ba|z)?sh|exec\s*\(\s*"
+     r"(base64\.b64decode|bytes\.fromhex|codecs\.decode)|new Function\s*\(\s*atob|-enc(odedcommand)?\s+[A-Za-z0-9+/=]{20,}", True),
+]
+SKILL_NOTES = {
+    "hidden instruction": "wording that tells the agent to override you or keep things from you",
+    "invisible characters": "characters you can't see but the agent reads: check the file in a hex viewer",
+    "pipes a download into a shell": "runs whatever that URL serves at the time, unreviewed",
+    "sends data to a capture service": "a URL used to collect data, rarely needed by a real skill",
+    "hard-coded secret": "a key or token is written into the skill (value not shown)",
+    "reads credentials": "a script touches SSH, cloud or browser credentials",
+    "sets up something that survives a restart": "a script installs a login item, cron job, service or shell startup line",
+    "hides what it runs": "a script decodes and runs code it doesn't show",
+    "downloads a program and runs it": "fetches a program at run time; what runs can change after you reviewed it",
+    "ships a compiled program": "a binary the agent can run but you can't read",
+    "can run any shell command": "allowed-tools lets the agent run any shell command without asking while this skill is active",
+    "password-protected archive": "an encrypted zip can't be inspected; Snyk saw these in malicious skills",
+}
+BINARY_MAGIC = (b"\x7fELF", b"\xcf\xfa\xed\xfe", b"\xce\xfa\xed\xfe", b"\xca\xfe\xba\xbe", b"MZ")
+
+
+def skill_file_findings(path, data):
+    """Labels for one file in a skill. data is bytes; nothing from it is ever printed."""
+    found = set()
+    if data[:4] in BINARY_MAGIC[:4] or data[:2] == b"MZ":
+        return {"ships a compiled program"}
+    if path.endswith(".zip") and len(data) > 8 and data[:2] == b"PK" and data[6] & 1:
+        return {"password-protected archive"}
+    if b"\0" in data[:4096]:
+        return found
+    text = data.decode("utf-8", "replace")
+    script = path.endswith(SCRIPT_EXT) or text.startswith("#!")
+    for label, pat, scripts_only in SKILL_TEXT_CHECKS:
+        if (script or not scripts_only) and re.search(pat, text.lstrip("\ufeff")):
+            found.add(label)
+    if script and re.search(r"(?i)\b(curl|wget)\b[^\n]*(-o\b|-O\b|--output)|urlretrieve|-OutFile|urllib\.request\.urlopen", text) \
+            and re.search(r"chmod\s+(\+x|[0-7]?7[0-7]{2})|os\.chmod|chmodSync", text):
+        found.add("downloads a program and runs it")
+    if os.path.basename(path) == "SKILL.md":
+        front = text.split("---", 2)[1] if text.startswith("---") and text.count("---") >= 2 else ""
+        tools = front.split("allowed-tools", 1)[1][:400] if "allowed-tools" in front else ""
+        if re.search(r"\bBash\b(?!\()|Bash\(\*\)", tools):
+            found.add("can run any shell command")
+    return found
+
+
+def check_skills(home=HOME, extra=()):
+    name = SKILLS["name"]
+    dirs = set(extra)
+    for r in SKILLS["roots"]:
+        for p in glob.glob(os.path.join(r.replace("~", home, 1), "**", "SKILL.md"), recursive=True):
+            dirs.add(os.path.dirname(p))
+    dirs = sorted(d for d in dirs if not re.search(r"/plugins/marketplaces/|/\.tmp/|/node_modules/", d))
+    rows, bad = [], [b.lower() for b in SKILLS["bad_authors"]]
+    for d in dirs:
+        if os.path.basename(d) in SKILLS["bad_names"]:
+            rows.append((name, d, "known malicious skill", "AFFECTED", "named in Snyk's ToxicSkills research: remove it and rotate the keys it could reach"))
+        for root, subdirs, files in os.walk(d):
+            subdirs[:] = [x for x in subdirs if x not in SKIP and x not in ("evals", "tests", "test", "fixtures")]  # test data quotes attacks
+            for f in files[:500]:
+                p = os.path.join(root, f)
+                try:
+                    data = open(p, "rb").read(2_000_000) if os.path.getsize(p) < 20_000_000 else b""
+                except OSError:
+                    continue
+                low = data.lower()
+                if any(a.encode() in low for a in bad) or any(x.encode() in data for x in SKILLS["bad_strings"]):
+                    rows.append((name, p, "known malicious author", "AFFECTED", "matches an author or file Snyk confirmed malicious: remove the skill, rotate keys"))
+                rows += [(name, p, label, "REVIEW", SKILL_NOTES[label]) for label in sorted(skill_file_findings(p, data))]
+    if not dirs:
+        return [(name, "-", "-", "NOT FOUND", "")]
+    rows.append((name, f"{len(dirs)} skills checked", "-", "OK", "")) if not rows else None
+    return rows
+
+
+def check_hooks(home=HOME):
+    """Plugin and settings hooks run a command on their own, on events like SessionStart. Listing them is the check."""
+    name, rows = "AI agent: hooks", []
+    paths = glob.glob(os.path.join(home, ".claude", "plugins", "cache", "**", "hooks.json"), recursive=True) + \
+        [os.path.join(home, ".claude", "settings.json")]
+    for p in sorted(set(paths)):
+        try:
+            hooks = json.load(open(p)).get("hooks", {})
+        except (OSError, ValueError, AttributeError):
+            continue
+        cmds = {}
+        for event, groups in (hooks.items() if isinstance(hooks, dict) else []):
+            for h in (x for g in groups if isinstance(g, dict) for x in g.get("hooks", []) if isinstance(x, dict)):
+                c = str(h.get("command") or "").strip()
+                if c:
+                    first = c[1:].split(c[0], 1)[0] if c[0] in "\"'" else c.split()[0]  # quoted paths have spaces
+                    label = os.path.basename(first) if first not in ("[", "test", "if", "sh", "bash", "zsh", "node", "python", "python3", "npx") else c[:50]
+                    cmds.setdefault(label, set()).add(event)
+        for cmd, events in sorted(cmds.items()):
+            rows.append((name, p, cmd, "REVIEW", f"runs automatically on {len(events)} event(s) ({', '.join(sorted(events)[:4])}"
+                         f"{'...' if len(events) > 4 else ''}): make sure you know what it does"))
+    return rows or [(name, "-", "-", "NOT FOUND", "")]
+
+
 def check_iocs(home=HOME):
     """Traces a known malware campaign leaves on disk. Reports which file matched, never its contents."""
     rows = []
@@ -274,14 +395,14 @@ def check_ssh_keys():
     return rows
 
 
-def env_rows(d, dirs, files):
+def env_rows(d, dirs, files, home=HOME):
     """A folder an agent works in (it has CLAUDE.md, AGENTS.md, .claude/ ...) that also holds a .env."""
     envs = sorted(f for f in files if f == ".env" or (f.startswith(".env.") and not f.endswith((".example", ".sample", ".template"))))
     if not envs or not (AGENT_MARKERS & set(files) or AGENT_DIRS & set(dirs)):
         return []
     deny = []
     for sp in (os.path.join(d, ".claude", "settings.json"), os.path.join(d, ".claude", "settings.local.json"),
-               os.path.join(HOME, ".claude", "settings.json")):
+               os.path.join(home, ".claude", "settings.json")):
         try:
             deny += json.load(open(sp)).get("permissions", {}).get("deny", [])
         except (OSError, ValueError, AttributeError):
@@ -615,6 +736,8 @@ def scan_files(roots):
         for d, dirs, files in os.walk(root):
             dirs[:] = [x for x in dirs if x not in SKIP]
             rows += env_rows(d, dirs, files)
+            if "SKILL.md" in files:
+                FOUND_SKILL_DIRS.add(d)
             if d == f"{HOME}/Library":  # huge on macOS; only its Python site-packages matter
                 dirs[:] = [x for x in dirs if x == "Python"]
             for f in files:
@@ -831,6 +954,12 @@ def fix_for(item, where, note=""):
             return ("Remove the Puppeteer MCP server (no fix is coming)",
                     "delete the server-puppeteer entry from the config; for a browser use @playwright/mcp or chrome-devtools-mcp")
         return ("Replace archived @modelcontextprotocol servers", "switch each one to the vendor's own server, e.g. github/github-mcp-server")
+    if item == SKILLS["name"]:
+        if note.startswith(("named in", "matches an")):
+            return ("Remove known-malicious skills and rotate keys", "delete the skill folder, check SOUL.md / MEMORY.md for changes, rotate every key it could reach")
+        return ("Read the flagged skill files before you keep using them", "open each file listed; remove the skill if you can't explain what it does")
+    if item == "AI agent: hooks":
+        return ("Check what each hook runs", "read the hooks.json listed; remove the plugin if a hook runs something you don't recognise")
     if item == "AI agent: unpinned MCP servers":
         return ("Pin MCP server versions", "replace @latest or a bare package name with an exact version, e.g. npx -y @playwright/mcp@0.0.84")
     if item == "AI agent: permissions":
@@ -923,7 +1052,7 @@ def html_report(rows, path):
                  f'<ul class="leaves">{leaves}</ul></details>')
 
     sources = "".join(f'<li><a href="{e(a["source"])}">{e(a["name"])}</a>: {e(a["about"])}</li>'
-                      for a in ADVISORIES["versions"] + DISTRO + PACKAGES + ADVISORIES.get("iocs", []) + [CHROMIUM, MCP, AGENT, {"name": "eMudhra CA", **ADVISORIES["ca"]}])
+                      for a in ADVISORIES["versions"] + DISTRO + PACKAGES + ADVISORIES.get("iocs", []) + [CHROMIUM, MCP, AGENT, SKILLS, {"name": "eMudhra CA", **ADVISORIES["ca"]}])
     when = datetime.datetime.now().strftime("%d %b %Y, %H:%M")
     open(path, "w").write(f"""<!doctype html><html><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1"><title>Am I affected? — report</title><style>
@@ -1021,7 +1150,7 @@ def main(argv):
         print("openssl not found: CA bundles are judged by which roots they hold, not by a chain test", file=sys.stderr)
     rows = [r for adv in ADVISORIES["versions"] for r in check_version(adv)] + check_distro()
     rows += check_chromium_cache() + scan_files(roots) + check_docker(args.docker) + check_stores()
-    rows += check_mcp(rows) + check_iocs()
+    rows += check_mcp(rows) + check_iocs() + check_skills(extra=FOUND_SKILL_DIRS) + check_hooks()
     widths = [max(len(str(r[i])) for r in rows) for i in range(4)]
     for r in rows:
         print("  ".join(str(c).ljust(w) for c, w in zip(r, widths)), r[4])

@@ -54,6 +54,8 @@ curl -fsSL https://amiaffected.now/run | sh -s -- ~/work               # only se
 <table>
 <tr><td>MCP servers</td><td>Servers started with <code>npx</code>, <code>bunx</code> or <code>uvx</code> and no version (or <code>@latest</code>), which run whatever was published last</td></tr>
 <tr><td>Permissions</td><td>Claude Code allowed to run any shell command or skip asking, and Codex running without a sandbox or approvals</td></tr>
+<tr><td>Skills</td><td>Every installed skill (Claude Code, its plugins, Codex, OpenClaw, <code>~/.agents</code>): hidden instructions and invisible characters, <code>curl | sh</code> installs, programs downloaded at run time, scripts that read credentials, set up login items or hide what they run, hard-coded keys, and the authors <a href="https://snyk.io/blog/toxicskills-malicious-ai-agent-skills-clawhub/">Snyk confirmed malicious</a>. Their scan of 3,984 skills found 36.8% with a security issue and 13.4% with a critical one</td></tr>
+<tr><td>Hooks</td><td>Plugin and settings hooks that run a command on their own, on events like session start</td></tr>
 <tr><td>Cursor extension backdoor</td><td>The tampered Claude Code extension (2.1.312 / 2.1.313) on Cursor's marketplace on 29 Oct: the <code>svc-telemetry</code> SSH key, its persistence files and launch agent, and the bad versions still installed. <a href="https://cursor.com/blog/claude-code-extension-security-notice">Cursor's notice</a></td></tr>
 <tr><td>Secrets in reach</td><td>SSH private keys without a passphrase, and <code>.env</code> files in folders where an agent works (unless Claude Code is told not to read them). It reports the file, never what's in it</td></tr>
 </table>

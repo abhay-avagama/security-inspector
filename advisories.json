@@ -1119,5 +1119,39 @@
         "isolate the machine; run Cursor's remediate-macos.sh (from cursor.com/blog/claude-code-extension-security-notice, review it first); rotate keys and sessions from a clean machine"
       ]
     }
-  ]
+  ],
+  "skills": {
+    "name": "AI agent: skills",
+    "about": "Static audit of installed agent skills (Claude Code, Codex, OpenClaw, ~/.agents): hidden instructions, invisible characters, pipe-to-shell installs, downloaded programs, credential reads, persistence, obfuscation, exfiltration endpoints, hard-coded secrets and authors Snyk confirmed malicious. Snyk's ToxicSkills scan of 3,984 skills (mostly ClawHub, Feb 2026) found 36.8% with a security issue, 13.4% critical and 76 confirmed malicious.",
+    "source": "https://snyk.io/blog/toxicskills-malicious-ai-agent-skills-clawhub/",
+    "roots": [
+      "~/.claude/skills",
+      "~/.claude/plugins/cache",
+      "~/.codex/skills",
+      "~/.agents/skills",
+      "~/.openclaw/skills",
+      "~/.openclaw/workspace/skills",
+      "~/.cursor/skills",
+      "~/.gemini/extensions"
+    ],
+    "bad_authors": [
+      "zaycv",
+      "Aslaep123",
+      "moonshine-100rze",
+      "pepe276",
+      "aztr0nutzs"
+    ],
+    "bad_names": [
+      "clawhud",
+      "clawhub1",
+      "polymarket-traiding-bot",
+      "bybit-agent",
+      "moltbook-lm8",
+      "moltbookagent",
+      "NET_NiNjA.v1.2"
+    ],
+    "bad_strings": [
+      "openclaw-core"
+    ]
+  }
 }
