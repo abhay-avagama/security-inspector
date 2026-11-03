@@ -150,6 +150,123 @@ def check_chromium_cache():
 
 # --- MCP servers that will never be patched -------------------------------------------------------
 
+# --- How safe is this machine for an AI agent? -----------------------------------------------------
+# Config findings, not CVEs, so everything here is REVIEW. Values of secrets are never read out or printed.
+
+AGENT = ADVISORIES["agent"]
+AGENT_MARKERS = {"CLAUDE.md", "AGENTS.md", ".mcp.json", "GEMINI.md", ".cursorrules"}
+AGENT_DIRS = {".claude", ".cursor", ".codex", ".gemini"}
+
+
+def server_entries(obj):
+    """Every {"command": ..., "args": [...]} in an MCP config, however deeply it's nested
+    (~/.claude.json keeps one list per project; VS Code says "servers", Claude "mcpServers")."""
+    if isinstance(obj, dict):
+        if isinstance(obj.get("command"), str):
+            yield obj
+        for v in obj.values():
+            yield from server_entries(v)
+    elif isinstance(obj, list):
+        for v in obj:
+            yield from server_entries(v)
+
+
+def unpinned(command, args):
+    """The package spec if this server is fetched fresh on every start (npx/bunx/uvx without a version)."""
+    args = [a for a in (args or []) if isinstance(a, str)]
+    base = os.path.basename(command)
+    if base in ("pnpm", "yarn") and args[:1] == ["dlx"]:
+        base, args = "npx", args[1:]
+    if base not in ("npx", "bunx", "uvx"):
+        return None
+    if base == "uvx" and "--from" in args[:-1]:
+        spec = args[args.index("--from") + 1]
+    else:
+        spec = next((a for a in args if not a.startswith("-")), None)
+    if not spec:
+        return None
+    if base == "uvx":
+        return None if re.search(r"==|@\d", spec) else spec
+    name, _, version = spec[1:].partition("@") if spec.startswith("@") else spec.partition("@")
+    return spec if version in ("", "latest", "next") else None
+
+
+def load_config(path, data):
+    try:
+        if path.endswith(".toml"):
+            import tomllib  # 3.11+; older Pythons just skip Codex's config
+            return tomllib.loads(data.decode("utf-8", "replace"))
+        return json.loads(data)
+    except Exception:  # ponytail: JSONC with comments (VS Code) is skipped, not half-parsed
+        return None
+
+
+def agent_config_rows(path, data):
+    if re.search(r"/plugins/marketplaces/|/\.tmp/", path):  # catalogs of plugins you could install, not ones that run
+        return []
+    rows = mcp_rows(path, data)
+    cfg = load_config(path, data)
+    if not isinstance(cfg, dict):
+        return rows
+    for spec in sorted({unpinned(e["command"], e.get("args")) for e in server_entries(cfg)} - {None}):
+        rows.append(("AI agent: unpinned MCP servers", path, spec, "REVIEW",
+                     "starts whatever version was published last: pin an exact version"))
+    perms = cfg.get("permissions") if isinstance(cfg.get("permissions"), dict) else {}
+    if perms.get("defaultMode") == "bypassPermissions":
+        rows.append(("AI agent: permissions", path, "bypassPermissions", "REVIEW", "Claude Code runs every tool without asking"))
+    if {"Bash", "Bash(*)", "Bash(:*)"} & set(perms.get("allow") or []):
+        rows.append(("AI agent: permissions", path, "allow Bash", "REVIEW", "Claude Code runs any shell command without asking"))
+    if cfg.get("sandbox_mode") == "danger-full-access" or cfg.get("approval_policy") == "never":
+        rows.append(("AI agent: permissions", path, f"{cfg.get('approval_policy', '-')}/{cfg.get('sandbox_mode', '-')}", "REVIEW",
+                     "Codex runs without a sandbox or without asking"))
+    return rows
+
+
+def ssh_key_encrypted(text):
+    if "BEGIN OPENSSH PRIVATE KEY" in text:
+        body = "".join(text.split("-----")[2].split())
+        try:
+            raw = base64.b64decode(body)
+            n = int.from_bytes(raw[15:19], "big")  # after b"openssh-key-v1\0": length-prefixed cipher name
+            return raw[19:19 + n] != b"none"
+        except (ValueError, IndexError):
+            return True
+    return "ENCRYPTED" in text  # PEM: "Proc-Type: 4,ENCRYPTED" or "BEGIN ENCRYPTED PRIVATE KEY"
+
+
+def check_ssh_keys():
+    rows = []
+    for p in sorted(glob.glob(os.path.join(HOME, ".ssh", "*"))):
+        if p.endswith(".pub") or not os.path.isfile(p) or os.path.getsize(p) > 64_000:
+            continue
+        try:
+            head = open(p, errors="replace").read()
+        except OSError:
+            continue
+        if "PRIVATE KEY-----" in head and not ssh_key_encrypted(head):
+            rows.append(("AI agent: secrets in reach", p, "no passphrase", "REVIEW",
+                         "anything running as you, including an agent following a prompt injection, can copy and use it"))
+    return rows
+
+
+def env_rows(d, dirs, files):
+    """A folder an agent works in (it has CLAUDE.md, AGENTS.md, .claude/ ...) that also holds a .env."""
+    envs = sorted(f for f in files if f == ".env" or (f.startswith(".env.") and not f.endswith((".example", ".sample", ".template"))))
+    if not envs or not (AGENT_MARKERS & set(files) or AGENT_DIRS & set(dirs)):
+        return []
+    deny = []
+    for sp in (os.path.join(d, ".claude", "settings.json"), os.path.join(d, ".claude", "settings.local.json"),
+               os.path.join(HOME, ".claude", "settings.json")):
+        try:
+            deny += json.load(open(sp)).get("permissions", {}).get("deny", [])
+        except (OSError, ValueError, AttributeError):
+            pass
+    if any(".env" in str(x) for x in deny):
+        return []
+    return [("AI agent: secrets in reach", os.path.join(d, e), ".env", "REVIEW",
+             "an agent works in this folder and can read it") for e in envs]
+
+
 def mcp_rows(path, data):
     rows = []
     for server in sorted(set(re.findall(rb"@modelcontextprotocol/(server-[a-z0-9-]+)", data))):
@@ -168,11 +285,13 @@ def check_mcp(rows):
     for p in sorted({os.path.expanduser(c) for c in MCP["configs"]}):
         if os.path.isfile(p) and os.path.getsize(p) < MAX_READ and not any(r[1] == p for r in rows):
             try:
-                out += mcp_rows(p, open(p, "rb").read())
+                out += agent_config_rows(p, open(p, "rb").read())
             except OSError:
                 pass
-    if not any(r[0] == MCP["name"] for r in rows + out):
-        out.append((MCP["name"], "-", "-", "NOT FOUND", ""))
+    out += check_ssh_keys()
+    for name in (MCP["name"], "AI agent: unpinned MCP servers", "AI agent: permissions", "AI agent: secrets in reach"):
+        if not any(r[0] == name for r in rows + out):
+            out.append((name, "-", "-", "NOT FOUND", ""))
     return out
 
 
@@ -448,8 +567,8 @@ def inspect_file(path, read):
             for bad in pkg["bad"]:
                 if re.search(rf"{pat}.{{0,80}}?{re.escape(bad)}".encode(), data(), re.S | re.I):
                     rows.append((name, path, bad, status, lock_note))
-    if base in MCP["files"]:
-        rows += mcp_rows(path, data())
+    if base in MCP["files"] or (parent in AGENT_DIRS and base in ("settings.json", "settings.local.json", "config.toml")):
+        rows += agent_config_rows(path, data())
     if base in BUNDLE_FILES:
         names = roots_in(data())
         if names:
@@ -464,6 +583,7 @@ def scan_files(roots):
     for root in roots:
         for d, dirs, files in os.walk(root):
             dirs[:] = [x for x in dirs if x not in SKIP]
+            rows += env_rows(d, dirs, files)
             if d == f"{HOME}/Library":  # huge on macOS; only its Python site-packages matter
                 dirs[:] = [x for x in dirs if x == "Python"]
             for f in files:
@@ -674,6 +794,16 @@ def fix_for(item, where, note=""):
             return ("Remove the Puppeteer MCP server (no fix is coming)",
                     "delete the server-puppeteer entry from the config; for a browser use @playwright/mcp or chrome-devtools-mcp")
         return ("Replace archived @modelcontextprotocol servers", "switch each one to the vendor's own server, e.g. github/github-mcp-server")
+    if item == "AI agent: unpinned MCP servers":
+        return ("Pin MCP server versions", "replace @latest or a bare package name with an exact version, e.g. npx -y @playwright/mcp@0.0.84")
+    if item == "AI agent: permissions":
+        return ("Make your coding agent ask before it runs commands",
+                'Claude Code: drop "Bash" from permissions.allow and defaultMode bypassPermissions; Codex: approval_policy = "on-request", sandbox_mode = "workspace-write"')
+    if item == "AI agent: secrets in reach":
+        if "/.ssh/" in where:
+            return ("Put a passphrase on SSH private keys", "ssh-keygen -p -f <key>   # macOS: then ssh-add --apple-use-keychain <key>")
+        return ("Keep agents away from .env files",
+                'add "permissions": {"deny": ["Read(./.env*)"]} to the project\'s .claude/settings.json, or keep secrets in a secret manager')
     if item == "Docker":
         return ("Rebuild the affected Docker image", "remove the image, rebuild from a patched base, rotate any keys it held")
     plan = next((a["plan"] for a in ADVISORIES["versions"] + PACKAGES if a["name"] == item and "plan" in a), None)
@@ -754,7 +884,7 @@ def html_report(rows, path):
                  f'<ul class="leaves">{leaves}</ul></details>')
 
     sources = "".join(f'<li><a href="{e(a["source"])}">{e(a["name"])}</a>: {e(a["about"])}</li>'
-                      for a in ADVISORIES["versions"] + DISTRO + PACKAGES + [CHROMIUM, MCP, {"name": "eMudhra CA", **ADVISORIES["ca"]}])
+                      for a in ADVISORIES["versions"] + DISTRO + PACKAGES + [CHROMIUM, MCP, AGENT, {"name": "eMudhra CA", **ADVISORIES["ca"]}])
     when = datetime.datetime.now().strftime("%d %b %Y, %H:%M")
     open(path, "w").write(f"""<!doctype html><html><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1"><title>Am I affected? — report</title><style>

@@ -1076,7 +1076,14 @@
       "~/.config/Code/User/settings.json",
       "~/.claude/settings.json",
       "~/.gemini/settings.json",
-      "~/.codex/config.toml"
+      "~/.codex/config.toml",
+      "~/.cursor/mcp.json",
+      "~/.claude/settings.local.json"
     ]
+  },
+  "agent": {
+    "name": "AI agent setup",
+    "about": "Not CVEs: MCP servers fetched fresh on every start, coding agents allowed to run any command, SSH keys without a passphrase and .env files in folders an agent works in. Anything an agent can be tricked into doing runs with your files and keys.",
+    "source": "https://github.com/abhay-avagama/security-inspector#ai-agent-setup"
   }
 }

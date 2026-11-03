@@ -1,10 +1,12 @@
 import io
 import os
+import shutil
+import subprocess
 import sys
 import tarfile
 import tempfile
 
-from secinspect import (ADVISORIES, AAA, CHROMIUM, INTERMEDIATES, MCP, ROOTS, by_branch, chain_accepts, check_mcp, check_overrides, check_version,
+from secinspect import (ADVISORIES, AAA, CHROMIUM, INTERMEDIATES, MCP, ROOTS, agent_config_rows, by_branch, chain_accepts, check_mcp, env_rows, ssh_key_encrypted, unpinned, check_overrides, check_version,
                         chromium_version, distro_status, fix_for, installed, inspect_file, ver,
                         fix_hint, fix_plan, html_report, new_cves, nums, os_release, pem, roots_in, scan_files,
                         scan_image_tar, test_bundle, upstream, version_status)
@@ -290,7 +292,40 @@ def test_postgres():
     assert rows == [("pgAdmin 4 (pip)", "9.18", "REVIEW")], rows
 
 
+def test_agent_setup():
+    assert unpinned("npx", ["-y", "@playwright/mcp@latest"]) == "@playwright/mcp@latest"
+    assert unpinned("npx", ["-y", "@playwright/mcp"]) == "@playwright/mcp"
+    assert unpinned("npx", ["-y", "@playwright/mcp@0.0.84"]) is None
+    assert unpinned("/usr/local/bin/npx", ["server-x@1.2.3", "--port", "1"]) is None
+    assert unpinned("uvx", ["mcp-server-fetch"]) == "mcp-server-fetch"
+    assert unpinned("uvx", ["--from", "mcp-server-fetch==1.0", "mcp-server-fetch"]) is None
+    assert unpinned("node", ["server.js"]) is None
+    cfg = b'{"projects": {"/p": {"mcpServers": {"pw": {"command": "npx", "args": ["@playwright/mcp@latest"]}}}},' \
+          b' "permissions": {"defaultMode": "bypassPermissions", "allow": ["Bash", "Read"]}}'
+    got = sorted((r[0], r[2]) for r in agent_config_rows("/h/.claude.json", cfg))
+    assert got == [("AI agent: permissions", "allow Bash"), ("AI agent: permissions", "bypassPermissions"),
+                   ("AI agent: unpinned MCP servers", "@playwright/mcp@latest")], got
+    codex = b'approval_policy = "never"\nsandbox_mode = "danger-full-access"\n'
+    if sys.version_info >= (3, 11):
+        assert [r[2] for r in agent_config_rows("/h/.codex/config.toml", codex)] == ["never/danger-full-access"]
+    assert agent_config_rows("/h/.mcp.json", b"{not json") == []
+    assert agent_config_rows("/h/.claude/plugins/marketplaces/x/.mcp.json", cfg) == []
+    with tempfile.TemporaryDirectory() as d:
+        key = os.path.join(d, "k")
+        if shutil.which("ssh-keygen") and subprocess.run(["ssh-keygen", "-q", "-t", "ed25519", "-N", "", "-f", key], capture_output=True).returncode == 0:
+            assert not ssh_key_encrypted(open(key).read())
+            subprocess.run(["ssh-keygen", "-q", "-p", "-P", "", "-N", "pw", "-f", key], capture_output=True, check=True)
+            assert ssh_key_encrypted(open(key).read())
+        assert [r[2] for r in env_rows(d, [".claude"], [".env", ".env.example", "app.py"])] == [".env"]
+        assert env_rows(d, [], [".env"]) == []  # no agent here
+        os.makedirs(os.path.join(d, ".claude"))
+        open(os.path.join(d, ".claude", "settings.json"), "w").write('{"permissions": {"deny": ["Read(./.env*)"]}}')
+        assert env_rows(d, [".claude"], [".env"]) == []  # already denied
+    assert fix_for("AI agent: secrets in reach", "/Users/a/.ssh/id_ed25519")[1].startswith("ssh-keygen -p")
+
+
 if __name__ == "__main__":
+    test_agent_setup()
     test_postgres()
     test_queue_nov3()
     test_chrome()

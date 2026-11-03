@@ -61,6 +61,19 @@ version-feed technologies, so they aren't tracked this way — refresh them from
 With `--docker`, every local image is streamed through `docker save` and the same file checks run
 on each layer (LiteLLM, malware files, lockfiles, CA bundles), without starting a container.
 
+## AI agent setup
+
+Coding agents (Claude Code, Codex, Cursor, Gemini) and their MCP servers run as you, so anything they
+can be tricked into doing by a prompt injection runs with your files and keys. These are
+configuration findings, not CVEs, so they're REVIEW, never AFFECTED, and don't change the exit code.
+
+| Check | How |
+|---|---|
+| **Unpinned MCP servers** | Servers in `.mcp.json`, `mcp.json`, `~/.claude.json`, Claude Desktop, Cursor, VS Code and Codex configs that start with `npx` / `bunx` / `pnpm dlx` / `uvx` and no version or `@latest`. Plugin catalogs you haven't installed are skipped. |
+| **Agent permissions** | Claude Code `permissions.defaultMode: bypassPermissions` or an allow rule for all of `Bash`; Codex `approval_policy = "never"` or `sandbox_mode = "danger-full-access"`. |
+| **SSH keys without a passphrase** | Every private key in `~/.ssh`, read for its encryption header only. |
+| **`.env` files an agent can read** | `.env*` files (not `.example` / `.sample` / `.template`) in folders with `CLAUDE.md`, `AGENTS.md`, `GEMINI.md`, `.mcp.json` or a `.claude` / `.cursor` / `.codex` / `.gemini` folder, unless a Claude Code `permissions.deny` rule covers `.env`. Only the path is reported. |
+
 ## Servers (Ubuntu, Debian, RHEL family)
 
 On a VPS most software comes from apt or dnf, and the distros fix bugs without changing the

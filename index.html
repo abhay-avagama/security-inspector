@@ -49,6 +49,15 @@ curl -fsSL https://amiaffected.now/run | sh -s -- ~/work               # only se
 <tr><td>eMudhra CA</td><td>Whether each trust store (OpenSSL, certifi, Keychain, Java, Firefox, Windows) would accept the cracked intermediates</td></tr>
 </table>
 
+<h2>If an AI agent works on this machine</h2>
+<p>Coding agents and their MCP servers run as you, so a prompt injection in a web page, an issue or a README can reach whatever you can. These aren't CVEs, so they're flagged for review, not as affected.</p>
+<table>
+<tr><td>MCP servers</td><td>Servers started with <code>npx</code>, <code>bunx</code> or <code>uvx</code> and no version (or <code>@latest</code>), which run whatever was published last</td></tr>
+<tr><td>Permissions</td><td>Claude Code allowed to run any shell command or skip asking, and Codex running without a sandbox or approvals</td></tr>
+<tr><td>Secrets in reach</td><td>SSH private keys without a passphrase, and <code>.env</code> files in folders where an agent works (unless Claude Code is told not to read them). It reports the file, never what's in it</td></tr>
+</table>
+<p class="muted">Want a second pair of eyes on your agent setup? That's what our <a href="https://avagama.co/services/">agent security review</a> covers.</p>
+
 <h2>On a Linux server</h2>
 <p>On Ubuntu, Debian and RHEL/AlmaLinux/Rocky it also checks the running kernel and the usual VPS software against each distro's own fixed packages, so a patched server isn't flagged just because the version number looks old.</p>
 <table>
