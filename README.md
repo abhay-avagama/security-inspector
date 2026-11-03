@@ -206,6 +206,10 @@ Built and maintained by [Avagama Consulting](https://avagama.co), who also do fi
 [security reviews](https://avagama.co/services/) of agents, MCP servers and the machines they run on.
 MIT licensed.
 
+## Changelog
+
+Every check and when it went live: [amiaffected.now/changelog](https://amiaffected.now/changelog/) ([RSS](https://amiaffected.now/changelog.xml)). Add an entry to `changelog.json` with each change and run `python3 changelog.py`; CI fails if the page is out of date.
+
 ## Security
 
 Found a problem with the tool itself? See [SECURITY.md](SECURITY.md).

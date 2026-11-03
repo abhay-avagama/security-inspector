@@ -11,6 +11,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - run: python3 test_secinspect.py
+      - run: python3 changelog.py --check  # page and feed match changelog.json
       - name: Make a fixture repo with a backdoored pin and an archived MCP server
         run: |
           mkdir -p "$RUNNER_TEMP/fixture"
