@@ -374,12 +374,18 @@ def distro_status(adv, release, version, source, lt):
     fixed = adv.get("fixed", {}).get(release)
     if isinstance(fixed, dict):
         fixed = fixed.get(source) or fixed.get("*")
+    proposed = isinstance(fixed, str) and fixed.startswith("proposed:")  # fix only in Ubuntu's testing pocket so far
+    fixed = fixed[len("proposed:"):] if proposed else fixed
     ups = [nums(f) for f in adv.get("upstream_fixed", [])]
     after = (", " + adv["after_fix"]) if adv.get("after_fix") else ""
     if fixed == "not-affected":
         return "OK", f"{release} isn't affected"
     if fixed and fixed != "unfixed" and (not ups or upstream(version) == upstream(fixed)):
-        return ("AFFECTED", f"update to {fixed}+{after}") if lt(version, fixed) else ("OK", "")
+        if not lt(version, fixed):
+            return "OK", ""
+        if proposed:
+            return "AFFECTED", f"fixed in {fixed}, so far only in {release}'s -proposed pocket: install it from there or wait for -updates{after}"
+        return "AFFECTED", f"update to {fixed}+{after}"
     unfixed = ("AFFECTED", f"no fixed {release} package yet: {adv.get('mitigation', 'watch for the update')}")
     if ups:  # vendor build, or the distro moved to a new upstream release
         status, note = by_branch(nums(upstream(version)), ups, adv.get("branch_width", 2))
@@ -741,6 +747,12 @@ def check_stores():
 STATUSES = ("AFFECTED", "REVIEW", "UNKNOWN", "OK", "NOT FOUND")
 
 
+# From ubuntu.com/blog/fixes-available-in-proposed-pocket-for-cve-2026-98432 (kernels installed via a meta-package)
+PROPOSED_KERNEL = ("sudo add-apt-repository --component main --pocket proposed http://archive.ubuntu.com/ubuntu && sudo apt update && "
+                   "dpkg-query -W -f '${source:Package}\\t${binary:Package}\\n' | awk '$1 ~ \"^linux-meta\" { print $2 }' | "
+                   "xargs sudo apt install -t \"$(. /etc/os-release && echo $VERSION_CODENAME)-proposed\" --only-upgrade && sudo reboot")
+
+
 def fix_for(item, where, note=""):
     """One (title, command) for an actionable row, or None. Rows with the same command collapse into
     one job in the fix plan, so 15 Node installs or 80 venvs become a single step."""
@@ -811,6 +823,8 @@ def fix_for(item, where, note=""):
         return tuple(plan)
     adv = next((a for a in DISTRO if a["name"] == item), None)
     if adv and where.endswith(("(apt)", "(dnf)")):
+        if "-proposed pocket" in note:  # a plain upgrade won't pick it up; Ubuntu's own steps
+            return (f"Install the fixed kernel from -proposed and reboot ({item}), or wait for -updates", PROPOSED_KERNEL)
         if note.startswith("no fixed"):  # upgrading won't help yet: the workaround is the job
             return (f"Work around {item} until your distro ships a fix", adv.get("mitigation", "watch for the update"))
         if adv.get("kernel"):

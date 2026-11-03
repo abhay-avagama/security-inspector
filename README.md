@@ -87,7 +87,7 @@ against the upstream fixes instead.
 | Issue | How |
 |---|---|
 | **Linux kernel**: CVE-2026-46300, CVE-2026-53266, CVE-2025-39964, CVE-2025-39682 (all CISA KEV) | The *running* kernel, matched to its flavour (generic, HWE, KVM, AWS, Azure, GCP, Oracle). A fix only counts after a reboot. |
-| **Linux kernel**: CVE-2026-98432 (CVSS 9.8, remote over IPv4 TCP) | Same. Ubuntu has announced the fix but not shipped it yet. |
+| **Linux kernel**: CVE-2026-98432 (CVSS 9.8, remote over IPv4 TCP) | Same. On Ubuntu the fixed generic kernels (5.15.0-203.213 / 6.8.0-149.149 / 7.0.0-43.43) are [in -proposed](https://ubuntu.com/blog/fixes-available-in-proposed-pocket-for-cve-2026-98432) so far: a booted proposed kernel counts as fixed, and the fix plan gives Ubuntu's steps to install it. Cloud and HWE flavours aren't listed yet. |
 | **nginx** CVE-2026-15176 and 4 more | Distro or nginx.org package. Fixed upstream in 1.30.6 / 1.31.7. |
 | **Apache httpd** 2.4.69 fixes (CVE-2026-57941 mod_http2 and 4 more) | `apache2` / `httpd`, plus `mod_http2` on RHEL-family systems, where it is a separate package. |
 | **MariaDB** CVE-2026-85746 and 4 more | Distro or MariaDB repo package. |

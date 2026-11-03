@@ -196,6 +196,13 @@ def test_distro():
     assert st(k, "debian:12", "6.1.158-1") == "AFFECTED" and st(k, "debian:12", "6.1.176-1") == "OK"
     assert st("Linux kernel (remote TCP)", "ubuntu:24.04", "6.8.0-146.146", "linux") == "AFFECTED"
     assert st("Linux kernel (remote TCP)", "el:9", "5.14.0-687.64.1.el9_8") == "OK"
+    # Ubuntu's fix is only in -proposed: a booted proposed kernel counts, others get Ubuntu's install steps
+    assert st("Linux kernel (remote TCP)", "ubuntu:24.04", "6.8.0-149.149", "linux") == "OK"
+    note = distro_status(DIST["Linux kernel (remote TCP)"], "ubuntu:22.04", "5.15.0-198.208", "linux", lt)[1]
+    assert "-proposed pocket" in note and "5.15.0-203.213" in note, note
+    assert "--pocket proposed" in fix_for("Linux kernel (remote TCP)", "linux-image-5.15.0-198-generic (apt)", note)[1]
+    aws = distro_status(DIST["Linux kernel (remote TCP)"], "ubuntu:24.04", "6.8.0-1066.69", "linux-aws", lt)[1]
+    assert aws.startswith("no fixed") and "isn't listed yet" in aws, aws  # flavours not in Ubuntu's post
     # fix plan: one apt/dnf command per advisory, kernel reboots
     plan = fix_plan([("nginx", "nginx nginx-core (apt)", "1", "AFFECTED", ""), (k, "kernel-core (dnf)", "1", "AFFECTED", "")])
     assert any("apt install --only-upgrade nginx nginx-core" in p[2] for p in plan)
