@@ -71,6 +71,7 @@ configuration findings, not CVEs, so they're REVIEW, never AFFECTED, and don't c
 |---|---|
 | **Unpinned MCP servers** | Servers in `.mcp.json`, `mcp.json`, `~/.claude.json`, Claude Desktop, Cursor, VS Code and Codex configs that start with `npx` / `bunx` / `pnpm dlx` / `uvx` and no version or `@latest`. Plugin catalogs you haven't installed are skipped. |
 | **Agent permissions** | Claude Code `permissions.defaultMode: bypassPermissions` or an allow rule for all of `Bash`; Codex `approval_policy = "never"` or `sandbox_mode = "danger-full-access"`. |
+| **Cursor extension backdoor** ([Cursor's notice](https://cursor.com/blog/claude-code-extension-security-notice)) | AFFECTED if any trace of the tampered `Anthropic.claude-code` 2.1.312 / 2.1.313 is on disk: a `svc-telemetry` key in `~/.ssh/authorized_keys`, `~/.config/.smt` / `.smtk`, `~/Library/LaunchAgents/com.apple.sysmond.plist`, `.stk_*` in the temp folder, the `@reboot` crontab entry, or the bad versions in `~/.cursor/extensions`. Uninstalling the extension doesn't remove the backdoor. |
 | **SSH keys without a passphrase** | Every private key in `~/.ssh`, read for its encryption header only. |
 | **`.env` files an agent can read** | `.env*` files (not `.example` / `.sample` / `.template`) in folders with `CLAUDE.md`, `AGENTS.md`, `GEMINI.md`, `.mcp.json` or a `.claude` / `.cursor` / `.codex` / `.gemini` folder, unless a Claude Code `permissions.deny` rule covers `.env`. Only the path is reported. |
 

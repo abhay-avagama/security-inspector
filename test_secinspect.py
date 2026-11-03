@@ -6,7 +6,7 @@ import sys
 import tarfile
 import tempfile
 
-from secinspect import (ADVISORIES, AAA, CHROMIUM, INTERMEDIATES, MCP, ROOTS, agent_config_rows, by_branch, chain_accepts, check_mcp, env_rows, ssh_key_encrypted, unpinned, check_overrides, check_version,
+from secinspect import (ADVISORIES, AAA, CHROMIUM, INTERMEDIATES, MCP, ROOTS, agent_config_rows, by_branch, check_iocs, chain_accepts, check_mcp, env_rows, ssh_key_encrypted, unpinned, check_overrides, check_version,
                         chromium_version, distro_status, fix_for, installed, inspect_file, ver,
                         fix_hint, fix_plan, html_report, new_cves, nums, os_release, pem, roots_in, scan_files,
                         scan_image_tar, test_bundle, upstream, version_status)
@@ -331,7 +331,22 @@ def test_agent_setup():
     assert fix_for("AI agent: secrets in reach", "/Users/a/.ssh/id_ed25519")[1].startswith("ssh-keygen -p")
 
 
+def test_cursor_backdoor():
+    with tempfile.TemporaryDirectory() as h:
+        clean = [r for r in check_iocs(h) if r[0].startswith("Cursor")]
+        assert [r[3] for r in clean] in (["NOT FOUND"], ["AFFECTED"]), clean  # AFFECTED only if this test box is infected
+        os.makedirs(f"{h}/.ssh"); os.makedirs(f"{h}/.config"); os.makedirs(f"{h}/.cursor/extensions/anthropic.claude-code-2.1.313-darwin-arm64")
+        open(f"{h}/.ssh/authorized_keys", "w").write("ssh-ed25519 AAAA me@laptop\nssh-ed25519 AAAA svc-telemetry\n")
+        open(f"{h}/.config/.smt", "w").write("x")
+        got = sorted((os.path.basename(r[1]), r[2], r[3]) for r in check_iocs(h) if r[0].startswith("Cursor") and h in r[1])
+        assert got == [(".smt", "persistence file", "AFFECTED"),
+                       ("anthropic.claude-code-2.1.313-darwin-arm64", "malicious extension version", "AFFECTED"),
+                       ("authorized_keys", "svc-telemetry entry", "AFFECTED")], got
+    assert fix_for("Cursor: malicious Claude Code extension", "x")[0].startswith("Clean up the Cursor")
+
+
 if __name__ == "__main__":
+    test_cursor_backdoor()
     test_agent_setup()
     test_postgres()
     test_queue_nov3()

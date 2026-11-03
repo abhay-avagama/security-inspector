@@ -54,6 +54,7 @@ curl -fsSL https://amiaffected.now/run | sh -s -- ~/work               # only se
 <table>
 <tr><td>MCP servers</td><td>Servers started with <code>npx</code>, <code>bunx</code> or <code>uvx</code> and no version (or <code>@latest</code>), which run whatever was published last</td></tr>
 <tr><td>Permissions</td><td>Claude Code allowed to run any shell command or skip asking, and Codex running without a sandbox or approvals</td></tr>
+<tr><td>Cursor extension backdoor</td><td>The tampered Claude Code extension (2.1.312 / 2.1.313) on Cursor's marketplace on 29 Oct: the <code>svc-telemetry</code> SSH key, its persistence files and launch agent, and the bad versions still installed. <a href="https://cursor.com/blog/claude-code-extension-security-notice">Cursor's notice</a></td></tr>
 <tr><td>Secrets in reach</td><td>SSH private keys without a passphrase, and <code>.env</code> files in folders where an agent works (unless Claude Code is told not to read them). It reports the file, never what's in it</td></tr>
 </table>
 <p class="muted">Want a second pair of eyes on your agent setup? That's what our <a href="https://avagama.co/services/">agent security review</a> covers.</p>

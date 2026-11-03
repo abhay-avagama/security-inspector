@@ -234,6 +234,31 @@ def ssh_key_encrypted(text):
     return "ENCRYPTED" in text  # PEM: "Proc-Type: 4,ENCRYPTED" or "BEGIN ENCRYPTED PRIVATE KEY"
 
 
+def check_iocs(home=HOME):
+    """Traces a known malware campaign leaves on disk. Reports which file matched, never its contents."""
+    rows = []
+    for ioc in ADVISORIES.get("iocs", []):
+        name, hits = ioc["name"], []
+        at = lambda g: g.replace("~", home, 1).replace("{tmp}", tempfile.gettempdir())
+        for g in ioc.get("files", []):
+            hits += [(p, "persistence file") for p in glob.glob(at(g)) if re.search(ioc["file_regex"], p)]
+        for g, needle in ioc.get("contains", []):
+            for p in glob.glob(at(g)):
+                try:
+                    if needle in open(p, errors="replace").read(MAX_READ):
+                        hits.append((p, f"{needle} entry"))
+                except OSError:
+                    pass
+        if ioc.get("crontab") and ioc["crontab"] in run("crontab", "-l"):
+            hits.append(("crontab", "@reboot entry"))
+        for g in ioc.get("extensions", []):
+            hits += [(p, "malicious extension version") for p in glob.glob(at(g))]
+        rows += [(name, p, what, "AFFECTED", ioc["cleanup"]) for p, what in sorted(set(hits))]
+        if not any(r[0] == name for r in rows):
+            rows.append((name, "-", "-", "NOT FOUND", ""))
+    return rows
+
+
 def check_ssh_keys():
     rows = []
     for p in sorted(glob.glob(os.path.join(HOME, ".ssh", "*"))):
@@ -818,7 +843,7 @@ def fix_for(item, where, note=""):
                 'add "permissions": {"deny": ["Read(./.env*)"]} to the project\'s .claude/settings.json, or keep secrets in a secret manager')
     if item == "Docker":
         return ("Rebuild the affected Docker image", "remove the image, rebuild from a patched base, rotate any keys it held")
-    plan = next((a["plan"] for a in ADVISORIES["versions"] + PACKAGES if a["name"] == item and "plan" in a), None)
+    plan = next((a["plan"] for a in ADVISORIES["versions"] + PACKAGES + ADVISORIES.get("iocs", []) if a["name"] == item and "plan" in a), None)
     if plan:
         return tuple(plan)
     adv = next((a for a in DISTRO if a["name"] == item), None)
@@ -898,7 +923,7 @@ def html_report(rows, path):
                  f'<ul class="leaves">{leaves}</ul></details>')
 
     sources = "".join(f'<li><a href="{e(a["source"])}">{e(a["name"])}</a>: {e(a["about"])}</li>'
-                      for a in ADVISORIES["versions"] + DISTRO + PACKAGES + [CHROMIUM, MCP, AGENT, {"name": "eMudhra CA", **ADVISORIES["ca"]}])
+                      for a in ADVISORIES["versions"] + DISTRO + PACKAGES + ADVISORIES.get("iocs", []) + [CHROMIUM, MCP, AGENT, {"name": "eMudhra CA", **ADVISORIES["ca"]}])
     when = datetime.datetime.now().strftime("%d %b %Y, %H:%M")
     open(path, "w").write(f"""<!doctype html><html><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1"><title>Am I affected? — report</title><style>
@@ -996,7 +1021,7 @@ def main(argv):
         print("openssl not found: CA bundles are judged by which roots they hold, not by a chain test", file=sys.stderr)
     rows = [r for adv in ADVISORIES["versions"] for r in check_version(adv)] + check_distro()
     rows += check_chromium_cache() + scan_files(roots) + check_docker(args.docker) + check_stores()
-    rows += check_mcp(rows)
+    rows += check_mcp(rows) + check_iocs()
     widths = [max(len(str(r[i])) for r in rows) for i in range(4)]
     for r in rows:
         print("  ".join(str(c).ljust(w) for c, w in zip(r, widths)), r[4])

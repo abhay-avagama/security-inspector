@@ -1088,5 +1088,36 @@
     "name": "AI agent setup",
     "about": "Not CVEs: MCP servers fetched fresh on every start, coding agents allowed to run any command, SSH keys without a passphrase and .env files in folders an agent works in. Anything an agent can be tricked into doing runs with your files and keys.",
     "source": "https://github.com/abhay-avagama/security-inspector#ai-agent-setup"
-  }
+  },
+  "iocs": [
+    {
+      "name": "Cursor: malicious Claude Code extension",
+      "about": "Anthropic.claude-code 2.1.312 / 2.1.313 on Cursor's marketplace (not built by Anthropic), live 29 Oct 2026, installed a reverse-SSH backdoor that survives uninstalling the extension; macOS and Windows",
+      "source": "https://cursor.com/blog/claude-code-extension-security-notice",
+      "files": [
+        "~/.config/.smt",
+        "~/.config/.smtk",
+        "~/Library/LaunchAgents/com.apple.sysmond.plist",
+        "{tmp}/.stk_*",
+        "/tmp/.stk_*"
+      ],
+      "file_regex": "(\\.smtk?|com\\.apple\\.sysmond\\.plist|\\.stk_[0-9a-f]{10})$",
+      "contains": [
+        [
+          "~/.ssh/authorized_keys",
+          "svc-telemetry"
+        ]
+      ],
+      "crontab": ".config/.smt",
+      "extensions": [
+        "~/.cursor/extensions/anthropic.claude-code-2.1.312*",
+        "~/.cursor/extensions/anthropic.claude-code-2.1.313*"
+      ],
+      "cleanup": "isolate this machine, review and run Cursor's remediate-macos.sh as your user (not root), remove the svc-telemetry key and persistence, consider a rebuild, then rotate every credential and session it could reach from a clean machine",
+      "plan": [
+        "Clean up the Cursor extension backdoor and rotate credentials",
+        "isolate the machine; run Cursor's remediate-macos.sh (from cursor.com/blog/claude-code-extension-security-notice, review it first); rotate keys and sessions from a clean machine"
+      ]
+    }
+  ]
 }
