@@ -75,7 +75,7 @@ def by_branch(v, fixed, width):
 def version_status(adv, v):
     if "affected" in adv:  # explicit inclusive ranges, e.g. BIND
         return next((("AFFECTED", fix) for lo, hi, fix, *only in adv["affected"]  # optional 4th item: sys.platform
-                     if ver(lo) <= v <= ver(hi) and (not only or sys.platform in only)), ("OK", ""))
+                     if nums(lo) <= v <= nums(hi) and (not only or sys.platform in only)), ("OK", ""))
     status, note = by_branch(v, [ver(f) for f in adv["fixed"]], adv["branch_width"])
     if status == "AFFECTED" and adv.get("after_fix"):
         note += ", " + adv["after_fix"]
@@ -84,14 +84,18 @@ def version_status(adv, v):
 
 def check_version(adv):
     name = adv["name"]
-    if "version_files" in adv:  # apps in web roots (WordPress, Nextcloud apps): one row per install
+    if "present_paths" in adv:  # no reliable version on disk (Control Web Panel): installed means check it by hand
+        here = [p for p in adv["present_paths"] if os.path.exists(p)]
+        return [(name, p, "installed", "REVIEW", adv["review_note"]) for p in here] or [(name, "-", "-", "NOT FOUND", "")]
+    if "version_files" in adv:  # apps in web roots (WordPress, Nextcloud apps, plugins): one row per install
         found = []
         for p in sorted({p for g in adv["version_files"] for p in glob.glob(os.path.expanduser(g))}):
             try:
                 m = re.search(adv["version_regex"], open(p, errors="replace").read(MAX_READ))
             except OSError:
                 m = None
-            found.append((os.path.dirname(os.path.dirname(p)), nums(m[1]) if m else None))
+            if m or not adv.get("match_required"):
+                found.append((os.path.dirname(os.path.dirname(p)), nums(m[1]) if m else None))
     elif "version_file" in adv:
         found = [(adv["version_file"], ver(open(adv["version_file"]).read()))] if os.path.exists(adv["version_file"]) else []
     else:
@@ -384,9 +388,23 @@ def bundle_summary(bundles):
 
 # --- File checks, shared by the folder walk and Docker layers -----------------------------------
 
-LOCKFILE = re.compile(r"(requirements.*\.txt|pyproject\.toml|uv\.lock|poetry\.lock|Pipfile\.lock)$")
+LOCKFILE = re.compile(r"(requirements.*\.txt|pyproject\.toml|uv\.lock|poetry\.lock|Pipfile\.lock"
+                      r"|package-lock\.json|pnpm-lock\.yaml|yarn\.lock|bun\.lock)$")
 SKIP = {"node_modules", ".git", ".Trash"}
 MAX_READ = 50_000_000  # cap per-file reads (disk and tar members) so an untrusted file can't exhaust memory
+
+
+def pkg_bad(pkg, v):
+    lo, hi = pkg.get("bad_range", (None, None))
+    return v in pkg.get("bad", ()) or bool(lo and nums(lo) <= nums(v) <= nums(hi))
+
+
+def npm_versions(pat, data):
+    """Resolved versions of one npm package in package-lock / pnpm-lock / yarn.lock / bun.lock.
+    ponytail: format-shaped regexes, not parsers; they skip the ^ranges in package.json-style specs."""
+    return set(re.findall(rb"node_modules/" + pat + rb'"\s*:\s*\{[^}]*?"version"\s*:\s*"([\d.]+)"', data)
+               + re.findall(rb"[/'\"\s]" + pat + rb"@(\d+\.\d+\.\d+)", data)
+               + re.findall(rb"\n\"?" + pat + rb"@[^\n]*:\n\s+version:? \"?(\d+\.\d+\.\d+)", data))
 
 
 def inspect_file(path, read):
@@ -401,21 +419,32 @@ def inspect_file(path, read):
     rows, bundles = [], []
     base, parent = os.path.basename(path), os.path.basename(os.path.dirname(path))
     for pkg in PACKAGES:
-        name = pkg["name"]
-        m = re.fullmatch(rf"{re.escape(pkg['package'])}-([\w.]+)\.(?:dist|egg)-info", parent)
+        name, status = pkg["name"], pkg.get("status", "AFFECTED")
+        pat = re.escape(pkg["package"]).replace(r"\-", "[-_]")  # dist-info folders say python_jose
+        lock_note = pkg.get("lock_note", f"lockfile pins the backdoored build: pin {pkg.get('safe')}")
+        m = re.fullmatch(rf"{pat}-([\w.]+)\.(?:dist|egg)-info", parent, re.I)
         if m and base in ("METADATA", "PKG-INFO"):
-            bad = m[1] in pkg["bad"]
-            rows.append((name, os.path.dirname(path), m[1], "AFFECTED" if bad else "OK", pkg["cleanup"] if bad else ""))
-        if "site-packages" in path and base in pkg["malware_files"]:
+            bad = pkg_bad(pkg, m[1])
+            rows.append((name, os.path.dirname(path), m[1], status if bad else "OK", pkg["cleanup"] if bad else ""))
+        if "site-packages" in path and base in pkg.get("malware_files", ()):
             rows.append((name, path, "malware file", "AFFECTED", pkg["cleanup"]))
         # Python only auto-runs it from the top of site-packages; Homebrew ships a legit one there
-        elif base in pkg["suspicious_files"] and parent == "site-packages" and b"created by Homebrew" not in data()[:200]:
+        elif base in pkg.get("suspicious_files", ()) and parent == "site-packages" and b"created by Homebrew" not in data()[:200]:
             rows.append((name, path, "possible malware", "REVIEW", f"{name} malware drops this; check it if you didn't add it"))
-        # ponytail: proximity regex, not a real lockfile parser; good enough for pinned versions
-        if LOCKFILE.search(base):
+        if not LOCKFILE.search(base):
+            continue
+        if pkg.get("ecosystem") == "npm":
+            for v in sorted(npm_versions(pat.encode(), data())):
+                if pkg_bad(pkg, v.decode()):
+                    rows.append((name, path, v.decode(), status, lock_note))
+        elif "bad_range" in pkg:  # ponytail: proximity regex, first version after the name; fine for pins
+            for v in sorted({x.decode() for x in re.findall(rf"{pat}\W.{{0,80}}?(\d+\.\d+\.\d+)".encode(), data(), re.S | re.I)}):
+                if pkg_bad(pkg, v):
+                    rows.append((name, path, v, status, lock_note))
+        else:
             for bad in pkg["bad"]:
-                if re.search(rf"{re.escape(pkg['package'])}.{{0,80}}?{re.escape(bad)}".encode(), data(), re.S | re.I):
-                    rows.append((name, path, bad, "AFFECTED", f"lockfile pins the backdoored build: pin {pkg['safe']}"))
+                if re.search(rf"{pat}.{{0,80}}?{re.escape(bad)}".encode(), data(), re.S | re.I):
+                    rows.append((name, path, bad, status, lock_note))
     if base in MCP["files"]:
         rows += mcp_rows(path, data())
     if base in BUNDLE_FILES:
@@ -644,6 +673,9 @@ def fix_for(item, where, note=""):
         return ("Replace archived @modelcontextprotocol servers", "switch each one to the vendor's own server, e.g. github/github-mcp-server")
     if item == "Docker":
         return ("Rebuild the affected Docker image", "remove the image, rebuild from a patched base, rotate any keys it held")
+    plan = next((a["plan"] for a in ADVISORIES["versions"] + PACKAGES if a["name"] == item and "plan" in a), None)
+    if plan:
+        return tuple(plan)
     adv = next((a for a in DISTRO if a["name"] == item), None)
     if adv and where.endswith(("(apt)", "(dnf)")):
         if note.startswith("no fixed"):  # upgrading won't help yet: the workaround is the job

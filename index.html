@@ -41,6 +41,9 @@ curl -fsSL https://amiaffected.now/run | sh -s -- ~/work               # only se
 <tr><td>BIND 9</td><td>CVE-2026-94300 against ISC's affected ranges</td></tr>
 <tr><td>GitLab</td><td>CVE-2026-110264 and 11 more on self-managed Omnibus</td></tr>
 <tr><td>LiteLLM</td><td>The 1.107.0 backdoor: installed copies, lockfiles, malware files and bad Docker image digests</td></tr>
+<tr><td>python-jose</td><td>CVE-2026-120459: accepts empty HMAC keys, every release through 3.5.0, no fix yet. Installed copies and lockfiles</td></tr>
+<tr><td>@fastify/http-proxy</td><td>CVE-2026-120213: prefix escape in 9.0.0 to 11.6.5, read from package-lock, pnpm, yarn and bun lockfiles</td></tr>
+<tr><td>FreeRDP</td><td>CVE-2026-121392: certificate check bypass, fixed in 3.32.2</td></tr>
 <tr><td>eMudhra CA</td><td>Whether each trust store (OpenSSL, certifi, Keychain, Java, Firefox, Windows) would accept the cracked intermediates</td></tr>
 </table>
 
@@ -52,6 +55,8 @@ curl -fsSL https://amiaffected.now/run | sh -s -- ~/work               # only se
 <tr><td>Databases</td><td>MariaDB (CVE-2026-85746 and more), MongoDB (CVE-2026-82067)</td></tr>
 <tr><td>Libraries</td><td>Brotli (CVE-2026-111497, CISA KEV)</td></tr>
 <tr><td>Apps</td><td>WordPress core, Nextcloud's built-in Collabora server, Plex and Zammad (all CISA KEV)</td></tr>
+<tr><td>WordPress plugins</td><td>ACF Extended PRO, s2Member, Ultra Addons for Contact Form 7 and BuddyPress XProfile Image Field (unauthenticated code execution or file deletion, Nov 2026)</td></tr>
+<tr><td>Control Web Panel</td><td>CVE-2026-77876 and CVE-2026-73696: flags CWP so you can confirm it's on 1.29+</td></tr>
 </table>
 
 <p class="muted">Running agents or MCP servers in production? Avagama Consulting does fixed-scope <a href="https://avagama.co/services/">security reviews</a> of agents, their tools and the servers they run on.</p>

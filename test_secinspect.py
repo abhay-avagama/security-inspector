@@ -4,7 +4,7 @@ import sys
 import tarfile
 import tempfile
 
-from secinspect import (ADVISORIES, AAA, CHROMIUM, INTERMEDIATES, MCP, ROOTS, by_branch, chain_accepts, check_mcp, check_overrides,
+from secinspect import (ADVISORIES, AAA, CHROMIUM, INTERMEDIATES, MCP, ROOTS, by_branch, chain_accepts, check_mcp, check_overrides, check_version,
                         chromium_version, distro_status, fix_for, installed, inspect_file, ver,
                         fix_hint, fix_plan, html_report, new_cves, nums, os_release, pem, roots_in, scan_files,
                         scan_image_tar, test_bundle, upstream, version_status)
@@ -115,7 +115,7 @@ def fake_venv(files):
 
 
 def expected(rows):
-    got = sorted((r[0], r[3]) for r in rows)
+    got = sorted((r[0], r[3]) for r in rows if r[3] != "NOT FOUND")
     assert got == [("LiteLLM", "AFFECTED")] * 3 + [("LiteLLM", "OK"), ("eMudhra CA", "AFFECTED")], got
 
 
@@ -242,7 +242,38 @@ def test_mcp():
     assert check_mcp([])[-1][3] in ("NOT FOUND", "AFFECTED", "REVIEW")
 
 
+def test_queue_nov3():
+    rows = lambda path, data: [(r[0], r[2], r[3]) for r in inspect_file(path, lambda: data)[0]]
+    # python-jose: dist-info uses an underscore; every release through 3.5.0 is affected
+    assert rows("/v/site-packages/python_jose-3.3.0.dist-info/METADATA", b"") == [("python-jose", "3.3.0", "REVIEW")]
+    assert rows("/p/requirements.txt", b"python-jose[cryptography]==3.5.0\n") == [("python-jose", "3.5.0", "REVIEW")]
+    assert rows("/p/requirements.txt", b"pyjwt==2.9.0\n") == []
+    # @fastify/http-proxy in each lockfile format; 11.6.6 is fixed, ^ranges in specs are ignored
+    lock = b'{"packages": {"": {"dependencies": {"@fastify/http-proxy": "^11.0.0"}},' \
+           b' "node_modules/@fastify/http-proxy": {"version": "11.6.5", "resolved": "x"}}}'
+    assert rows("/p/package-lock.json", lock) == [("@fastify/http-proxy", "11.6.5", "AFFECTED")]
+    assert rows("/p/package-lock.json", lock.replace(b"11.6.5", b"11.6.6")) == []
+    assert rows("/p/pnpm-lock.yaml", b"packages:\n  '@fastify/http-proxy@10.0.1':\n") == [("@fastify/http-proxy", "10.0.1", "AFFECTED")]
+    assert rows("/p/yarn.lock", b'\n"@fastify/http-proxy@^11.0.0":\n  version "11.2.0"\n') == [("@fastify/http-proxy", "11.2.0", "AFFECTED")]
+    assert rows("/p/bun.lock", b'"@fastify/http-proxy": ["@fastify/http-proxy@8.4.0", ""]') == []  # before 9.0.0
+    # WordPress plugins and FreeRDP: ranges compared with nums(), so s2Member's 260927 works
+    assert status("WordPress: s2Member", (260927,)) == "AFFECTED" and status("WordPress: s2Member", (261017,)) == "OK"
+    assert status("WordPress: Ultra Addons for Contact Form 7", (3, 5, 57)) == "OK"
+    assert status("FreeRDP", (3, 32, 1)) == "AFFECTED" and status("FreeRDP", (3, 32, 2)) == "OK"
+    with tempfile.TemporaryDirectory() as d:
+        for slug, head in (("acf-extended", "Plugin Name: Advanced Custom Fields: Extended\n * Version: 0.9.2.5"),
+                           ("acf-extended-pro", "Plugin Name: Advanced Custom Fields: Extended PRO\n * Version: 0.9.2.6")):
+            os.makedirs(f"{d}/site/wp-content/plugins/{slug}")
+            open(f"{d}/site/wp-content/plugins/{slug}/acf-extended.php", "w").write(f"<?php\n/*\n{head}\n*/")
+        acf = dict(ADV["WordPress: ACF Extended PRO"], version_files=[f"{d}/site/wp-content/plugins/acf-extended*/acf-extended*.php"])
+        assert [r[2:4] for r in check_version(acf)] == [("0.9.2.6", "AFFECTED")]  # the free plugin is skipped
+        cwp = dict(ADV["Control Web Panel"], present_paths=[d])
+        assert check_version(cwp)[0][3] == "REVIEW"
+    assert fix_for("python-jose", "/p/requirements.txt")[0].startswith("Move off python-jose")
+
+
 if __name__ == "__main__":
+    test_queue_nov3()
     test_chrome()
     test_mcp()
     test_distro()

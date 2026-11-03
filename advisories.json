@@ -24,7 +24,7 @@
       "branch_width": 2,
       "after_fix": "restart PHP-FPM/workers",
       "feed": "php",
-      "checked": "2026-10-23T12:00:00Z"
+      "checked": "2026-11-03T12:00:00Z"
     },
     {
       "name": "Node.js",
@@ -253,6 +253,176 @@
       ],
       "checked": "2026-11-03T12:00:00Z",
       "feed": "chrome"
+    },
+    {
+      "name": "WordPress: ACF Extended PRO",
+      "about": "CVE-2026-120534: unauthenticated code injection in Advanced Custom Fields: Extended PRO up to 0.9.2.6",
+      "source": "https://www.wordfence.com/threat-intel/vulnerabilities/id/b8a7a925-2b9e-43bc-b649-c7ec518e063c",
+      "cves": [
+        "CVE-2026-120534"
+      ],
+      "version_files": [
+        "/var/www/*/wp-content/plugins/acf-extended*/acf-extended*.php",
+        "/var/www/*/*/wp-content/plugins/acf-extended*/acf-extended*.php",
+        "/srv/*/wp-content/plugins/acf-extended*/acf-extended*.php",
+        "/srv/*/*/wp-content/plugins/acf-extended*/acf-extended*.php",
+        "/home/*/public_html/wp-content/plugins/acf-extended*/acf-extended*.php",
+        "/home/*/*/public_html/wp-content/plugins/acf-extended*/acf-extended*.php",
+        "/usr/share/wordpress/wp-content/plugins/acf-extended*/acf-extended*.php"
+      ],
+      "version_regex": "(?s)Plugin Name:\\s*Advanced Custom Fields: Extended PRO.*?Version:\\s*([\\d.]+)",
+      "affected": [
+        [
+          "0",
+          "0.9.2.6",
+          "update past 0.9.2.6 if acf-extended.com lists a fixed PRO build; until then deactivate it"
+        ]
+      ],
+      "plan": [
+        "Update or deactivate ACF Extended PRO",
+        "wp plugin deactivate acf-extended-pro   # then update from acf-extended.com once a fixed build is out"
+      ],
+      "not_found": "plugin not found in /var/www, /srv or ~/public_html",
+      "match_required": true
+    },
+    {
+      "name": "WordPress: s2Member",
+      "about": "CVE-2026-86596: unauthenticated remote code execution via the PayPal IPN item_name, up to 260927",
+      "source": "https://nvd.nist.gov/vuln/detail/CVE-2026-86596",
+      "cves": [
+        "CVE-2026-86596"
+      ],
+      "version_files": [
+        "/var/www/*/wp-content/plugins/s2member/s2member.php",
+        "/var/www/*/*/wp-content/plugins/s2member/s2member.php",
+        "/srv/*/wp-content/plugins/s2member/s2member.php",
+        "/srv/*/*/wp-content/plugins/s2member/s2member.php",
+        "/home/*/public_html/wp-content/plugins/s2member/s2member.php",
+        "/home/*/*/public_html/wp-content/plugins/s2member/s2member.php",
+        "/usr/share/wordpress/wp-content/plugins/s2member/s2member.php"
+      ],
+      "version_regex": "Version:\\s*([\\d.]+)",
+      "affected": [
+        [
+          "0",
+          "260927",
+          "update to the latest release (261017 or later)"
+        ]
+      ],
+      "plan": [
+        "Update s2Member",
+        "wp plugin update s2member"
+      ],
+      "not_found": "plugin not found in /var/www, /srv or ~/public_html"
+    },
+    {
+      "name": "WordPress: Ultra Addons for Contact Form 7",
+      "about": "CVE-2026-102435: unauthenticated arbitrary file deletion (can lead to RCE via wp-config.php), up to 3.5.54",
+      "source": "https://www.wordfence.com/threat-intel/vulnerabilities/id/187777a4-3438-489c-ad3b-7e16753189d6",
+      "cves": [
+        "CVE-2026-102435"
+      ],
+      "version_files": [
+        "/var/www/*/wp-content/plugins/ultimate-addons-for-contact-form-7/ultimate-addons-for-contact-form-7.php",
+        "/var/www/*/*/wp-content/plugins/ultimate-addons-for-contact-form-7/ultimate-addons-for-contact-form-7.php",
+        "/srv/*/wp-content/plugins/ultimate-addons-for-contact-form-7/ultimate-addons-for-contact-form-7.php",
+        "/srv/*/*/wp-content/plugins/ultimate-addons-for-contact-form-7/ultimate-addons-for-contact-form-7.php",
+        "/home/*/public_html/wp-content/plugins/ultimate-addons-for-contact-form-7/ultimate-addons-for-contact-form-7.php",
+        "/home/*/*/public_html/wp-content/plugins/ultimate-addons-for-contact-form-7/ultimate-addons-for-contact-form-7.php",
+        "/usr/share/wordpress/wp-content/plugins/ultimate-addons-for-contact-form-7/ultimate-addons-for-contact-form-7.php"
+      ],
+      "version_regex": "Version:\\s*([\\d.]+)",
+      "affected": [
+        [
+          "0",
+          "3.5.54",
+          "update to the latest release (3.5.57)"
+        ]
+      ],
+      "plan": [
+        "Update Ultra Addons for Contact Form 7",
+        "wp plugin update ultimate-addons-for-contact-form-7"
+      ],
+      "not_found": "plugin not found in /var/www, /srv or ~/public_html"
+    },
+    {
+      "name": "WordPress: BuddyPress XProfile Image Field",
+      "about": "CVE-2026-120518: unauthenticated arbitrary file deletion, up to 3.1.0; the plugin is no longer on wordpress.org",
+      "source": "https://nvd.nist.gov/vuln/detail/CVE-2026-120518",
+      "cves": [
+        "CVE-2026-120518"
+      ],
+      "version_files": [
+        "/var/www/*/wp-content/plugins/buddypress-xprofile-image-field/bp-xprofile-image-field.php",
+        "/var/www/*/*/wp-content/plugins/buddypress-xprofile-image-field/bp-xprofile-image-field.php",
+        "/srv/*/wp-content/plugins/buddypress-xprofile-image-field/bp-xprofile-image-field.php",
+        "/srv/*/*/wp-content/plugins/buddypress-xprofile-image-field/bp-xprofile-image-field.php",
+        "/home/*/public_html/wp-content/plugins/buddypress-xprofile-image-field/bp-xprofile-image-field.php",
+        "/home/*/*/public_html/wp-content/plugins/buddypress-xprofile-image-field/bp-xprofile-image-field.php",
+        "/usr/share/wordpress/wp-content/plugins/buddypress-xprofile-image-field/bp-xprofile-image-field.php"
+      ],
+      "version_regex": "Version:\\s*([\\d.]+)",
+      "affected": [
+        [
+          "0",
+          "3.1.0",
+          "no fix and the plugin has been pulled from wordpress.org: deactivate and delete it"
+        ]
+      ],
+      "plan": [
+        "Delete BuddyPress XProfile Image Field (no fix coming)",
+        "wp plugin deactivate buddypress-xprofile-image-field && wp plugin delete buddypress-xprofile-image-field"
+      ],
+      "not_found": "plugin not found in /var/www, /srv or ~/public_html"
+    },
+    {
+      "name": "FreeRDP",
+      "about": "CVE-2026-121392: the client can accept a certificate it should reject (tls_verify_certificate), fixed in 3.32.2",
+      "source": "https://github.com/FreeRDP/FreeRDP/security/advisories/GHSA-jq25-3374-4262",
+      "cves": [
+        "CVE-2026-121392"
+      ],
+      "binary": "xfreerdp",
+      "flag": "--version",
+      "globs": [
+        "/usr/bin/xfreerdp3",
+        "/usr/bin/sdl-freerdp3",
+        "/usr/bin/wlfreerdp3",
+        "/usr/bin/sdl-freerdp",
+        "/opt/homebrew/bin/xfreerdp",
+        "/opt/homebrew/bin/sdl-freerdp",
+        "/opt/homebrew/bin/sdl-freerdp3",
+        "/usr/local/bin/xfreerdp",
+        "/usr/local/bin/sdl-freerdp"
+      ],
+      "affected": [
+        [
+          "0",
+          "3.32.1",
+          "update to 3.32.2+ (a distro build may carry a backported fix: check your distro's tracker)"
+        ]
+      ],
+      "plan": [
+        "Update FreeRDP",
+        "brew upgrade freerdp   # Linux: sudo apt update && sudo apt upgrade  (dnf: sudo dnf upgrade 'freerdp*')"
+      ]
+    },
+    {
+      "name": "Control Web Panel",
+      "about": "CVE-2026-77876 (command injection, fixed in 1.16) and CVE-2026-73696 (login bypass, fixed in 1.12); VulnCheck recommends 1.29+",
+      "source": "https://www.vulncheck.com/blog/control-web-panel-pre-auth-module-dispatch-rce",
+      "cves": [
+        "CVE-2026-77876",
+        "CVE-2026-73696"
+      ],
+      "present_paths": [
+        "/usr/local/cwpsrv"
+      ],
+      "review_note": "CWP is installed: make sure the panel shows webpanel_version 1.29 or later (1.16 fixes CVE-2026-77876, 1.12 fixes CVE-2026-73696)",
+      "plan": [
+        "Update Control Web Panel to 1.29+",
+        "update CWP from the admin panel (CWP Settings > Update), then confirm webpanel_version is 1.29 or later"
+      ]
     }
   ],
   "packages": [
@@ -279,6 +449,47 @@
         "sha256:7b00e91cd2fe"
       ],
       "cleanup": "don't pip install first (any Python start re-runs it): delete cook.pth/cook.py/sitecustomize.py from site-packages, kill the daemon holding /tmp/remote_code_loader.lock, rebuild the env pinned to 1.106.2, rotate every credential the host could reach"
+    },
+    {
+      "name": "python-jose",
+      "package": "python-jose",
+      "ecosystem": "pypi",
+      "about": "CVE-2026-120459: accepts empty HMAC keys, so a token signed with an empty key passes jwt.decode; every release through 3.5.0, no fix yet",
+      "source": "https://github.com/mpdavis/python-jose/issues/398",
+      "cves": [
+        "CVE-2026-120459"
+      ],
+      "bad_range": [
+        "0",
+        "3.5.0"
+      ],
+      "status": "REVIEW",
+      "cleanup": "no fixed release: make sure HS256/384/512 keys can never be empty, or move to PyJWT or joserfc",
+      "lock_note": "pins python-jose, which has no fix: make sure HMAC keys can never be empty, or move to PyJWT or joserfc",
+      "plan": [
+        "Move off python-jose, or make sure HMAC keys can't be empty",
+        "pip uninstall python-jose && pip install pyjwt   # then port jwt.decode calls; or reject empty keys before decoding"
+      ]
+    },
+    {
+      "name": "@fastify/http-proxy",
+      "package": "@fastify/http-proxy",
+      "ecosystem": "npm",
+      "about": "CVE-2026-120213 (GHSA-h3vp-4jfr-v364): encoded route params escape the proxy prefix when prefix/rewritePrefix use :params; 9.0.0 to 11.6.5, fixed in 11.6.6",
+      "source": "https://github.com/advisories/GHSA-h3vp-4jfr-v364",
+      "cves": [
+        "CVE-2026-120213"
+      ],
+      "bad_range": [
+        "9.0.0",
+        "11.6.5"
+      ],
+      "cleanup": "update to 11.6.6+",
+      "lock_note": "lockfile resolves an affected version: update to 11.6.6+ (only exploitable with :params in prefix/rewritePrefix)",
+      "plan": [
+        "Update @fastify/http-proxy",
+        "npm i @fastify/http-proxy@^11.6.6   # in each project listed"
+      ]
     }
   ],
   "ca": {

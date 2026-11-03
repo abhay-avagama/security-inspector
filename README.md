@@ -50,6 +50,9 @@ version-feed technologies, so they aren't tracked this way — refresh them from
 | **BIND 9** CVE-2026-94300 | `named -v` against ISC's affected ranges. |
 | **GitLab** CVE-2026-110264 + 11 more | Self-managed Omnibus version file. GitLab.com and Dedicated are already patched. |
 | **LiteLLM** 1.107.0 backdoor | Installed copies in every venv, lockfiles pinning 1.107.0, the malware's `cook.pth` / `cook.py` / `sitecustomize.py`, `/tmp/remote_code_loader.lock`, and the bad Docker image digests. |
+| **python-jose** CVE-2026-120459 (empty HMAC key accepted) | Installed copies in every venv and lockfiles. Every release through 3.5.0 is affected and there's no fix, so it's flagged for review: make sure HMAC keys can't be empty, or move to PyJWT / joserfc. |
+| **@fastify/http-proxy** CVE-2026-120213 | Resolved versions in `package-lock.json`, `pnpm-lock.yaml`, `yarn.lock` and `bun.lock`. 9.0.0 to 11.6.5 affected, fixed in 11.6.6. |
+| **FreeRDP** CVE-2026-121392 | `--version` of xfreerdp / sdl-freerdp on PATH, Homebrew and `/usr/bin`. Fixed in 3.32.2; distro builds may carry a backported fix. |
 | **eMudhra CA** (RHSB-2026-012) | Tests whether each trust store would accept the cracked eMudhra intermediates. See below. |
 
 With `--docker`, every local image is streamed through `docker save` and the same file checks run
@@ -76,6 +79,8 @@ against the upstream fixes instead.
 | **Brotli** CVE-2026-111497 (CISA KEV) | The system library that web servers, curl and PHP use. |
 | **Plex**, **Zammad** (CISA KEV) | Their vendor packages. |
 | **WordPress** CVE-2026-87902 (CISA KEV), CVE-2026-119977 | `wp-includes/version.php` under `/var/www`, `/srv` and `~/public_html`. |
+| **WordPress plugins**: ACF Extended PRO (CVE-2026-120534), s2Member (CVE-2026-86596), Ultra Addons for CF7 (CVE-2026-102435), BuddyPress XProfile Image Field (CVE-2026-120518) | The plugin's `Version:` header in `wp-content/plugins/` under the same web roots. BuddyPress XProfile Image Field has no fix and is gone from wordpress.org: delete it. |
+| **Control Web Panel** CVE-2026-77876, CVE-2026-73696 | Flags `/usr/local/cwpsrv` for review: CWP doesn't keep a version file we can trust, so confirm the panel shows 1.29+. |
 | **Nextcloud** built-in Collabora CODE, CVE-2026-110447 (CISA KEV) | The `richdocumentscode` app in the same web roots. |
 
 The fix plan gives the `apt` or `dnf` command for each one, and says when a distro hasn't shipped a
