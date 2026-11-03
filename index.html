@@ -30,7 +30,7 @@ footer{margin-top:3rem;padding-top:1rem;border-top:1px solid var(--line);font-si
 curl -fsSL https://amiaffected.now/run | sh -s -- --docker             # also scan Docker images
 curl -fsSL https://amiaffected.now/run | sh -s -- ~/work               # only search this folder
 curl -fsSL https://amiaffected.now/run | sh -s -- --skills-baseline ~/.amiaffected-skills.json   # also show what changed in your agent skills since last time</pre>
-<p class="muted">Exit code is 1 if anything is affected, so it can fail a CI job.</p>
+<p class="muted">Exit code is 1 if anything is affected, so it can fail a CI job. There's also a <a href="https://github.com/abhay-avagama/security-inspector#github-action">GitHub Action</a>, and a <a href="https://github.com/abhay-avagama/security-inspector#watch-a-server">watch mode</a> for servers that posts to Slack or email only when something changes.</p>
 
 <h2>What it checks</h2>
 <table>

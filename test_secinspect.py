@@ -6,7 +6,7 @@ import sys
 import tarfile
 import tempfile
 
-from secinspect import (ADVISORIES, AAA, CHROMIUM, INTERMEDIATES, MCP, ROOTS, agent_config_rows, by_branch, check_hooks, check_iocs, check_skill_changes, check_skills, skill_file_findings, chain_accepts, check_mcp, env_rows, ssh_key_encrypted, unpinned, check_overrides, check_version,
+from secinspect import (ADVISORIES, AAA, CHROMIUM, INTERMEDIATES, MCP, ROOTS, agent_config_rows, by_branch, check_hooks, check_iocs, check_skill_changes, watch_diff, watch_message, check_skills, skill_file_findings, chain_accepts, check_mcp, env_rows, ssh_key_encrypted, unpinned, check_overrides, check_version,
                         chromium_version, distro_status, fix_for, installed, inspect_file, ver,
                         fix_hint, fix_plan, html_report, new_cves, nums, os_release, pem, roots_in, scan_files,
                         scan_image_tar, test_bundle, upstream, version_status)
@@ -390,7 +390,23 @@ def test_skill_changes():
         assert check_skill_changes([a, f"{h}/skills/b"], base)[0][3] == "OK"  # baseline moved forward
 
 
+def test_watch():
+    with tempfile.TemporaryDirectory() as d:
+        st = f"{d}/state/watch.json"
+        day1 = [("nginx", "nginx (apt)", "1.24", "AFFECTED", "update"), ("PHP", "-", "-", "NOT FOUND", "")]
+        new, fixed, first = watch_diff(day1, st)
+        assert first and new == ["nginx | nginx (apt) | AFFECTED"] and fixed == []
+        assert "now watching" in watch_message(new, fixed, first, day1)
+        assert watch_diff(day1, st) == ([], [], False)  # quiet day: nothing to send
+        day3 = [("nginx", "nginx (apt)", "1.24", "OK", ""), ("Linux kernel", "linux (apt)", "6.8", "AFFECTED", "reboot")]
+        new, fixed, first = watch_diff(day3, st)
+        assert new == ["Linux kernel | linux (apt) | AFFECTED"] and fixed == ["nginx | nginx (apt) | AFFECTED"], (new, fixed)
+        msg = watch_message(new, fixed, first, day3)
+        assert msg.splitlines()[0].endswith("1 new, 1 fixed since the last run") and "FIXED  nginx" in msg
+
+
 if __name__ == "__main__":
+    test_watch()
     test_skill_changes()
     test_skills()
     test_cursor_backdoor()

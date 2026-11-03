@@ -96,6 +96,24 @@ configuration findings, not CVEs, so they're REVIEW, never AFFECTED, and don't c
 | **SSH keys without a passphrase** | Every private key in `~/.ssh`, read for its encryption header only. |
 | **`.env` files an agent can read** | `.env*` files (not `.example` / `.sample` / `.template`) in folders with `CLAUDE.md`, `AGENTS.md`, `GEMINI.md`, `.mcp.json` or a `.claude` / `.cursor` / `.codex` / `.gemini` folder, unless a Claude Code `permissions.deny` rule covers `.env`. Only the path is reported. |
 
+## Watch a server
+
+Run it daily from cron and hear about it only when something changes: a new affected package, a new
+kernel bug, or a fix that landed. A quiet day prints and sends nothing.
+
+```sh
+sudo git clone https://github.com/abhay-avagama/security-inspector /opt/amiaffected
+sudo crontab -e
+# 07:00 daily: pull new advisories, compare with yesterday, post changes to Slack
+0 7 * * * cd /opt/amiaffected && git pull -q && python3 secinspect.py --watch /var/lib/amiaffected/watch.json --notify https://hooks.slack.com/services/...
+```
+
+`--notify URL` posts `{"text": ..., "content": ...}`, which Slack, Teams and Discord webhooks all read.
+`--mail ADDRESS` sends through the server's own `sendmail`. The first run reports everything it found;
+after that only NEW and FIXED lines. These two flags are the only way findings leave the machine, and
+only to the place you name. `git pull` means new checks arrive daily; pin a tag instead if you'd rather
+review each update before it runs as root.
+
 ## Servers (Ubuntu, Debian, RHEL family)
 
 On a VPS most software comes from apt or dnf, and the distros fix bugs without changing the

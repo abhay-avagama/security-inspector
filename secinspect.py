@@ -1181,11 +1181,60 @@ def check_feed_updates(advs, timeout=6):
     return lines
 
 
+# --- Watch mode: run daily from cron, speak only when something changes ---------------------------
+
+def watch_diff(rows, state_file):
+    """(new findings, fixed findings, first run?) against the last run, then records this run.
+    A finding is item + where + status, so AFFECTED -> OK shows as fixed and OK -> AFFECTED as new."""
+    now = {f"{r[0]} | {r[1]} | {r[3]}" for r in rows if r[3] in ("AFFECTED", "REVIEW")}
+    try:
+        before = set(json.load(open(state_file))["findings"])
+        first = False
+    except (OSError, ValueError, KeyError, TypeError):
+        before, first = set(), True
+    os.makedirs(os.path.dirname(os.path.abspath(state_file)), exist_ok=True)
+    with open(state_file, "w") as fh:
+        json.dump({"when": datetime.datetime.now().isoformat(timespec="seconds"), "findings": sorted(now)}, fh, indent=1)
+    return sorted(now - before), sorted(before - now), first
+
+
+def watch_message(new, fixed, first, rows):
+    host = platform.node()
+    affected = sum(r[3] == "AFFECTED" for r in rows)
+    head = (f"Am I affected? is now watching {host}: {affected} affected, {len(new) - affected if first else 0} to review"
+            if first else f"Am I affected? on {host}: {len(new)} new, {len(fixed)} fixed since the last run")
+    lines = [head] + [f"NEW  {x}" for x in new[:30]] + [f"FIXED  {x}" for x in fixed[:30]]
+    if len(new) + len(fixed) > 60:
+        lines.append("... and more: run it by hand for the full list")
+    return "\n".join(lines)
+
+
+def notify(message, url=None, mail=None):
+    """Sends only to what the user named on the command line."""
+    if url:
+        body = json.dumps({"text": message, "content": message[:1900]}).encode()  # Slack/Teams read text, Discord content
+        try:
+            urllib.request.urlopen(urllib.request.Request(url, body, {"Content-Type": "application/json"}), timeout=10)
+        except Exception as e:
+            print(f"watch: couldn't post to the webhook: {e}", file=sys.stderr)
+    if mail:
+        sendmail = shutil.which("sendmail") or ("/usr/sbin/sendmail" if os.path.exists("/usr/sbin/sendmail") else None)
+        if not sendmail:
+            print("watch: no sendmail on this machine, so no email was sent", file=sys.stderr)
+            return
+        msg = f"To: {mail}\nSubject: {message.splitlines()[0]}\n\n{message}\n"
+        subprocess.run([sendmail, "-t"], input=msg, text=True, capture_output=True)
+
+
 def main(argv):
     ap = argparse.ArgumentParser(description="Am I affected by the issues in advisories.json?")
     ap.add_argument("dirs", nargs="*", help="search only these folders for Python envs, lockfiles and CA bundles")
     ap.add_argument("--docker", action="store_true", help="also look inside every local Docker image (slow)")
     ap.add_argument("--html", metavar="FILE", help="also write an HTML report")
+    ap.add_argument("--watch", metavar="STATE_FILE",
+                    help="for cron: compare with the last run recorded in STATE_FILE and report only what changed")
+    ap.add_argument("--notify", metavar="URL", help="with --watch: post changes to this webhook (Slack, Discord, Teams or any JSON endpoint)")
+    ap.add_argument("--mail", metavar="ADDRESS", help="with --watch: email changes through this machine's sendmail")
     ap.add_argument("--files-only", action="store_true",
                     help="only check files in the folders given (lockfiles, MCP configs, skills, .env, CA bundles), not this "
                          "machine's programs; for CI, where the runner's own Chrome or Node aren't yours to fix")
@@ -1195,8 +1244,9 @@ def main(argv):
                     help="skip the cve.now advisory-freshness check (offline/CI; also $SECINSPECT_NO_UPDATE_CHECK)")
     args = ap.parse_args(argv)
     roots = args.dirs or [HOME, "/usr/local/lib", "/opt/homebrew/lib", *glob.glob("/usr/lib/python3*")]
-    print(f"Scanning {', '.join(roots)} for Python envs, lockfiles and CA bundles, give it a minute...", file=sys.stderr)
-    if not (args.no_update_check or os.environ.get("SECINSPECT_NO_UPDATE_CHECK")):
+    if not args.watch:  # cron mails anything printed, so a quiet day must print nothing
+        print(f"Scanning {', '.join(roots)} for Python envs, lockfiles and CA bundles, give it a minute...", file=sys.stderr)
+    if not (args.watch or args.no_update_check or os.environ.get("SECINSPECT_NO_UPDATE_CHECK")):
         for line in check_feed_updates(ADVISORIES["versions"]):
             print("update: " + line, file=sys.stderr)
     if not OPENSSL:
@@ -1210,6 +1260,13 @@ def main(argv):
         rows += check_mcp(rows) + check_iocs() + check_skills(extra=FOUND_SKILL_DIRS) + check_hooks()
     if args.skills_baseline:
         rows += check_skill_changes(skill_dirs(extra=FOUND_SKILL_DIRS), os.path.expanduser(args.skills_baseline))
+    if args.watch:  # cron mode: say only what changed
+        new, fixed, first = watch_diff(rows, os.path.expanduser(args.watch))
+        if new or fixed or first:
+            message = watch_message(new, fixed, first, rows)
+            print(message)
+            notify(message, args.notify, args.mail)
+        return 1 if any(r[3] == "AFFECTED" for r in rows) else 0
     widths = [max(len(str(r[i])) for r in rows) for i in range(4)]
     for r in rows:
         print("  ".join(str(c).ljust(w) for c, w in zip(r, widths)), r[4])
