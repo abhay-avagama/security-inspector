@@ -1,5 +1,6 @@
 import io
 import os
+import sys
 import tarfile
 import tempfile
 
@@ -217,9 +218,11 @@ def test_chrome():
     assert ver("Google Chrome for Testing 153.0.8010.12") == (153, 0, 8010, 12)
     assert ver("v24.22.1") == (24, 22, 1)
     assert status("Google Chrome / Chromium", (153, 0, 8010, 35)) == "AFFECTED"
-    assert status("Google Chrome / Chromium", (153, 0, 8010, 36)) == "OK"
+    assert status("Google Chrome / Chromium", (155, 0, 8059, 39)) == "OK"
     assert version_status(CHROMIUM, (142, 0, 7444, 175))[0] == "AFFECTED"
     assert version_status(CHROMIUM, (156, 0, 8078, 47))[0] == "OK"
+    mac = version_status(CHROMIUM, (154, 0, 1, 1))[0]
+    assert mac == ("AFFECTED" if sys.platform == "darwin" else "OK"), mac  # CVE-2026-106378 is macOS-only
     assert chromium_version("/x/.cache/puppeteer/chrome/mac_arm-142.0.7444.175") == (142, 0, 7444, 175)
     assert "puppeteer" in fix_for(CHROMIUM["name"], "/home/a/.cache/puppeteer/chrome/linux-140.0.1.2")[1]
     assert "playwright" in fix_for(CHROMIUM["name"], "/home/a/.cache/ms-playwright/chromium-1234")[1]

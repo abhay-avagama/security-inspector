@@ -213,11 +213,12 @@
     },
     {
       "name": "Google Chrome / Chromium",
-      "about": "CVE-2026-87491 and CVE-2026-85046: V8 bugs exploited in the wild (CISA KEV), fixed in Chrome 153.0.8010.36",
+      "about": "CVE-2026-87491 and CVE-2026-85046: V8 bugs exploited in the wild (CISA KEV), fixed in 153.0.8010.36; on macOS also CVE-2026-106378, a GPU sandbox escape fixed in 155.0.8059.39",
       "source": "https://www.cisa.gov/known-exploited-vulnerabilities-catalog?field_cve=CVE-2026-87491",
       "cves": [
         "CVE-2026-87491",
-        "CVE-2026-85046"
+        "CVE-2026-85046",
+        "CVE-2026-106378"
       ],
       "binary": "google-chrome",
       "flag": "--version",
@@ -232,7 +233,13 @@
         [
           "0.0.0.0",
           "153.0.8010.35",
-          "update to 153.0.8010.36+ and relaunch the browser"
+          "update to the latest stable (153.0.8010.36+ fixes the exploited V8 bugs; macOS needs 155.0.8059.39+) and relaunch the browser"
+        ],
+        [
+          "153.0.8010.36",
+          "155.0.8059.38",
+          "macOS sandbox escape CVE-2026-106378: update to 155.0.8059.39+ and relaunch the browser",
+          "darwin"
         ]
       ],
       "checked": "2026-11-03T12:00:00Z"
@@ -608,17 +615,24 @@
   ],
   "chromium_cache": {
     "name": "Puppeteer / Playwright Chromium",
-    "about": "Browsers that Puppeteer and Playwright download never update themselves; builds before 153.0.8010.36 carry the exploited V8 bugs CVE-2026-87491 and CVE-2026-85046",
+    "about": "Browsers that Puppeteer and Playwright download never update themselves. CVE-2026-87491 and CVE-2026-85046: V8 bugs exploited in the wild (CISA KEV), fixed in 153.0.8010.36; on macOS also CVE-2026-106378, a GPU sandbox escape fixed in 155.0.8059.39",
     "source": "https://www.cisa.gov/known-exploited-vulnerabilities-catalog?field_cve=CVE-2026-87491",
     "cves": [
       "CVE-2026-87491",
-      "CVE-2026-85046"
+      "CVE-2026-85046",
+      "CVE-2026-106378"
     ],
     "affected": [
       [
         "0.0.0.0",
         "153.0.8010.35",
-        "update to 153.0.8010.36+ (better: the latest stable)"
+        "update to the latest stable (153.0.8010.36+ fixes the exploited V8 bugs; macOS needs 155.0.8059.39+)"
+      ],
+      [
+        "153.0.8010.36",
+        "155.0.8059.38",
+        "macOS sandbox escape CVE-2026-106378: update to 155.0.8059.39+",
+        "darwin"
       ]
     ],
     "dirs": [

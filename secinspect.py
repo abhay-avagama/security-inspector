@@ -74,7 +74,8 @@ def by_branch(v, fixed, width):
 
 def version_status(adv, v):
     if "affected" in adv:  # explicit inclusive ranges, e.g. BIND
-        return next((("AFFECTED", fix) for lo, hi, fix in adv["affected"] if ver(lo) <= v <= ver(hi)), ("OK", ""))
+        return next((("AFFECTED", fix) for lo, hi, fix, *only in adv["affected"]  # optional 4th item: sys.platform
+                     if ver(lo) <= v <= ver(hi) and (not only or sys.platform in only)), ("OK", ""))
     status, note = by_branch(v, [ver(f) for f in adv["fixed"]], adv["branch_width"])
     if status == "AFFECTED" and adv.get("after_fix"):
         note += ", " + adv["after_fix"]
