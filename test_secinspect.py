@@ -195,6 +195,8 @@ def test_distro():
     assert st(k, "ubuntu:24.04", "6.8.0-1.1", "linux-lowlatency-weird") == "UNKNOWN"
     assert st(k, "debian:12", "6.1.158-1") == "AFFECTED" and st(k, "debian:12", "6.1.176-1") == "OK"
     assert st("Linux kernel (remote TCP)", "ubuntu:24.04", "6.8.0-146.146", "linux") == "AFFECTED"
+    ub = distro_status(DIST["Linux kernel (exploited)"], "ubuntu:24.04", "6.8.0-139.139", "linux", lt)[1]
+    assert "AlmaLinux" not in ub and ub.endswith("reboot into it"), ub  # distro-specific notes stay on their distro
     assert st("Linux kernel (remote TCP)", "el:9", "5.14.0-687.64.1.el9_8") == "OK"
     # Ubuntu's fix is only in -proposed: a booted proposed kernel counts, others get Ubuntu's install steps
     assert st("Linux kernel (remote TCP)", "ubuntu:24.04", "6.8.0-149.149", "linux") == "OK"

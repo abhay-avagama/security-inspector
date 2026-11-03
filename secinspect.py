@@ -570,6 +570,8 @@ def distro_status(adv, release, version, source, lt):
     fixed = fixed[len("proposed:"):] if proposed else fixed
     ups = [nums(f) for f in adv.get("upstream_fixed", [])]
     after = (", " + adv["after_fix"]) if adv.get("after_fix") else ""
+    extra = adv.get("release_notes", {}).get((release or "").split(":")[0])  # e.g. an AlmaLinux-only remark
+    after += f" ({extra})" if extra else ""
     if fixed == "not-affected":
         return "OK", f"{release} isn't affected"
     if fixed and fixed != "unfixed" and (not ups or upstream(version) == upstream(fixed)):
