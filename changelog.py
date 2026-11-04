@@ -14,7 +14,15 @@ import sys
 ROOT = pathlib.Path(__file__).parent
 SITE = "https://amiaffected.now"
 REPO = "https://github.com/abhay-avagama/security-inspector"
-STYLE = (ROOT / "index.html").read_text().split("<style>", 1)[1].split("</style>", 1)[0]  # one look for the whole site
+INDEX = (ROOT / "index.html").read_text()
+STYLE = INDEX.split("<style>", 1)[1].split("</style>", 1)[0]  # one look and one menu for the whole site
+NAV = '<header class="top">' + INDEX.split('<header class="top">', 1)[1].split("</header>", 1)[0] + "</header>"
+
+
+def nav(href):
+    """The site menu with this page's link marked current."""
+    assert f'href="{href}"' in NAV, href
+    return NAV.replace(f'href="{href}">', f'href="{href}" aria-current="page">')
 
 
 def render(entries):
@@ -36,8 +44,8 @@ def render(entries):
 <link rel="canonical" href="{SITE}/changelog/">
 <link rel="alternate" type="application/rss+xml" title="Am I affected? changelog" href="{SITE}/changelog.xml">
 <style>{STYLE}.log{{padding-left:1.1rem}}.log li{{margin:.6rem 0}}.log a{{font:13px ui-monospace,monospace;text-decoration:none}}</style></head>
-<body><main>
-<p class="muted"><a href="/">Am I affected?</a></p>
+<body>{nav("/changelog/")}
+<main>
 <h1>Changelog</h1>
 <p>What the tool checks, and when each check went live. New exploited bugs usually land within a day of disclosure. Follow along with the <a href="/changelog.xml">RSS feed</a>.</p>
 {body}
@@ -115,8 +123,8 @@ h2{font-size:1.35rem;margin:3rem 0 .25rem;letter-spacing:-.01em}h2+p{margin-top:
 <meta name="description" content="Agent skills, MCP servers and extensions that a named source has flagged, what the tool reports for each, and what to do.">
 <link rel="canonical" href="{SITE}/watchlist/">
 <style>{STYLE}{css}</style></head>
-<body><main>
-<p class="muted"><a href="/">Am I affected?</a></p>
+<body>{nav("/watchlist/")}
+<main>
 <h1>Agent watchlist</h1>
 <p class="lede">Skills, MCP servers and extensions that someone has named in public as malicious or unsafe, each linked to who said so.</p>
 <p>It's a short, hand-picked list, not a directory. One command checks everything here against what's installed on your machine:</p>

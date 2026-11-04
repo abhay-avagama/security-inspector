@@ -8,7 +8,7 @@
 @media (prefers-color-scheme:dark){:root{--bg:#161513;--fg:#ece9e3;--muted:#9c978d;--line:#2e2c28;--code:#211f1c;--accent:#f0805f}}
 *{box-sizing:border-box}
 body{margin:0;background:var(--bg);color:var(--fg);font:17px/1.6 ui-sans-serif,system-ui,-apple-system,sans-serif}
-main{max-width:44rem;margin:0 auto;padding:4rem 16px}
+main{max-width:44rem;margin:0 auto;padding:3rem 16px 4rem}
 h1{font-size:2.6rem;line-height:1.1;margin:0 0 1rem;letter-spacing:-.02em}
 h2{font-size:1.1rem;margin:2.5rem 0 .5rem}
 p,li{color:var(--fg)}.muted{color:var(--muted)}
@@ -18,8 +18,19 @@ code{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:.9em}
 table{width:100%;border-collapse:collapse;font-size:15px}td{padding:.5rem .5rem .5rem 0;border-top:1px solid var(--line);vertical-align:top}td:first-child{font-weight:600;white-space:nowrap;padding-right:1rem}
 a{color:var(--accent)}
 footer{margin-top:3rem;padding-top:1rem;border-top:1px solid var(--line);font-size:14px;color:var(--muted)}
+header.top{position:sticky;top:0;z-index:10;background:color-mix(in srgb,var(--bg) 88%,transparent);backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);border-bottom:1px solid var(--line)}
+header.top nav{max-width:44rem;margin:0 auto;padding:0 16px;display:flex;align-items:center;gap:1.5rem;height:3.25rem}
+header.top .brand{font-weight:700;color:var(--fg);text-decoration:none;white-space:nowrap;letter-spacing:-.01em}
+header.top ul{display:flex;gap:.25rem;list-style:none;margin:0 0 0 auto;padding:0;overflow-x:auto;scrollbar-width:none}header.top ul::-webkit-scrollbar{display:none}
+header.top li a{display:block;padding:.35rem .65rem;border-radius:6px;font-size:15px;color:var(--muted);text-decoration:none;white-space:nowrap}
+header.top li a:hover{color:var(--fg);background:var(--code)}header.top li a[aria-current]{color:var(--fg);background:var(--code);font-weight:600}
+h2[id]{scroll-margin-top:4.5rem}
+@media (max-width:560px){header.top nav{flex-direction:column;align-items:stretch;height:auto;gap:0;padding:.55rem 16px .4rem}header.top ul{margin:.3rem -.5rem 0;gap:0}header.top li a{padding:.3rem .5rem;font-size:14.5px}}
 </style></head>
-<body><main>
+<body><header class="top"><nav aria-label="Site"><a class="brand" href="/">Am I affected?</a><ul>
+<li><a href="/#checks">Checks</a></li><li><a href="/#agents">Agents</a></li><li><a href="/#linux">Linux</a></li><li><a href="/watchlist/">Watchlist</a></li><li><a href="/changelog/">Changelog</a></li>
+</ul></nav></header>
+<main>
 <h1>Am I affected?</h1>
 <p>One Python file that checks your machine for the Chrome bugs being exploited right now, the old browsers Puppeteer and Playwright leave behind, and the October 2026 PHP, Node.js, BIND, LiteLLM, GitLab and eMudhra issues, and tells you what to do about each one.</p>
 <p class="muted">No dependencies, and nothing about your machine is sent anywhere. Python 3.8+ on macOS or Linux.</p>
@@ -32,7 +43,7 @@ curl -fsSL https://amiaffected.now/run | sh -s -- ~/work               # only se
 curl -fsSL https://amiaffected.now/run | sh -s -- --skills-baseline ~/.amiaffected-skills.json   # also show what changed in your agent skills since last time</pre>
 <p class="muted">New checks land within a day of disclosure: see the <a href="/changelog/">changelog</a>. Exit code is 1 if anything is affected, so it can fail a CI job. There's also a <a href="https://github.com/abhay-avagama/security-inspector#github-action">GitHub Action</a>, and a <a href="https://github.com/abhay-avagama/security-inspector#watch-a-server">watch mode</a> for servers that posts to Slack or email only when something changes.</p>
 
-<h2>What it checks</h2>
+<h2 id="checks">What it checks</h2>
 <table>
 <tr><td>Chrome / Chromium</td><td>CVE-2026-87491 and CVE-2026-85046, V8 bugs on CISA KEV, fixed in 153.0.8010.36; on macOS also <a href="https://pwn.ai/blog/chrome-escape">CVE-2026-106378</a>, the GPU sandbox escape fixed in 155.0.8059.39; and the four critical bugs fixed on 27 Oct in 156.0.8078.73 (CVE-2026-118306, 118331, 118348, 118344)</td></tr>
 <tr><td>Puppeteer / Playwright</td><td>The Chromium builds they download into their caches, which never update themselves. Even the latest Playwright (1.64.1) and Puppeteer (25.16.0) ship builds without the 27 Oct fixes, and Playwright turns Chrome's sandbox off by default. If your agent browses the web, point it at your installed Chrome with <code>channel: 'chrome'</code> and <code>chromiumSandbox: true</code></td></tr>
@@ -50,7 +61,7 @@ curl -fsSL https://amiaffected.now/run | sh -s -- --skills-baseline ~/.amiaffect
 <tr><td>eMudhra CA</td><td>Whether each trust store (OpenSSL, certifi, Keychain, Java, Firefox, Windows) would accept the cracked intermediates</td></tr>
 </table>
 
-<h2>If an AI agent works on this machine</h2>
+<h2 id="agents">If an AI agent works on this machine</h2>
 <p>Coding agents and their MCP servers run as you, so a prompt injection in a web page, an issue or a README can reach whatever you can. These aren't CVEs, so they're flagged for review, not as affected.</p>
 <table>
 <tr><td>MCP servers</td><td>Servers started with <code>npx</code>, <code>bunx</code> or <code>uvx</code> and no version (or <code>@latest</code>), which run whatever was published last</td></tr>
@@ -62,7 +73,7 @@ curl -fsSL https://amiaffected.now/run | sh -s -- --skills-baseline ~/.amiaffect
 </table>
 <p class="muted">The skills, MCP servers and extensions named in public as malicious or unsafe, with sources: the <a href="/watchlist/">agent watchlist</a>. Want a second pair of eyes on your agent setup? That's what our <a href="https://avagama.co/services/">agent security review</a> covers.</p>
 
-<h2>On a Linux server</h2>
+<h2 id="linux">On a Linux server</h2>
 <p>On Ubuntu, Debian and RHEL/AlmaLinux/Rocky it also checks the running kernel and the usual VPS software against each distro's own fixed packages, so a patched server isn't flagged just because the version number looks old.</p>
 <table>
 <tr><td>Linux kernel</td><td>Four bugs on CISA KEV (CVE-2026-46300 and others) and the remote TCP bug CVE-2026-98432</td></tr>
