@@ -208,7 +208,7 @@ MIT licensed.
 
 ## Changelog
 
-Every check and when it went live: [amiaffected.now/changelog](https://amiaffected.now/changelog/) ([RSS](https://amiaffected.now/changelog.xml)). Add an entry to `changelog.json` with each change and run `python3 changelog.py`; CI fails if the page is out of date.
+Every check and when it went live: [amiaffected.now/changelog](https://amiaffected.now/changelog/) ([RSS](https://amiaffected.now/changelog.xml)). Agent skills, MCP servers and extensions named in public as malicious or unsafe: [amiaffected.now/watchlist](https://amiaffected.now/watchlist/), generated from `advisories.json` by the same script. Add an entry to `changelog.json` with each change and run `python3 changelog.py`; CI fails if the page is out of date.
 
 ## Security
 

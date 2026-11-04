@@ -60,7 +60,7 @@ curl -fsSL https://amiaffected.now/run | sh -s -- --skills-baseline ~/.amiaffect
 <tr><td>Cursor extension backdoor</td><td>The tampered Claude Code extension (2.1.312 / 2.1.313) on Cursor's marketplace on 29 Oct: the <code>svc-telemetry</code> SSH key, its persistence files and launch agent, and the bad versions still installed. <a href="https://cursor.com/blog/claude-code-extension-security-notice">Cursor's notice</a></td></tr>
 <tr><td>Secrets in reach</td><td>SSH private keys without a passphrase, and <code>.env</code> files in folders where an agent works (unless Claude Code is told not to read them). It reports the file, never what's in it</td></tr>
 </table>
-<p class="muted">Want a second pair of eyes on your agent setup? That's what our <a href="https://avagama.co/services/">agent security review</a> covers.</p>
+<p class="muted">The skills, MCP servers and extensions named in public as malicious or unsafe, with sources: the <a href="/watchlist/">agent watchlist</a>. Want a second pair of eyes on your agent setup? That's what our <a href="https://avagama.co/services/">agent security review</a> covers.</p>
 
 <h2>On a Linux server</h2>
 <p>On Ubuntu, Debian and RHEL/AlmaLinux/Rocky it also checks the running kernel and the usual VPS software against each distro's own fixed packages, so a patched server isn't flagged just because the version number looks old.</p>
@@ -76,5 +76,5 @@ curl -fsSL https://amiaffected.now/run | sh -s -- --skills-baseline ~/.amiaffect
 
 <p class="muted">Running agents or MCP servers in production? Avagama Consulting does fixed-scope <a href="https://avagama.co/services/">security reviews</a> of agents, their tools and the servers they run on.</p>
 
-<footer>Built and maintained by <a href="https://avagama.co">Avagama Consulting</a>. MIT licensed. Source, details and pull requests on <a href="https://github.com/abhay-avagama/security-inspector">GitHub</a>. Found a problem? See the <a href="https://github.com/abhay-avagama/security-inspector/blob/main/SECURITY.md">security policy</a>. What changed and when: the <a href="/changelog/">changelog</a> (<a href="/changelog.xml">RSS</a>). Newer CVEs are tracked via <a href="https://cve.now">cve.now</a>.</footer>
+<footer>Built and maintained by <a href="https://avagama.co">Avagama Consulting</a>. MIT licensed. Source, details and pull requests on <a href="https://github.com/abhay-avagama/security-inspector">GitHub</a>. Found a problem? See the <a href="https://github.com/abhay-avagama/security-inspector/blob/main/SECURITY.md">security policy</a>. What changed and when: the <a href="/changelog/">changelog</a> (<a href="/changelog.xml">RSS</a>). Flagged agent skills and MCP servers: the <a href="/watchlist/">watchlist</a>. Newer CVEs are tracked via <a href="https://cve.now">cve.now</a>.</footer>
 </main></body></html>
