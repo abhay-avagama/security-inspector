@@ -131,7 +131,7 @@
     },
     {
       "name": "WordPress",
-      "about": "CVE-2026-87902 (CISA KEV) and CVE-2026-119977: unauthenticated remote code execution in core",
+      "about": "CVE-2026-87902 and CVE-2026-119977 (both CISA KEV; FCEB deadline for 119977 Nov 6 2026): unauthenticated remote code execution in core",
       "source": "https://wordpress.org/news/2026/10/wordpress-7-1-4/",
       "cves": [
         "CVE-2026-87902",

@@ -134,7 +134,7 @@ against the upstream fixes instead.
 | **MongoDB** CVE-2026-82067 (authorization can end up off) and 4 more | `mongodb-org-server`. |
 | **Brotli** CVE-2026-111497 (CISA KEV) | The system library that web servers, curl and PHP use. |
 | **Plex**, **Zammad** (CISA KEV) | Their vendor packages. |
-| **WordPress** CVE-2026-87902 (CISA KEV), CVE-2026-119977 | `wp-includes/version.php` under `/var/www`, `/srv` and `~/public_html`. |
+| **WordPress** CVE-2026-87902, CVE-2026-119977 (both CISA KEV) | `wp-includes/version.php` under `/var/www`, `/srv` and `~/public_html`. |
 | **WordPress plugins**: ACF Extended PRO (CVE-2026-120534), s2Member (CVE-2026-86596), Ultra Addons for CF7 (CVE-2026-102435), BuddyPress XProfile Image Field (CVE-2026-120518) | The plugin's `Version:` header in `wp-content/plugins/` under the same web roots. BuddyPress XProfile Image Field has no fix and is gone from wordpress.org: delete it. |
 | **Control Web Panel** CVE-2026-77876, CVE-2026-73696 | Flags `/usr/local/cwpsrv` for review: CWP doesn't keep a version file we can trust, so confirm the panel shows 1.29+. |
 | **Nextcloud** built-in Collabora CODE, CVE-2026-110447 (CISA KEV) | The `richdocumentscode` app in the same web roots. |
