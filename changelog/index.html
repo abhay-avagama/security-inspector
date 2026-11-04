@@ -27,6 +27,7 @@ footer{margin-top:3rem;padding-top:1rem;border-top:1px solid var(--line);font-si
 <p>What the tool checks, and when each check went live. New exploited bugs usually land within a day of disclosure. Follow along with the <a href="/changelog.xml">RSS feed</a>.</p>
 <h2 id="2026-11-04">4 November 2026</h2>
 <ul class="log">
+<li><b>WordPress CVE-2026-119977 is now exploited</b>. CISA added the core upgrade race condition to its exploited list, with a 6 November deadline for US federal agencies. The check already flagged it; the label now says it is being exploited. <a class="muted" href="https://github.com/abhay-avagama/security-inspector/commit/ebde85c">ebde85c</a></li>
 <li><b>Watch mode stays quiet when an update doesn&#x27;t fix anything</b>. A kernel or package update that leaves the same bug open is no longer reported as one new and one fixed finding. Found by running watch mode on our own server. <a class="muted" href="https://github.com/abhay-avagama/security-inspector/commit/ee09981">ee09981</a></li>
 <li><b>Kernel advice no longer mentions AlmaLinux on Ubuntu</b>. A note meant for RHEL-family servers was shown on every distro. <a class="muted" href="https://github.com/abhay-avagama/security-inspector/commit/c734a38">c734a38</a></li>
 <li><b>Watch mode for servers</b>. Run it daily from cron with --watch and hear only about new and fixed findings, by webhook (Slack, Teams, Discord) or through your own sendmail. A quiet day sends nothing. <a class="muted" href="https://github.com/abhay-avagama/security-inspector/commit/2c724ef">2c724ef</a></li>

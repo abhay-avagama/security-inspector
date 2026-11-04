@@ -1,4 +1,6 @@
 [
+  {"date": "2026-11-04", "commit": "ebde85c", "title": "WordPress CVE-2026-119977 is now exploited",
+   "body": "CISA added the core upgrade race condition to its exploited list, with a 6 November deadline for US federal agencies. The check already flagged it; the label now says it is being exploited."},
   {"date": "2026-11-04", "commit": "ee09981", "title": "Watch mode stays quiet when an update doesn't fix anything",
    "body": "A kernel or package update that leaves the same bug open is no longer reported as one new and one fixed finding. Found by running watch mode on our own server."},
   {"date": "2026-11-04", "commit": "c734a38", "title": "Kernel advice no longer mentions AlmaLinux on Ubuntu",
