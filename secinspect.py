@@ -5,12 +5,15 @@ browsers and the deprecated Puppeteer MCP server; on Linux servers also the kern
 MariaDB, MongoDB, WordPress and more). Stdlib only. Exit code 1 if anything is affected.
 
 Usage: python3 secinspect.py [dirs ...] [--docker] [--html report.html] [--no-update-check]
+       python3 secinspect.py --fix        offer each vendor update, apply only what you approve, log every step
+       python3 secinspect.py --verify-log check the --fix audit log hasn't been edited
   With no dirs, searches your home folder and system Python paths for envs, lockfiles and CA bundles.
   With dirs, searches only those. Installed programs and system trust stores are always checked.
 """
 import argparse
 import base64
 import datetime
+import getpass
 import glob
 import hashlib
 import html
@@ -1230,6 +1233,254 @@ def notify(message, url=None, mail=None):
         subprocess.run([sendmail, "-t"], input=msg, text=True, capture_output=True)
 
 
+# --- Fix: vendor updates through the package manager, approved at the terminal, logged ---------
+# Sanctity: the commands are built here, from package names the package manager itself reports.
+# Nothing from advisories.json is ever run; it only decides which installed packages need an update.
+# The update comes from the sources this machine already trusts (signed apt/dnf repositories,
+# including vendor ones like nginx.org, PGDG or MySQL's, and Homebrew), never from us.
+
+PKG_NAME = re.compile(r"^[A-Za-z0-9][A-Za-z0-9+._@-]*$")
+REFRESH = {"apt": ["apt-get", "update"], "dnf": ["dnf", "makecache"], "brew": ["brew", "update"]}
+
+
+def is_root():
+    return getattr(os, "geteuid", lambda: 1)() == 0
+
+
+def default_audit_log():
+    return "/var/log/amiaffected/audit.jsonl" if is_root() else os.path.join(HOME, ".local", "state", "amiaffected", "audit.jsonl")
+
+
+def who():
+    user, via = getpass.getuser(), os.environ.get("SUDO_USER")
+    return f"{via} (sudo as {user})" if via else user
+
+
+def entry_hash(e):
+    return hashlib.sha256(json.dumps({k: v for k, v in e.items() if k != "hash"}, sort_keys=True).encode()).hexdigest()
+
+
+def verify_log(path):
+    """(True, entries) or (False, 'line N: what is wrong'). Each entry holds the hash of the one before it."""
+    try:
+        lines = open(path).read().splitlines()
+    except FileNotFoundError:
+        return True, 0
+    prev = ""
+    for i, line in enumerate(lines, 1):
+        try:
+            e = json.loads(line)
+        except ValueError:
+            return False, f"line {i}: not valid JSON"
+        if not isinstance(e, dict) or e.get("prev") != prev:
+            return False, f"line {i}: doesn't follow the line before it (a line was removed, added or moved)"
+        if e.get("hash") != entry_hash(e):
+            return False, f"line {i}: changed after it was written"
+        prev = e["hash"]
+    return True, len(lines)
+
+
+class AuditLog:
+    """Append-only JSON lines, hash-chained, readable only by the owner."""
+    # ponytail: tamper-evident, not tamper-proof: root can rewrite the whole chain; keep a copy of the last hash elsewhere if that matters
+    def __init__(self, path):
+        self.path = path
+        os.makedirs(os.path.dirname(os.path.abspath(path)), mode=0o700, exist_ok=True)
+        try:
+            lines = open(path).read().splitlines()
+        except FileNotFoundError:
+            lines = []
+        self.prev = json.loads(lines[-1])["hash"] if lines else ""
+
+    def write(self, event, **data):
+        e = {"time": datetime.datetime.now(datetime.timezone.utc).isoformat(timespec="seconds"), "host": platform.node(),
+             "user": who(), "event": event, **data, "prev": self.prev}
+        e["hash"] = self.prev = entry_hash(e)
+        with os.fdopen(os.open(self.path, os.O_WRONLY | os.O_APPEND | os.O_CREAT, 0o600), "a") as fh:
+            fh.write(json.dumps(e, sort_keys=True) + "\n")
+
+
+def package_manager():
+    if sys.platform.startswith("linux"):
+        if shutil.which("apt-get") and shutil.which("dpkg-query"):
+            return "apt"
+        if shutil.which("dnf") and shutil.which("rpm"):
+            return "dnf"
+    return "brew" if shutil.which("brew") else None
+
+
+def out_ok(*cmd):
+    """stdout of a command that succeeded, else ''."""
+    try:
+        p = subprocess.run(cmd, capture_output=True, text=True, timeout=300)
+    except (OSError, subprocess.TimeoutExpired):
+        return ""
+    return p.stdout if p.returncode == 0 else ""
+
+
+def owner(pm, path):
+    """The package that installed this file, or None (nvm, a tarball, an app that updates itself)."""
+    if pm == "apt":
+        lines = [l for l in out_ok("dpkg-query", "-S", path).splitlines() if not l.startswith("diversion")]
+        name = lines[0].split(": ")[0].split(":")[0].strip() if len(lines) == 1 else ""
+    elif pm == "dnf":
+        lines = out_ok("rpm", "-qf", "--qf", "%{NAME}\n", path).split()
+        name = lines[0] if len(lines) == 1 else ""
+    else:
+        m = re.search(r"/Cellar/([^/]+)/", os.path.realpath(path))
+        name = m[1] if m else ""
+    return name if PKG_NAME.match(name) else None
+
+
+def candidate(pm, pkg):
+    """The newest version the configured sources offer for pkg, or None."""
+    if pm == "apt":
+        m = re.search(r"^\s*Candidate:\s*(\S+)", out_ok("apt-cache", "policy", pkg), re.M)
+        return m[1] if m and m[1] != "(none)" else None
+    if pm == "dnf":
+        found = out_ok("dnf", "-q", "repoquery", "--latest-limit=1", "--qf", "%{evr}\n", pkg).split()
+        return found[-1] if found else None
+    try:
+        f = (json.loads(out_ok("brew", "info", "--json=v2", "--formula", pkg) or "{}").get("formulae") or [{}])[0]
+    except ValueError:
+        return None
+    v, rev = f.get("versions", {}).get("stable"), f.get("revision", 0)
+    return f"{v}_{rev}" if v and rev else v
+
+
+def as_admin(pm, cmd):
+    return cmd if pm == "brew" or is_root() else ["sudo"] + cmd
+
+
+def upgrade_cmd(pm, pkgs):
+    cmd = {"apt": ["env", "DEBIAN_FRONTEND=noninteractive", "apt-get", "install", "--only-upgrade", "-y",
+                   "-o", "Dpkg::Options::=--force-confold", *pkgs],  # keep the admin's config files
+           "dnf": ["dnf", "upgrade", "-y", *pkgs], "brew": ["brew", "upgrade", *pkgs]}[pm]
+    return as_admin(pm, cmd)
+
+
+def patch_plan(rows, pm, release=None):
+    """AFFECTED rows split into (updates the configured sources can fix now, [(item, where, why)] for the rest).
+    An update is offered only if the candidate version itself passes the same check the scan used."""
+    fam = {"apt": "deb", "dnf": "rpm"}.get(pm)
+    lt = deb_lt if fam == "deb" else rpm_lt
+    updates, manual = {}, []
+    for item, where, version, status, _ in rows:
+        where = str(where)
+        if status != "AFFECTED":
+            continue
+        distro = next((a for a in DISTRO if a["name"] == item), None)
+        vadv = next((a for a in ADVISORIES["versions"] if a["name"] == item and "binary" in a), None)
+        if distro and distro.get("kernel"):  # ponytail: kernels need a reboot and a new package name; by hand for now
+            manual.append((item, where, "kernel updates need a reboot: use the fix plan"))
+            continue
+        if distro and fam and where.endswith(f"({pm})"):
+            found = installed(fam, where.rsplit(" (", 1)[0].split())
+            after = {p: candidate(pm, p) for p, _, _ in found}
+            fixes = bool(found) and all(after[p] and distro_status(distro, release, after[p], src, lt)[0] == "OK" for p, _, src in found)
+            before, after_fix = {p: v for p, v, _ in found}, distro.get("after_fix")
+        elif vadv and pm and os.path.isabs(where) and owner(pm, where):
+            pkg = owner(pm, where)
+            after, before, after_fix = {pkg: candidate(pm, pkg)}, {pkg: version}, vadv.get("after_fix")
+            fixes = bool(after[pkg]) and version_status(vadv, nums(upstream(after[pkg])))[0] == "OK"
+        else:
+            manual.append((item, where, "not installed through apt, dnf or Homebrew: use the fix plan"))
+            continue
+        if not fixes:
+            newest = ", ".join(f"{p} {v or 'none'}" for p, v in after.items())
+            manual.append((item, where, f"no fixed build in this machine's package sources yet (newest: {newest})"))
+            continue
+        u = updates.setdefault(tuple(sorted(after)), {"items": [], "rows": [], "before": before, "after": after, "after_fix": after_fix})
+        u["items"] += [item] if item not in u["items"] else []
+        u["rows"].append((item, where))
+    return list(updates.values()), manual
+
+
+def execute(cmd):
+    try:
+        p = subprocess.run(cmd, capture_output=True, text=True, timeout=3600)
+    except (OSError, subprocess.TimeoutExpired) as e:
+        return 127, str(e)
+    return p.returncode, (p.stdout + p.stderr)[-4000:]
+
+
+def sha256_file(path):
+    return hashlib.sha256(open(path, "rb").read()).hexdigest()
+
+
+def recheck(u):
+    rows = [r for a in ADVISORIES["versions"] if a["name"] in u["items"] for r in check_version(a)]
+    rows += [r for r in check_distro() if r[0] in u["items"]]
+    return {f"{i} | {w}": next((r[3] for r in rows if (r[0], str(r[1])) == (i, w)), "NOT FOUND") for i, w in u["rows"]}
+
+
+def run_fix(rows, log_path, tty=None, os_text=None):
+    ok, why = verify_log(log_path)
+    if not ok:
+        print(f"fix: the audit log {log_path} fails its check ({why}). Nothing was changed; "
+              "move the log aside and find out why before fixing anything.", file=sys.stderr)
+        return 2
+    pm = package_manager()
+    if not pm:
+        print("fix: no apt, dnf or Homebrew on this machine, so there is nothing --fix can apply", file=sys.stderr)
+        return 2
+    try:
+        ask_in, ask_out = (tty, tty) if tty else (open("/dev/tty"), open("/dev/tty", "w"))  # not stdin: with curl | sh, stdin is the script
+    except OSError:
+        print("fix: --fix asks before every change and needs a terminal for that; nothing was changed", file=sys.stderr)
+        return 2
+    log = AuditLog(log_path)
+    here = os.path.dirname(os.path.abspath(__file__))
+    log.write("start", tool_sha256=sha256_file(os.path.join(here, "secinspect.py")),
+              advisories_sha256=sha256_file(os.path.join(here, "advisories.json")), package_manager=pm,
+              affected=[f"{r[0]} | {r[1]} | {r[2]}" for r in rows if r[3] == "AFFECTED"])
+    print(f"\nRefreshing the package lists ({' '.join(REFRESH[pm])})...")
+    code, out = execute(as_admin(pm, REFRESH[pm]))
+    log.write("refresh", command=as_admin(pm, REFRESH[pm]), exit=code)
+    if code:
+        print(f"  that failed (exit {code}), so the newest versions below may be out of date:\n{out[-600:]}")
+    if os_text is None and os.path.exists("/etc/os-release"):
+        os_text = open("/etc/os-release").read()
+    release = os_release(os_text) if os_text else None
+    updates, manual = patch_plan(rows, pm, release)
+    log.write("plan", updates=[{"items": u["items"], "before": u["before"], "after": u["after"]} for u in updates],
+              manual=[list(m) for m in manual])
+    print(f"\n{len(updates)} update(s) ready from this machine's own package sources ({pm}); {len(manual)} need you.")
+    left = len(manual)
+    for n, u in enumerate(updates, 1):
+        cmd = upgrade_cmd(pm, list(u["after"]))
+        print(f"\n[{n}/{len(updates)}] {', '.join(u['items'])}")
+        for p in u["after"]:
+            print(f"      {p}: {u['before'][p]} -> {u['after'][p]}")
+        print(f"      runs: {' '.join(cmd)}")
+        if u["after_fix"]:
+            print(f"      afterwards, by hand: {u['after_fix']}")
+        sys.stdout.flush()
+        ask_out.write("      Apply this update? Type yes to apply, anything else to skip: ")
+        ask_out.flush()
+        answer = ask_in.readline().strip().lower()
+        if answer != "yes":
+            log.write("declined", items=u["items"], packages=list(u["after"]))
+            left += 1
+            continue
+        log.write("approved", items=u["items"], packages=list(u["after"]), command=cmd, approved_by=who())
+        code, out = execute(cmd)
+        log.write("applied", items=u["items"], command=cmd, exit=code, output=out[-2000:])
+        after = recheck(u)
+        log.write("verified", items=u["items"], status=after, still_to_do=u["after_fix"] or "")
+        fixed = code == 0 and all(s == "OK" for s in after.values())
+        left += 0 if fixed else 1
+        print(f"      {'fixed' if fixed else 'NOT fixed'}: " + ", ".join(f"{k} is {v}" for k, v in after.items()) +
+              (f"\n      exit {code}:\n{out[-800:]}" if code else "") + (f"\n      now: {u['after_fix']}" if fixed and u["after_fix"] else ""))
+    if manual:
+        print("\nNeeds you (see the fix plan):")
+        for item, where, why in manual:
+            print(f"  {item}  {where}\n      {why}")
+    log.write("end", still_affected=left)
+    print(f"\nEvery step is logged in {log_path}; check it any time with --verify-log.")
+    return 1 if left else 0
+
+
 def main(argv):
     ap = argparse.ArgumentParser(description="Am I affected by the issues in advisories.json?")
     ap.add_argument("dirs", nargs="*", help="search only these folders for Python envs, lockfiles and CA bundles")
@@ -1246,7 +1497,20 @@ def main(argv):
                     help="remember a fingerprint of every installed skill in FILE and report what changed since the last run")
     ap.add_argument("--no-update-check", action="store_true",
                     help="skip the cve.now advisory-freshness check (offline/CI; also $SECINSPECT_NO_UPDATE_CHECK)")
+    ap.add_argument("--fix", action="store_true",
+                    help="offer the vendor's update for each affected package (apt, dnf, Homebrew), apply only what you "
+                         "approve at the terminal, and log every step")
+    ap.add_argument("--audit-log", metavar="FILE", help="with --fix or --verify-log: the log to use "
+                    "(default /var/log/amiaffected/audit.jsonl as root, else ~/.local/state/amiaffected/audit.jsonl)")
+    ap.add_argument("--verify-log", action="store_true", help="check the --fix audit log hasn't been edited, then exit")
     args = ap.parse_args(argv)
+    log_path = os.path.expanduser(args.audit_log or default_audit_log())
+    if args.verify_log:
+        ok, why = verify_log(log_path)
+        print(f"{log_path}: {why} entries, chain intact" if ok else f"{log_path}: BROKEN at {why}")
+        return 0 if ok else 1
+    if args.fix and (args.watch or args.files_only):
+        ap.error("--fix can't be combined with --watch or --files-only")
     roots = args.dirs or [HOME, "/usr/local/lib", "/opt/homebrew/lib", *glob.glob("/usr/lib/python3*")]
     if not args.watch:  # cron mails anything printed, so a quiet day must print nothing
         print(f"Scanning {', '.join(roots)} for Python envs, lockfiles and CA bundles, give it a minute...", file=sys.stderr)
@@ -1277,6 +1541,8 @@ def main(argv):
     if args.html:
         html_report(rows, args.html)
         print(f"Report written to {os.path.abspath(args.html)}", file=sys.stderr)
+    if args.fix:
+        return run_fix(rows, log_path)
     return 1 if any(r[3] == "AFFECTED" for r in rows) else 0
 
 

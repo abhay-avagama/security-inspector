@@ -114,6 +114,32 @@ after that only NEW and FIXED lines. These two flags are the only way findings l
 only to the place you name. `git pull` means new checks arrive daily; pin a tag instead if you'd rather
 review each update before it runs as root.
 
+## Apply the fixes, with your approval
+
+```sh
+curl -fsSL https://amiaffected.now/run | sh -s -- --fix
+```
+
+`--fix` scans, then offers the update for each affected package that apt, dnf or Homebrew can install,
+whether it comes from your distro or from a vendor repository you added (nginx.org, PGDG, MySQL,
+Google's Chrome repo). For each one it shows the installed and the new version and the exact command,
+and runs it only if you type `yes` at the terminal. Then it checks again and says whether the finding
+cleared. Restarts (nginx, PHP-FPM, a database) are left to you and shown as the next step.
+
+- **What runs.** The commands are written in `secinspect.py`, using the package names your package
+  manager reports. Nothing from `advisories.json` is ever run: it only decides which packages need an update.
+- **Where the patch comes from.** Only from the package sources this machine already trusts, with
+  their own signatures. We never ship a patch.
+- **When it isn't offered.** If the newest version in your sources still doesn't fix the bug, it says
+  so instead of updating. Kernels (they need a reboot), apps that update themselves, and anything
+  installed by hand (nvm, tarballs) stay in the fix plan for you to do.
+- **Audit log.** Every step (the scan, the plan, each approval or skip, the command, its exit code and
+  the re-check) is one line in `/var/log/amiaffected/audit.jsonl` as root, or
+  `~/.local/state/amiaffected/audit.jsonl` otherwise (`--audit-log FILE` to choose). Each line holds the
+  hash of the one before, plus the hashes of the `secinspect.py` and `advisories.json` that made the
+  decision. `--verify-log` says which line was edited, added or removed. If the log doesn't check out,
+  `--fix` changes nothing. It stays on the machine.
+
 ## Servers (Ubuntu, Debian, RHEL family)
 
 On a VPS most software comes from apt or dnf, and the distros fix bugs without changing the

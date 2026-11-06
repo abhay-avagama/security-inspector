@@ -413,7 +413,73 @@ def test_watch():
         assert watch_diff(day4, st) == ([], [], False)
 
 
+class Tty(io.StringIO):  # a terminal: what's written to it isn't read back
+    def write(self, s):
+        return len(s)
+
+
+def test_fix():
+    import json as _json
+    import secinspect as si
+    with tempfile.TemporaryDirectory() as d:
+        log = f"{d}/a/audit.jsonl"
+        a = si.AuditLog(log)
+        for ev in ("start", "approved", "applied"):
+            a.write(ev, items=["nginx"])
+        assert si.verify_log(log) == (True, 3)
+        assert si.AuditLog(log).prev == a.prev  # a later run continues the chain
+        lines = open(log).read().splitlines()
+        e = _json.loads(lines[1]); e["items"] = ["something else"]
+        open(log, "w").write("\n".join([lines[0], _json.dumps(e), lines[2]]) + "\n")
+        assert si.verify_log(log) == (False, "line 2: changed after it was written"), si.verify_log(log)
+        open(log, "w").write("\n".join([lines[0], lines[2]]) + "\n")
+        assert si.verify_log(log)[1].startswith("line 2: doesn't follow")
+        assert si.run_fix([], log, tty=io.StringIO()) == 2  # broken log: refuse to change anything
+
+    saved = {k: getattr(si, k) for k in ("installed", "candidate", "owner", "deb_lt", "package_manager", "execute", "recheck")}
+    try:
+        newest = {"nginx": "1.24.0-2ubuntu7.19", "nginx-core": "1.24.0-2ubuntu7.19", "postgresql-16": "16.14-1.pgdg24.04+1",
+                  "evil; rm -rf /": "9"}
+        si.installed = lambda fam, names: [(n, "1.24.0-2ubuntu7.3", "nginx") for n in names]
+        si.candidate = lambda pm, p: newest.get(p)
+        si.owner = lambda pm, path: "postgresql-16" if path.startswith("/usr/lib/postgresql") else None
+        si.deb_lt = lambda x, y: nums(x) < nums(y)
+        rows = [("nginx", "nginx nginx-core (apt)", "1.24.0-2ubuntu7.3", "AFFECTED", ""),
+                ("Linux kernel (exploited)", "linux-image-6.8.0-1 (apt)", "6.8.0", "AFFECTED", ""),
+                ("PostgreSQL server", "/usr/lib/postgresql/16/bin/postgres", "16.10", "AFFECTED", ""),
+                ("Node.js", "/home/a/.nvm/versions/node/v20.1.0/bin/node", "20.1.0", "AFFECTED", ""),
+                ("PHP", "/usr/bin/php", "8.3.6", "OK", "")]
+        updates, manual = si.patch_plan(rows, "apt", "ubuntu:24.04")
+        assert [u["items"] for u in updates] == [["nginx"]], updates
+        assert updates[0]["after"] == {"nginx": "1.24.0-2ubuntu7.19", "nginx-core": "1.24.0-2ubuntu7.19"}
+        why = {m[0]: m[2] for m in manual}
+        assert why["Linux kernel (exploited)"].startswith("kernel updates need a reboot")
+        assert why["PostgreSQL server"].startswith("no fixed build"), why  # PGDG only has 16.14 so far: 16.15 fixes it
+        assert why["Node.js"].startswith("not installed through")
+        newest["postgresql-16"] = "16.15-1.pgdg24.04+1"
+        assert len(si.patch_plan(rows, "apt", "ubuntu:24.04")[0]) == 2
+        assert si.upgrade_cmd("brew", ["node"]) == ["brew", "upgrade", "node"]
+
+        ran, NOBLE = [], 'ID=ubuntu\nVERSION_ID="24.04"\n'
+        si.package_manager = lambda: "apt"
+        si.execute = lambda cmd: ran.append(cmd) or (0, "")
+        si.recheck = lambda u: {f"{i} | {w}": "OK" for i, w in u["rows"]}
+        with tempfile.TemporaryDirectory() as d:
+            log = f"{d}/audit.jsonl"
+            assert si.run_fix(rows[:1], log, tty=Tty("no\n"), os_text=NOBLE) == 1  # declined: still affected
+            assert not any("install" in c for c in ran), ran  # only the package-list refresh ran
+            assert si.run_fix(rows[:1], log, tty=Tty("yes\n"), os_text=NOBLE) == 0
+            assert any("--only-upgrade" in c and c[-2:] == ["nginx", "nginx-core"] for c in ran), ran
+            events = [_json.loads(l)["event"] for l in open(log)]
+            assert events == ["start", "refresh", "plan", "declined", "end", "start", "refresh", "plan", "approved", "applied", "verified", "end"], events
+            assert si.verify_log(log) == (True, 12)
+    finally:
+        for k, v in saved.items():
+            setattr(si, k, v)
+
+
 if __name__ == "__main__":
+    test_fix()
     test_watch()
     test_skill_changes()
     test_skills()
