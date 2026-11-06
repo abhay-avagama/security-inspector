@@ -63,7 +63,8 @@ def feed_candidates(known):
             continue
         fresh = new_cves(items, adv["checked"], known)
         if fresh:  # one issue per tech: Chrome alone lists a dozen CVEs per release
-            out.append({"cve": fresh[0], "title": f'{adv["name"]}: {len(fresh)} new CVE(s) since {adv["checked"][:10]}',
+            # ponytail: the lead CVE shifts as the feed reorders, so dedupe on tech + checked date instead
+            out.append({"cve": fresh[0], "key": f'"{adv["name"]}" "since {adv["checked"][:10]}"', "title": f'{adv["name"]}: {len(fresh)} new CVE(s) since {adv["checked"][:10]}',
                         "why": f'Listed on cve.now for {adv["name"]} after {adv["checked"][:10]}.',
                         "detail": "\n".join(f"- https://nvd.nist.gov/vuln/detail/{c}" for c in fresh), "fix": "",
                         "source": f'https://cve.now/feed?tech={adv["feed"]}'})
@@ -79,8 +80,8 @@ def body(c):
         "README. Close as `wontfix` if it doesn't fit the tool.") if x)
 
 
-def queued(cve):
-    out = subprocess.run(["gh", "issue", "list", "--state", "all", "--search", f"{cve} in:title", "--json", "number"],
+def queued(key):
+    out = subprocess.run(["gh", "issue", "list", "--state", "all", "--search", f"{key} in:title", "--json", "number"],
                          capture_output=True, text=True, check=True).stdout
     return bool(json.loads(out))
 
@@ -100,7 +101,7 @@ def main(argv):
         seen.add(c["cve"])
         if args.dry_run:
             print(f'{c["cve"]}  {c["title"]}')
-        elif not queued(c["cve"]):
+        elif not queued(c.get("key", c["cve"])):
             subprocess.run(["gh", "issue", "create", "--label", "queue", "--title", f'{c["cve"]}: {c["title"]}',
                             "--body", body(c)], check=True)
     print(f"{len(seen)} candidate(s)", file=sys.stderr)

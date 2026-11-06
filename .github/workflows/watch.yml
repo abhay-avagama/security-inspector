@@ -1,7 +1,7 @@
 name: watch for new CVEs
 on:
   schedule:
-    - cron: "30 3 * * *"  # daily, 09:00 IST
+    - cron: "30 */6 * * *"  # every 6 hours
   workflow_dispatch:
 permissions:
   contents: read
