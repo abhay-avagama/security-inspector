@@ -1193,7 +1193,7 @@ def watch_diff(rows, state_file):
     A finding is item + where + status, so AFFECTED -> OK shows as fixed and OK -> AFFECTED as new."""
     # compare with version numbers blanked: a kernel going 6.8.0-139 -> 147 while still affected is the same finding
     same = lambda k: re.sub(r"\d+(?:[.\-]\d+)+", "#", k)
-    now = {same(k): k for k in (f"{r[0]} | {r[1]} | {r[3]}" for r in rows if r[3] in ("AFFECTED", "REVIEW"))}
+    now = {same(k): k for k in (f"{r[0]} | {r[1]} | {r[3]}" for r in rows if r[3] in ("AFFECTED", "REVIEW", "PATCH"))}
     try:
         before = {same(k): k for k in json.load(open(state_file))["findings"]}
         first = False
@@ -1207,10 +1207,14 @@ def watch_diff(rows, state_file):
 
 def watch_message(new, fixed, first, rows):
     host = platform.node()
+    patch = [x for x in new if x.endswith(" | PATCH")]  # a fix reached this machine's package sources
+    new, fixed = [x for x in new if x not in patch], [x for x in fixed if not x.endswith(" | PATCH")]
     affected = sum(r[3] == "AFFECTED" for r in rows)
-    head = (f"Am I affected? is now watching {host}: {affected} affected, {len(new) - affected if first else 0} to review"
-            if first else f"Am I affected? on {host}: {len(new)} new, {len(fixed)} fixed since the last run")
-    lines = [head] + [f"NEW  {x}" for x in new[:30]] + [f"FIXED  {x}" for x in fixed[:30]]
+    ready = f", {len(patch)} fix(es) ready to apply" if patch else ""
+    head = (f"Am I affected? is now watching {host}: {affected} affected, {len(new) - affected if first else 0} to review{ready}"
+            if first else f"Am I affected? on {host}: {len(new)} new, {len(fixed)} fixed since the last run{ready}")
+    lines = [head] + [f"PATCH  {x.split(' | ')[1]}: run --fix to apply it" for x in patch[:30]]
+    lines += [f"NEW  {x}" for x in new[:30]] + [f"FIXED  {x}" for x in fixed[:30]]
     if len(new) + len(fixed) > 60:
         lines.append("... and more: run it by hand for the full list")
     return "\n".join(lines)
@@ -1396,6 +1400,19 @@ def patch_plan(rows, pm, release=None):
     return list(updates.values()), manual
 
 
+def patch_rows(rows, os_text=None):
+    """For watch mode: one PATCH row per affected package whose fix is already in this machine's sources."""
+    # ponytail: reads the package lists as they are (apt-daily / dnf-makecache keep them fresh); no refresh from cron
+    pm = package_manager()
+    if not pm or not any(r[3] == "AFFECTED" for r in rows):
+        return []
+    if os_text is None and os.path.exists("/etc/os-release"):
+        os_text = open("/etc/os-release").read()
+    updates, _ = patch_plan(rows, pm, os_release(os_text) if os_text else None)
+    return [("Patch available", f"{', '.join(u['items'])} -> " + ", ".join(f"{p} {v}" for p, v in u["after"].items()),
+             "-", "PATCH", "") for u in updates]
+
+
 def execute(cmd):
     try:
         p = subprocess.run(cmd, capture_output=True, text=True, timeout=3600)
@@ -1529,7 +1546,7 @@ def main(argv):
     if args.skills_baseline:
         rows += check_skill_changes(skill_dirs(extra=FOUND_SKILL_DIRS), os.path.expanduser(args.skills_baseline))
     if args.watch:  # cron mode: say only what changed
-        new, fixed, first = watch_diff(rows, os.path.expanduser(args.watch))
+        new, fixed, first = watch_diff(rows + patch_rows(rows), os.path.expanduser(args.watch))
         if new or fixed or first:
             message = watch_message(new, fixed, first, rows)
             print(message)

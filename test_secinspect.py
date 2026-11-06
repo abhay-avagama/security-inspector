@@ -411,6 +411,15 @@ def test_watch():
         day4 = [("nginx", "nginx (apt)", "1.24", "OK", ""), ("Linux kernel", "linux-image-6.8.0-147-generic (apt)", "6.8", "AFFECTED", "")]
         watch_diff([("Linux kernel", "linux-image-6.8.0-139-generic (apt)", "6.8", "AFFECTED", "")], st)
         assert watch_diff(day4, st) == ([], [], False)
+        # a fix reaching the package sources is news once, then quiet until it's applied
+        day5 = day4 + [("Patch available", "Linux kernel -> linux-image-6.8.0-150-generic 6.8.0-150.150", "-", "PATCH", "")]
+        new, fixed, first = watch_diff(day5, st)
+        msg = watch_message(new, fixed, first, day4)
+        assert msg.splitlines()[0].endswith("0 new, 0 fixed since the last run, 1 fix(es) ready to apply"), msg
+        assert msg.splitlines()[1] == "PATCH  Linux kernel -> linux-image-6.8.0-150-generic 6.8.0-150.150: run --fix to apply it", msg
+        assert watch_diff(day5, st) == ([], [], False)
+        new, fixed, _ = watch_diff(day4, st)  # applied: the PATCH line goes away without a FIXED line
+        assert "FIXED" not in watch_message(new, fixed, False, day4)
 
 
 class Tty(io.StringIO):  # a terminal: what's written to it isn't read back
@@ -459,6 +468,10 @@ def test_fix():
         newest["postgresql-16"] = "16.15-1.pgdg24.04+1"
         assert len(si.patch_plan(rows, "apt", "ubuntu:24.04")[0]) == 2
         assert si.upgrade_cmd("brew", ["node"]) == ["brew", "upgrade", "node"]
+        si.package_manager = lambda: "apt"
+        assert si.patch_rows(rows, os_text='ID=ubuntu\nVERSION_ID="24.04"\n')[0][:2] == (
+            "Patch available", "nginx -> nginx 1.24.0-2ubuntu7.19, nginx-core 1.24.0-2ubuntu7.19")
+        assert si.patch_rows(rows[4:]) == []  # nothing affected: no package queries at all
 
         ran, NOBLE = [], 'ID=ubuntu\nVERSION_ID="24.04"\n'
         si.package_manager = lambda: "apt"

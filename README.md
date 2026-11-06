@@ -114,6 +114,11 @@ after that only NEW and FIXED lines. These two flags are the only way findings l
 only to the place you name. `git pull` means new checks arrive daily; pin a tag instead if you'd rather
 review each update before it runs as root.
 
+When the fix for an affected package reaches the machine's own package sources (your distro's, or a
+vendor repository you added), watch mode says so once: `PATCH  nginx -> nginx 1.24.0-2ubuntu7.19: run
+--fix to apply it`. It reads the package lists as they are, so keep `apt-daily` or `dnf-makecache`
+running; it never refreshes or installs anything from cron.
+
 ## Apply the fixes, with your approval
 
 ```sh
