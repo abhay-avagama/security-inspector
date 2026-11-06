@@ -17,6 +17,7 @@ REPO = "https://github.com/abhay-avagama/security-inspector"
 INDEX = (ROOT / "index.html").read_text()
 STYLE = INDEX.split("<style>", 1)[1].split("</style>", 1)[0]  # one look and one menu for the whole site
 NAV = '<header class="top">' + INDEX.split('<header class="top">', 1)[1].split("</header>", 1)[0] + "</header>"
+BEACON = "<!-- Cloudflare Web Analytics -->" + INDEX.split("<!-- Cloudflare Web Analytics -->", 1)[1].split("<!-- End Cloudflare Web Analytics -->", 1)[0] + "<!-- End Cloudflare Web Analytics -->"  # same counter as the home page
 
 
 def nav(href):
@@ -43,7 +44,7 @@ def render(entries):
 <meta name="description" content="Every check added to Am I affected?, newest first, with the date it went live.">
 <link rel="canonical" href="{SITE}/changelog/">
 <link rel="alternate" type="application/rss+xml" title="Am I affected? changelog" href="{SITE}/changelog.xml">
-<style>{STYLE}.log{{padding-left:1.1rem}}.log li{{margin:.6rem 0}}.log a{{font:13px ui-monospace,monospace;text-decoration:none}}</style></head>
+<style>{STYLE}.log{{padding-left:1.1rem}}.log li{{margin:.6rem 0}}.log a{{font:13px ui-monospace,monospace;text-decoration:none}}</style>{BEACON}</head>
 <body>{nav("/changelog/")}
 <main>
 <h1>Changelog</h1>
@@ -122,7 +123,7 @@ h2{font-size:1.35rem;margin:3rem 0 .25rem;letter-spacing:-.01em}h2+p{margin-top:
 <title>Agent watchlist · Am I affected?</title>
 <meta name="description" content="Agent skills, MCP servers and extensions that a named source has flagged, what the tool reports for each, and what to do.">
 <link rel="canonical" href="{SITE}/watchlist/">
-<style>{STYLE}{css}</style></head>
+<style>{STYLE}{css}</style>{BEACON}</head>
 <body>{nav("/watchlist/")}
 <main>
 <h1>Agent watchlist</h1>
