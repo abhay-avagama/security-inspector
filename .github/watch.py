@@ -77,7 +77,8 @@ def body(c):
         f'Source: {c["source"]}',
         "To add it: find the fixed versions (vendor advisory, plus Ubuntu/Debian/RHEL trackers for server "
         "software), add an entry to advisories.json, a test in test_secinspect.py, and a row on the page and "
-        "README. Close as `wontfix` if it doesn't fit the tool.") if x)
+        "README. Close as `wontfix` if it doesn't fit the tool. Either way, move the tech's `checked` date in "
+        "advisories.json to today, or later CVEs for it won't be queued.") if x)
 
 
 def queued(key):
