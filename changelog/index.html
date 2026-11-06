@@ -35,6 +35,11 @@ h2[id]{scroll-margin-top:4.5rem}
 <main>
 <h1>Changelog</h1>
 <p>What the tool checks, and when each check went live. New exploited bugs usually land within a day of disclosure. Follow along with the <a href="/changelog.xml">RSS feed</a>.</p>
+<h2 id="2026-11-06">6 November 2026</h2>
+<ul class="log">
+<li><b>Chromium before 157.0.8103.38</b>. Chrome&#x27;s 3 November release fixes 196 bugs, 33 of them critical, several of which run code outside the sandbox. Playwright 1.65.0 already ships a fixed build; Puppeteer 25.16.0 doesn&#x27;t yet, so the advice is still to run it on your installed Chrome. <a class="muted" href="https://github.com/abhay-avagama/security-inspector/commit/1cd0de7">1cd0de7</a></li>
+<li><b>The CVE queue runs every 6 hours</b>. New CVEs are picked up four times a day instead of once, and a feed that reorders itself no longer opens a second issue for the same release. <a class="muted" href="https://github.com/abhay-avagama/security-inspector/commit/f1f8b82">f1f8b82</a></li>
+</ul>
 <h2 id="2026-11-04">4 November 2026</h2>
 <ul class="log">
 <li><b>Agent watchlist</b>. One page listing the skills, MCP servers and extensions named in public as malicious or unsafe, each with its source, how the tool finds it and what to do. Generated from the same data the tool reads, at amiaffected.now/watchlist. <a class="muted" href="https://github.com/abhay-avagama/security-inspector/commit/793b53f">793b53f</a></li>

@@ -1,4 +1,8 @@
 [
+  {"date": "2026-11-06", "commit": "1cd0de7", "title": "Chromium before 157.0.8103.38",
+   "body": "Chrome's 3 November release fixes 196 bugs, 33 of them critical, several of which run code outside the sandbox. Playwright 1.65.0 already ships a fixed build; Puppeteer 25.16.0 doesn't yet, so the advice is still to run it on your installed Chrome."},
+  {"date": "2026-11-06", "commit": "f1f8b82", "title": "The CVE queue runs every 6 hours",
+   "body": "New CVEs are picked up four times a day instead of once, and a feed that reorders itself no longer opens a second issue for the same release."},
   {"date": "2026-11-04", "commit": "793b53f", "title": "Agent watchlist",
    "body": "One page listing the skills, MCP servers and extensions named in public as malicious or unsafe, each with its source, how the tool finds it and what to do. Generated from the same data the tool reads, at amiaffected.now/watchlist."},
   {"date": "2026-11-04", "commit": "ebde85c", "title": "WordPress CVE-2026-119977 is now exploited",
