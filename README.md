@@ -178,7 +178,9 @@ upstream version: a patched Ubuntu nginx still says 1.24.0. So for these the too
 fixed build for that release (Ubuntu 22.04 / 24.04 / 26.04, Debian 12 / 13, RHEL / AlmaLinux /
 Rocky 9 / 10), letting `dpkg` and `rpm` decide which version is newer. Packages from a vendor
 repo (nginx.org, MariaDB, MongoDB, Plex) carry a different upstream version and are checked
-against the upstream fixes instead.
+against the upstream fixes instead. The same goes for Homebrew, on a Mac or Linuxbrew: nginx,
+httpd, MariaDB, MongoDB (`mongodb-community`) and Brotli installed with `brew` are checked against the
+upstream fixes, and `--fix` offers `brew upgrade` for them.
 
 | Issue | How |
 |---|---|

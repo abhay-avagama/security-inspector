@@ -800,7 +800,7 @@
       "rpm_packages": [
         "nginx",
         "nginx-core"
-      ],
+      ], "brew_packages": ["nginx"],
       "upstream_fixed": [
         "1.31.7",
         "1.30.6"
@@ -836,7 +836,7 @@
       "rpm_packages": [
         "httpd",
         "httpd-core"
-      ],
+      ], "brew_packages": ["httpd"],
       "upstream_fixed": [
         "2.4.69"
       ],
@@ -892,7 +892,7 @@
         "mariadb-server",
         "mariadb11.8-server",
         "MariaDB-server"
-      ],
+      ], "brew_packages": ["mariadb", "mariadb@10.6", "mariadb@10.11", "mariadb@11.4", "mariadb@11.8"],
       "upstream_fixed": [
         "10.6.28",
         "10.11.19",
@@ -929,7 +929,7 @@
       ],
       "rpm_packages": [
         "mongodb-org-server"
-      ],
+      ], "brew_packages": ["mongodb-community", "mongodb-community@7.0", "mongodb-community@8.0"],
       "upstream_fixed": [
         "7.0.43",
         "8.0.32",
@@ -955,7 +955,7 @@
         "brotli",
         "libbrotli",
         "python3-brotli"
-      ],
+      ], "brew_packages": ["brotli"],
       "upstream_fixed": [
         "1.0.10",
         "1.1.1",

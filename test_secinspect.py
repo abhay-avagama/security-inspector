@@ -428,6 +428,23 @@ class Tty(io.StringIO):  # a terminal: what's written to it isn't read back
         return len(s)
 
 
+def test_brew_server_packages():
+    """Homebrew builds are upstream versions: judged by upstream_fixed, never by the Linux release's own builds."""
+    import secinspect as si
+    saved = si.installed, si.candidate
+    si.installed = lambda fam, names: [(n, {"nginx": "1.31.6", "brotli": "1.2.1_1"}[n], n) for n in names if n in ("nginx", "brotli")]
+    si.candidate = lambda pm, p: {"nginx": "1.31.7"}.get(p)
+    try:
+        rows = {r[0]: r for r in si.check_distro_fam("brew", None)}
+        assert set(rows) == {"nginx", "Brotli"}, rows  # nothing installed means no row on a Mac
+        assert rows["nginx"][1:4] == ("nginx (brew)", "1.31.6", "AFFECTED"), rows["nginx"]
+        assert rows["Brotli"][3] == "OK", rows["Brotli"]  # 1.2.1 plus Homebrew's revision _1
+        updates, manual = si.patch_plan(list(rows.values()), "brew", release="ubuntu:24.04")
+        assert [u["after"] for u in updates] == [{"nginx": "1.31.7"}] and not manual, (updates, manual)
+    finally:
+        si.installed, si.candidate = saved
+
+
 def test_agent_update():
     import secinspect as si
     """--install pins a key; --update swaps files in only when both are signed by it and the data isn't older."""
@@ -544,6 +561,7 @@ def test_fix():
 if __name__ == "__main__":
     test_fix()
     test_agent_update()
+    test_brew_server_packages()
     test_watch()
     test_skill_changes()
     test_skills()

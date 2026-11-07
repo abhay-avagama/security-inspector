@@ -544,6 +544,12 @@ def installed(fam, names):
     """[(package, version, source package)] for the installed ones."""
     if not names:
         return []  # dpkg-query/rpm with no names list every package
+    if fam == "brew":  # "mongodb-community 7.0.12 8.3.7": old kegs stay until brew cleanup; the newest is the one that runs
+        try:  # stdout only: names that aren't installed print errors and exit 1, the rest are still listed
+            out = subprocess.run(["brew", "list", "--versions", "--formula", *names], capture_output=True, text=True, timeout=60).stdout
+        except (OSError, subprocess.TimeoutExpired):
+            return []
+        return [(p, max(vs, key=nums), p) for p, *vs in (l.split() for l in out.splitlines()) if vs]
     if fam == "deb":
         out = run("dpkg-query", "-W", "-f", "${db:Status-Abbrev}\t${Package}\t${Version}\t${source:Package}\n", *names)
         rows = [l.split("\t") for l in out.splitlines()]
@@ -596,29 +602,36 @@ def distro_status(adv, release, version, source, lt):
 
 
 def check_distro(os_text=None):
+    rows = check_distro_fam("brew", None) if shutil.which("brew") else []  # macOS, or Linuxbrew next to apt/dnf
     if os_text is None:
         try:
             os_text = open("/etc/os-release").read()
         except OSError:
-            return []  # not Linux: nothing to say about server packages
+            return rows  # not Linux: Homebrew is the only package manager to ask
     fam = "deb" if shutil.which("dpkg-query") else "rpm" if shutil.which("rpm") else None
-    release = os_release(os_text)
     if not fam:
-        return [("Server packages", "-", "-", "UNKNOWN", "only apt (Ubuntu/Debian) and dnf (RHEL family) systems are checked")]
+        return rows + [("Server packages", "-", "-", "UNKNOWN", "only apt (Ubuntu/Debian) and dnf (RHEL family) systems are checked")]
+    return rows + check_distro_fam(fam, os_release(os_text))
+
+
+def check_distro_fam(fam, release):
+    """One row per advisory for packages from apt (deb), dnf (rpm) or Homebrew (brew; upstream versions, no release)."""
     lt = deb_lt if fam == "deb" else rpm_lt
     rows = []
     for adv in DISTRO:
         if not adv.get("kernel") and not adv.get(f"{fam}_packages"):
             continue  # e.g. mod_http2 is its own package only on RHEL; apache2 covers it on Debian
+        if adv.get("kernel") and fam == "brew":
+            continue
         found = running_kernel(fam) if adv.get("kernel") else installed(fam, adv.get(f"{fam}_packages", []))
         if not found:
-            rows.append((adv["name"], "-", "-", "NOT FOUND", ""))
+            rows += [] if fam == "brew" else [(adv["name"], "-", "-", "NOT FOUND", "")]  # not on a Mac, nor twice on Linux
             continue
         # one row per advisory: nginx + nginx-core or mariadb-server + -core are one thing to fix
         checked = [(pkg, version, *distro_status(adv, release, version, source, lt)) for pkg, version, source in found]
         worst = min(checked, key=lambda c: STATUSES.index(c[2]))
         pkgs = " ".join(sorted({c[0] for c in checked}))
-        rows.append((adv["name"], f"{pkgs} ({'apt' if fam == 'deb' else 'dnf'})", worst[1], worst[2], worst[3]))
+        rows.append((adv["name"], f"{pkgs} ({ {'deb': 'apt', 'rpm': 'dnf'}.get(fam, fam)})", worst[1], worst[2], worst[3]))
     return rows
 
 
@@ -1367,8 +1380,9 @@ def upgrade_cmd(pm, pkgs):
 def patch_plan(rows, pm, release=None):
     """AFFECTED rows split into (updates the configured sources can fix now, [(item, where, why)] for the rest).
     An update is offered only if the candidate version itself passes the same check the scan used."""
-    fam = {"apt": "deb", "dnf": "rpm"}.get(pm)
+    fam = {"apt": "deb", "dnf": "rpm", "brew": "brew"}.get(pm)
     lt = deb_lt if fam == "deb" else rpm_lt
+    release = None if pm == "brew" else release
     updates, manual = {}, []
     for item, where, version, status, _ in rows:
         where = str(where)
