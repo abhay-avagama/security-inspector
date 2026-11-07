@@ -7,6 +7,7 @@ MariaDB, MongoDB, WordPress and more). Stdlib only. Exit code 1 if anything is a
 Usage: python3 secinspect.py [dirs ...] [--docker] [--html report.html] [--no-update-check]
        python3 secinspect.py --fix        offer each vendor update, apply only what you approve, log every step
        python3 secinspect.py --verify-log check the --fix audit log hasn't been edited
+       python3 secinspect.py --install    keep a copy that updates only from signed releases (then --update from cron)
   With no dirs, searches your home folder and system Python paths for envs, lockfiles and CA bundles.
   With dirs, searches only those. Installed programs and system trust stores are always checked.
 """
@@ -1498,6 +1499,123 @@ def run_fix(rows, log_path, tty=None, os_text=None):
     return 1 if left else 0
 
 
+# --- Agent: install once, then update only from releases signed with the key pinned at install ---
+SITE = "https://amiaffected.now/"
+SIGNER = "release@amiaffected.now"
+SIGNING_KEY = ""  # public half of Avagama's offline release key (ssh-ed25519 AAAA...); empty until releases are signed
+AGENT_FILES = ("secinspect.py", "advisories.json")
+HERE = os.path.dirname(os.path.abspath(__file__))
+
+
+def agent_dir():
+    return "/opt/amiaffected" if is_root() else os.path.join(HOME, ".local", "share", "amiaffected")
+
+
+def fingerprint(key):
+    blob = base64.b64decode(key.split()[1])
+    return "SHA256:" + base64.b64encode(hashlib.sha256(blob).digest()).decode().rstrip("=")
+
+
+def signers_line(key):
+    return f'{SIGNER} namespaces="amiaffected" {key}\n'
+
+
+def sig_ok(signers, path, sig):
+    """True only if ssh-keygen says sig is a signature over path by a key in the signers file."""
+    try:
+        with open(path, "rb") as fh:
+            p = subprocess.run(["ssh-keygen", "-Y", "verify", "-f", signers, "-I", SIGNER, "-n", "amiaffected", "-s", sig],
+                               stdin=fh, capture_output=True, timeout=60)
+    except (OSError, subprocess.TimeoutExpired):
+        return False
+    return p.returncode == 0
+
+
+def release_signed(d=HERE, key=None):
+    """For CI: do the .sig files next to the release files match SIGNING_KEY?"""
+    with tempfile.NamedTemporaryFile("w", suffix=".signers") as fh:
+        fh.write(signers_line(key or SIGNING_KEY))
+        fh.flush()
+        return all(sig_ok(fh.name, os.path.join(d, f), os.path.join(d, f + ".sig")) for f in AGENT_FILES)
+
+
+def newest_checked(path):
+    try:
+        return max(re.findall(r'"checked":\s*"([^"]+)"', open(path).read()), default="")
+    except FileNotFoundError:
+        return ""
+
+
+def fetch(url):
+    with urllib.request.urlopen(url, timeout=60) as r:
+        return r.read()
+
+
+def update_agent(d, log):
+    """Download the release and its signatures; swap the files in only if every signature matches the pinned key."""
+    signers = os.path.join(d, "allowed_signers")
+    if not os.path.exists(signers):
+        print(f"{d} isn't an installed copy: run --install first", file=sys.stderr)
+        return 1
+    tmp = tempfile.mkdtemp(dir=d)
+    try:
+        problem = None
+        try:
+            for f in AGENT_FILES:
+                for name in (f, f + ".sig"):
+                    with open(os.path.join(tmp, name), "wb") as fh:
+                        fh.write(fetch(SITE + name))
+        except OSError as e:
+            problem = f"download failed: {e}"
+        for f in AGENT_FILES if not problem else ():
+            if not sig_ok(signers, os.path.join(tmp, f), os.path.join(tmp, f + ".sig")):
+                problem = f"{f} isn't signed by the pinned key"
+                break
+        if not problem and newest_checked(os.path.join(tmp, "advisories.json")) < newest_checked(os.path.join(d, "advisories.json")):
+            problem = "the downloaded advisories are older than the installed ones (an old release replayed?)"
+        if problem:
+            log.write("update_refused", dir=d, reason=problem)
+            print(f"Update refused, nothing changed: {problem}", file=sys.stderr)
+            return 1
+        before = {f: sha256_file(os.path.join(d, f)) if os.path.exists(os.path.join(d, f)) else None for f in AGENT_FILES}
+        after = {f: sha256_file(os.path.join(tmp, f)) for f in AGENT_FILES}
+        if before != after:
+            # ponytail: two renames, not one atomic step; a crash between them leaves new data with the old script for one run
+            for f in ("advisories.json", "secinspect.py"):
+                os.replace(os.path.join(tmp, f), os.path.join(d, f))
+            log.write("updated", dir=d, before=before, after=after)
+            print(f"Updated {d} to the signed release", file=sys.stderr)
+        return 0
+    finally:
+        shutil.rmtree(tmp, ignore_errors=True)
+
+
+def install_agent(d, log, key=None):
+    key = key or SIGNING_KEY
+    if not key:
+        print("Signed releases haven't started yet, so there's nothing safe to install. Use the one-liner for now.", file=sys.stderr)
+        return 1
+    os.makedirs(d, mode=0o755, exist_ok=True)
+    signers = os.path.join(d, "allowed_signers")
+    if os.path.exists(signers) and open(signers).read() != signers_line(key):
+        print(f"A different release key is already pinned in {signers}. If you trust the new one, delete that file "
+              "and run --install again.", file=sys.stderr)
+        log.write("install_refused", dir=d, reason="a different key is pinned", key=fingerprint(key))
+        return 1
+    with open(signers, "w") as fh:
+        fh.write(signers_line(key))
+    print(f"Pinned release key {fingerprint(key)}\nCompare it with the one at github.com/abhay-avagama/security-inspector "
+          "before relying on updates.", file=sys.stderr)
+    log.write("installed", dir=d, key=fingerprint(key))
+    rc = update_agent(d, log)
+    if rc == 0:
+        py = os.path.join(d, "secinspect.py")
+        print(f"\nInstalled. Run it with:  python3 {py}\nApply fixes:            python3 {py} --fix\n"
+              f"For cron (every 6 hours; a refused update keeps the last signed copy and says why):\n"
+              f"  0 */6 * * * python3 {py} --update; python3 {py} --watch {os.path.join(d, 'watch.json')}", file=sys.stderr)
+    return rc
+
+
 def main(argv):
     ap = argparse.ArgumentParser(description="Am I affected by the issues in advisories.json?")
     ap.add_argument("dirs", nargs="*", help="search only these folders for Python envs, lockfiles and CA bundles")
@@ -1520,8 +1638,15 @@ def main(argv):
     ap.add_argument("--audit-log", metavar="FILE", help="with --fix or --verify-log: the log to use "
                     "(default /var/log/amiaffected/audit.jsonl as root, else ~/.local/state/amiaffected/audit.jsonl)")
     ap.add_argument("--verify-log", action="store_true", help="check the --fix audit log hasn't been edited, then exit")
+    ap.add_argument("--install", action="store_true", help="keep a copy in /opt/amiaffected (or ~/.local/share/amiaffected), "
+                    "pin the release key, and print the cron line")
+    ap.add_argument("--update", action="store_true", help="update the installed copy, only if the release is signed by the pinned key")
     args = ap.parse_args(argv)
     log_path = os.path.expanduser(args.audit_log or default_audit_log())
+    if args.install:
+        return install_agent(agent_dir(), AuditLog(log_path))
+    if args.update:
+        return update_agent(HERE if os.path.exists(os.path.join(HERE, "allowed_signers")) else agent_dir(), AuditLog(log_path))
     if args.verify_log:
         ok, why = verify_log(log_path)
         print(f"{log_path}: {why} entries, chain intact" if ok else f"{log_path}: BROKEN at {why}")

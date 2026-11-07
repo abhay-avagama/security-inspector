@@ -12,6 +12,8 @@ jobs:
       - uses: actions/checkout@v4
       - run: python3 test_secinspect.py
       - run: python3 changelog.py --check  # page and feed match changelog.json
+      - name: Release signatures match the files (once signing has started)
+        run: python3 -c "import secinspect as s, sys; sys.exit(0 if not s.SIGNING_KEY or s.release_signed() else 'secinspect.py.sig or advisories.json.sig is missing or stale: sign the release')"
       - name: Make a fixture repo with a backdoored pin and an archived MCP server
         run: |
           mkdir -p "$RUNNER_TEMP/fixture"

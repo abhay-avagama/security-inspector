@@ -1,4 +1,5 @@
 import io
+import json
 import os
 import shutil
 import subprocess
@@ -427,6 +428,55 @@ class Tty(io.StringIO):  # a terminal: what's written to it isn't read back
         return len(s)
 
 
+def test_agent_update():
+    import secinspect as si
+    """--install pins a key; --update swaps files in only when both are signed by it and the data isn't older."""
+    if not shutil.which("ssh-keygen"):
+        return
+    with tempfile.TemporaryDirectory() as t:
+        site, d, log = os.path.join(t, "site"), os.path.join(t, "agent"), si.AuditLog(os.path.join(t, "audit.jsonl"))
+        os.makedirs(site)
+        def key(name):
+            subprocess.run(["ssh-keygen", "-q", "-t", "ed25519", "-N", "", "-f", os.path.join(t, name)], check=True)
+            return open(os.path.join(t, name + ".pub")).read().strip()
+        good, bad = key("good"), key("bad")
+        def release(checked, signer="good"):
+            open(os.path.join(site, "secinspect.py"), "w").write("print('v')\n")
+            json.dump({"versions": [{"checked": checked}]}, open(os.path.join(site, "advisories.json"), "w"))
+            for f in si.AGENT_FILES:
+                if os.path.exists(os.path.join(site, f + ".sig")):
+                    os.remove(os.path.join(site, f + ".sig"))
+                subprocess.run(["ssh-keygen", "-q", "-Y", "sign", "-f", os.path.join(t, signer), "-n", "amiaffected",
+                                os.path.join(site, f)], check=True, capture_output=True)
+        fetch = si.fetch
+        si.fetch = lambda url: open(os.path.join(site, url[len(si.SITE):]), "rb").read()
+        try:
+            release("2026-11-06")
+            assert si.release_signed(site, good) and not si.release_signed(site, bad)
+            assert si.update_agent(d, log) == 1  # not installed yet
+            assert si.install_agent(d, log, good) == 0
+            assert json.load(open(os.path.join(d, "advisories.json")))["versions"][0]["checked"] == "2026-11-06"
+            assert si.install_agent(d, log, bad) == 1  # a different key is never silently re-pinned
+            release("2026-11-07")
+            open(os.path.join(site, "advisories.json"), "a").write(" ")  # edited after signing
+            assert si.update_agent(d, log) == 1
+            release("2026-11-07", signer="bad")
+            assert si.update_agent(d, log) == 1
+            release("2026-11-01")  # validly signed but older: a replay
+            assert si.update_agent(d, log) == 1
+            assert "2026-11-06" in open(os.path.join(d, "advisories.json")).read()
+            release("2026-11-07")
+            assert si.update_agent(d, log) == 0
+            assert "2026-11-07" in open(os.path.join(d, "advisories.json")).read()
+            assert set(os.listdir(d)) == {"allowed_signers", *si.AGENT_FILES}  # no temp files left behind
+        finally:
+            si.fetch = fetch
+        events = [json.loads(l)["event"] for l in open(log.path)]
+        assert events == ["installed", "updated", "install_refused", "update_refused", "update_refused",
+                          "update_refused", "updated"], events
+        assert si.verify_log(log.path) == (True, 7)
+
+
 def test_fix():
     import json as _json
     import secinspect as si
@@ -493,6 +543,7 @@ def test_fix():
 
 if __name__ == "__main__":
     test_fix()
+    test_agent_update()
     test_watch()
     test_skill_changes()
     test_skills()
