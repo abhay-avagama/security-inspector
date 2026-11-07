@@ -102,27 +102,51 @@ Run it daily from cron and hear about it only when something changes: a new affe
 kernel bug, or a fix that landed. A quiet day prints and sends nothing.
 
 ```sh
-sudo git clone https://github.com/abhay-avagama/security-inspector /opt/amiaffected
+curl -fsSL https://amiaffected.now/run | sudo sh -s -- --install
 sudo crontab -e
-# 07:00 daily: pull new advisories, compare with yesterday, post changes to Slack
-0 7 * * * cd /opt/amiaffected && git pull -q && python3 secinspect.py --watch /var/lib/amiaffected/watch.json --notify https://hooks.slack.com/services/...
+# every 6 hours: take the signed update if there is one, compare with last time, post changes to Slack
+0 */6 * * * python3 /opt/amiaffected/secinspect.py --update; python3 /opt/amiaffected/secinspect.py --watch /opt/amiaffected/watch.json --notify https://hooks.slack.com/services/...
 ```
 
 `--notify URL` posts `{"text": ..., "content": ...}`, which Slack, Teams and Discord webhooks all read.
 `--mail ADDRESS` sends through the server's own `sendmail`. The first run reports everything it found;
 after that only NEW and FIXED lines. These two flags are the only way findings leave the machine, and
-only to the place you name. `git pull` means new checks arrive daily; pin a tag instead if you'd rather
-review each update before it runs as root.
+only to the place you name.
 
 When the fix for an affected package reaches the machine's own package sources (your distro's, or a
 vendor repository you added), watch mode says so once: `PATCH  nginx -> nginx 1.24.0-2ubuntu7.19: run
 --fix to apply it`. It reads the package lists as they are, so keep `apt-daily` or `dnf-makecache`
 running; it never refreshes or installs anything from cron.
 
+## Install it, with signed updates
+
+The one-liner fetches a fresh copy every time, from the same site as the data. That suits a quick
+check. For a server you watch from cron, or before running `--fix` as root, install a copy that
+only takes updates you can check came from us:
+
+```sh
+curl -fsSL https://amiaffected.now/run | sudo sh -s -- --install    # or without sudo, into ~/.local/share/amiaffected
+```
+
+`--install` puts `secinspect.py` and `advisories.json` in `/opt/amiaffected` and pins our release key
+there. It prints the key's fingerprint, which should be:
+
+```
+SHA256:J2gtbuBTYxZRpDwEsKM6owYkY38bCClyuybzmeCu01U
+```
+
+From then on, `--update` downloads the new release and its signatures (`secinspect.py.sig`,
+`advisories.json.sig`) and checks them with `ssh-keygen -Y verify` against the pinned key. It swaps the
+files in only if both match and the advisory data isn't older than what's installed, so an old release
+served again is refused too. If anything fails, nothing changes and it says why. Installs, updates and
+refusals all go into the audit log below. The key that signs releases is kept offline, never on the
+site, in GitHub or in CI, so someone who takes over the site can change the files but can't sign them.
+
 ## Apply the fixes, with your approval
 
 ```sh
-curl -fsSL https://amiaffected.now/run | sh -s -- --fix
+sudo python3 /opt/amiaffected/secinspect.py --fix           # the installed copy (see above)
+curl -fsSL https://amiaffected.now/run | sh -s -- --fix      # or a one-off from the site
 ```
 
 `--fix` scans, then offers the update for each affected package that apt, dnf or Homebrew can install,
@@ -213,7 +237,9 @@ Everything the checks need lives in [`advisories.json`](advisories.json): fixed 
 branch (or explicit affected ranges), bad package versions, malware file names, image digests,
 roots and intermediates (base64 DER). A new Node or PHP release, another backdoored PyPI package
 or another cracked intermediate is a data change, so send a pull request with a link to the
-advisory in `source`.
+advisory in `source`. Each release is signed by the maintainer before it goes out
+(`ssh-keygen -Y sign -f ~/.ssh/amiaffected_signing -n amiaffected secinspect.py advisories.json`),
+and CI fails if a `.sig` doesn't match its file.
 
 ## Not covered (yet)
 

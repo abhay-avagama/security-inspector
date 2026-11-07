@@ -1502,7 +1502,7 @@ def run_fix(rows, log_path, tty=None, os_text=None):
 # --- Agent: install once, then update only from releases signed with the key pinned at install ---
 SITE = "https://amiaffected.now/"
 SIGNER = "release@amiaffected.now"
-SIGNING_KEY = ""  # public half of Avagama's offline release key (ssh-ed25519 AAAA...); empty until releases are signed
+SIGNING_KEY = "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAINNGctHXayqCsdirLrReypA24IT2fPuIWgGM55YfntaM"  # Avagama release key, kept offline
 AGENT_FILES = ("secinspect.py", "advisories.json")
 HERE = os.path.dirname(os.path.abspath(__file__))
 
