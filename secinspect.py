@@ -1547,7 +1547,8 @@ def newest_checked(path):
 
 
 def fetch(url):
-    with urllib.request.urlopen(url, timeout=60) as r:
+    # Cloudflare in front of the site turns away Python's default User-Agent
+    with urllib.request.urlopen(urllib.request.Request(url, headers={"User-Agent": "amiaffected"}), timeout=60) as r:
         return r.read()
 
 
@@ -1556,6 +1557,11 @@ def update_agent(d, log):
     signers = os.path.join(d, "allowed_signers")
     if not os.path.exists(signers):
         print(f"{d} isn't an installed copy: run --install first", file=sys.stderr)
+        return 1
+    if not shutil.which("ssh-keygen"):
+        log.write("update_refused", dir=d, reason="ssh-keygen not found")
+        print("Update refused, nothing changed: signatures are checked with ssh-keygen, which isn't installed "
+              "(apt-get install openssh-client, or dnf install openssh)", file=sys.stderr)
         return 1
     tmp = tempfile.mkdtemp(dir=d)
     try:
