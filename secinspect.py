@@ -13,6 +13,7 @@ Usage: python3 secinspect.py [dirs ...] [--docker] [--html report.html] [--no-up
 """
 import argparse
 import base64
+import bz2
 import datetime
 import getpass
 import glob
@@ -29,7 +30,9 @@ import sys
 import tarfile
 import tempfile
 import textwrap
+import time
 import urllib.request
+import xml.etree.ElementTree as ET
 
 HOME = os.path.expanduser("~")
 ADVISORIES = json.load(open(os.path.join(os.path.dirname(os.path.abspath(__file__)), "advisories.json")))
@@ -508,7 +511,7 @@ def os_release(text):
         return f"ubuntu:{v}"
     if os_id == "debian" and v:
         return f"debian:{v.split('.')[0]}"
-    if os_id != "fedora" and {"rhel", "centos"} & {os_id, *like} and v:
+    if os_id != "fedora" and {"rhel", "centos", "ol"} & {os_id, *like} and v:  # Oracle Linux says ID_LIKE="fedora"
         return f"el:{v.split('.')[0]}"
     return None
 
@@ -523,21 +526,81 @@ def nums(v):
     return tuple(int(x) for x in re.findall(r"\d+", v))
 
 
+def verrevcmp(a, b):
+    """dpkg's own comparison of one version part: ~ sorts first, letters before other symbols, digit runs as numbers."""
+    def order(c):
+        return 0 if c.isdigit() else ord(c) if c.isalpha() else -1 if c == "~" else ord(c) + 256
+    i = j = 0
+    while i < len(a) or j < len(b):
+        while (i < len(a) and not a[i].isdigit()) or (j < len(b) and not b[j].isdigit()):
+            ac, bc = order(a[i]) if i < len(a) else 0, order(b[j]) if j < len(b) else 0
+            if ac != bc:
+                return ac - bc
+            i, j = i + 1, j + 1
+        m, n = re.match(r"\d*", a[i:])[0], re.match(r"\d*", b[j:])[0]
+        if int(m or 0) != int(n or 0):
+            return int(m or 0) - int(n or 0)
+        i, j = i + len(m), j + len(n)
+    return 0
+
+
 def deb_lt(a, b):
-    return subprocess.run(["dpkg", "--compare-versions", a, "lt", b]).returncode == 0
+    """True if Debian version a sorts before b, as dpkg --compare-versions a lt b."""
+    def split(v):
+        e, _, rest = v.partition(":") if ":" in v else ("0", "", v)
+        u, _, r = rest.rpartition("-") if "-" in rest else (rest, "", "")
+        return int(e or 0), u, r
+    (ea, ua, ra), (eb, ub, rb) = split(a), split(b)
+    return ea < eb if ea != eb else (verrevcmp(ua, ub) or verrevcmp(ra, rb)) < 0
+
+
+def rpmvercmp(a, b):
+    """rpm's own comparison of one version part: alphanumeric runs, digits beat letters, ~ sorts first, ^ after."""
+    i = j = 0
+    while i < len(a) or j < len(b):
+        while i < len(a) and not (a[i].isascii() and a[i].isalnum()) and a[i] not in "~^":
+            i += 1
+        while j < len(b) and not (b[j].isascii() and b[j].isalnum()) and b[j] not in "~^":
+            j += 1
+        ca, cb = a[i:i + 1], b[j:j + 1]
+        if ca == "~" or cb == "~":
+            if ca != cb:
+                return -1 if ca == "~" else 1
+            i, j = i + 1, j + 1
+            continue
+        if ca == "^" or cb == "^":
+            if not ca:
+                return -1
+            if not cb:
+                return 1
+            if ca != cb:
+                return 1 if cb == "^" else -1
+            i, j = i + 1, j + 1
+            continue
+        if not ca or not cb:
+            break
+        pat = r"[0-9]+" if ca.isdigit() else r"[A-Za-z]+"
+        m, n = re.match(pat, a[i:]), re.match(pat, b[j:])
+        if not n:
+            return 1 if ca.isdigit() else -1  # a number beats letters
+        m, n = m[0], n[0]
+        if ca.isdigit():
+            if int(m) != int(n):
+                return 1 if int(m) > int(n) else -1
+        elif m != n:
+            return 1 if m > n else -1
+        i, j = i + len(m), j + len(n)
+    return 0 if i >= len(a) and j >= len(b) else -1 if i >= len(a) else 1
 
 
 def rpm_lt(a, b):
-    """EVR comparison with rpm's own rpmvercmp, applied to epoch, version and release in turn."""
+    """EVR comparison as rpm does it: epoch, then version, then release."""
     def evr(s):
         e, _, vr = s.rpartition(":") if ":" in s else ("0", "", s)
         v, _, r = vr.partition("-")
-        return [e or "0", v, r]
-    for x, y in zip(evr(a), evr(b)):
-        c = run("rpm", "--eval", f'%{{lua:print(rpm.vercmp("{x}", "{y}"))}}').strip()
-        if c != "0":
-            return c == "-1"
-    return False
+        return int(e or 0), v, r
+    (ea, va, ra), (eb, vb, rb) = evr(a), evr(b)
+    return ea < eb if ea != eb else (rpmvercmp(va, vb) or rpmvercmp(ra, rb)) < 0
 
 
 def installed(fam, names):
@@ -601,7 +664,7 @@ def distro_status(adv, release, version, source, lt):
     return "UNKNOWN", f"no fixed version known for {release or 'this distro'}"
 
 
-def check_distro(os_text=None):
+def check_distro(os_text=None, offline=True):
     rows = check_distro_fam("brew", None) if shutil.which("brew") else []  # macOS, or Linuxbrew next to apt/dnf
     if os_text is None:
         try:
@@ -611,7 +674,7 @@ def check_distro(os_text=None):
     fam = "deb" if shutil.which("dpkg-query") else "rpm" if shutil.which("rpm") else None
     if not fam:
         return rows + [("Server packages", "-", "-", "UNKNOWN", "only apt (Ubuntu/Debian) and dnf (RHEL family) systems are checked")]
-    return rows + check_distro_fam(fam, os_release(os_text))
+    return rows + check_distro_fam(fam, os_release(os_text)) + check_vendor(os_text, offline)
 
 
 def check_distro_fam(fam, release):
@@ -633,6 +696,210 @@ def check_distro_fam(fam, release):
         pkgs = " ".join(sorted({c[0] for c in checked}))
         rows.append((adv["name"], f"{pkgs} ({ {'deb': 'apt', 'rpm': 'dnf'}.get(fam, fam)})", worst[1], worst[2], worst[3]))
     return rows
+
+
+# --- Vendor security data: every installed package, not only the hand-picked list ---------------
+# The machine lists what it has, then matches it against the vendor's own notices, downloaded and
+# kept here. Only the vendor's public file is fetched; the package list never leaves the machine.
+# os-release ID -> (label, OVAL file, which os-release field goes in it)
+VENDOR_OVAL = {
+    "ubuntu": ("Ubuntu", "https://security-metadata.canonical.com/oval/com.ubuntu.{}.usn.oval.xml.bz2", "VERSION_CODENAME"),
+    "rhel": ("RHEL", "https://security.access.redhat.com/data/oval/v2/RHEL{0}/rhel-{0}.oval.xml.bz2", "VERSION_ID"),
+    "almalinux": ("AlmaLinux", "https://security.almalinux.org/oval/org.almalinux.alsa-{}.xml.bz2", "VERSION_ID"),
+    # Rocky's own OVAL stopped being updated in 2024; Rocky rebuilds RHEL with identical package versions, so Red Hat's fits
+    "rocky": ("Rocky Linux", "https://security.access.redhat.com/data/oval/v2/RHEL{0}/rhel-{0}.oval.xml.bz2", "VERSION_ID"),
+    "ol": ("Oracle Linux", "https://linux.oracle.com/security/oval/com.oracle.elsa-ol{}.xml.bz2", "VERSION_ID"),
+}
+KEV_URL = "https://www.cisa.gov/sites/default/files/feeds/known_exploited_vulnerabilities.json"
+VENDOR_FIXES = {}  # row item -> {binary package: first fixed version}, for --fix
+
+
+def cache_dir():
+    return "/var/cache/amiaffected" if is_root() else os.path.join(HOME, ".cache", "amiaffected")
+
+
+def cached(url, name, offline, max_age=6 * 3600):
+    """Path of a local copy of url, refreshed when older than max_age; the old copy if the download fails."""
+    path = os.path.join(cache_dir(), name)
+    fresh = os.path.exists(path) and time.time() - os.path.getmtime(path) < max_age
+    if not fresh and not offline:
+        try:
+            data = fetch(url)
+            os.makedirs(cache_dir(), mode=0o755, exist_ok=True)
+            with open(path + ".tmp", "wb") as fh:
+                fh.write(data)
+            os.replace(path + ".tmp", path)
+        except OSError:
+            pass
+    return path if os.path.exists(path) else None
+
+
+def oval_notices(path, inst, lt):
+    """[(title, severity, [cve], {installed package: first fixed version})] for the notices in a vendor OVAL file
+    (Canonical, Red Hat, Alma, Rocky, Oracle) whose conditions hold on this machine. inst is {name: (version, source,
+    arch)}. Version, release, arch and existence tests are judged; signature and release-file tests pass; anything
+    else (kernel uname, module streams) counts as not met, so an unknown condition can miss a notice, never invent one."""
+    tests, objs, states, names, defs = {}, {}, {}, {}, []
+
+    def tree(c):
+        kids = []
+        for k in c:
+            t = k.tag.rsplit("}", 1)[-1]
+            if t == "criteria":
+                kids.append(tree(k))
+            elif t == "criterion":
+                kids.append(("T", k.get("test_ref"), k.get("negate") == "true"))
+            elif t == "extend_definition":  # "Ubuntu 24.04 is installed": known from /etc/os-release
+                kids.append(("D", None, k.get("negate") == "true"))
+        return (c.get("operator", "AND"), kids, c.get("negate") == "true")
+
+    for _, el in ET.iterparse(bz2.open(path)):
+        tag, i = el.tag.rsplit("}", 1)[-1], el.get("id")
+        if tag.endswith("_test"):
+            o, st = el.find("{*}object"), el.find("{*}state")
+            tests[i] = (tag, el.get("check", "at least one"), o.get("object_ref") if o is not None else None,
+                        st.get("state_ref") if st is not None else None)
+        elif tag in ("dpkginfo_object", "rpminfo_object"):
+            n = el.find("{*}name")
+            objs[i] = ("var", n.get("var_ref")) if n is not None and n.get("var_ref") else ("name", n.text if n is not None else None)
+        elif tag in ("dpkginfo_state", "rpminfo_state"):
+            states[i] = {k.tag.rsplit("}", 1)[-1]: (k.get("operation", "equals"), k.text or "") for k in el}
+        elif tag == "constant_variable":
+            names[i] = [v.text for v in el.findall("{*}value")]
+        elif tag == "definition" and el.get("class") == "patch":
+            sev, c = el.find(".//{*}severity"), el.find("{*}criteria")
+            defs.append((" ".join(el.find(".//{*}title").text.split()), (sev.text or "") if sev is not None else "",
+                         sorted({x.text for x in el.findall(".//{*}cve")} |
+                                {r.get("ref_id") for r in el.findall(".//{*}reference") if r.get("source") == "CVE"}),
+                         tree(c) if c is not None else ("AND", [], False)))
+        else:
+            continue
+        el.clear()
+
+    def field_ok(b, field, op, want):
+        v = inst[b][0]
+        part = {"evr": v, "version": re.sub(r"^\d+:", "", v).rsplit("-", 1)[0], "release": v.rsplit("-", 1)[-1],
+                "arch": inst[b][2]}.get(field)
+        if field == "signature_keyid":
+            return True  # ponytail: trusts that installed packages came from the vendor's signed repos
+        if part is None:
+            return False
+        if op == "less than" and field == "evr":
+            return lt(v, want)
+        if op == "pattern match":
+            return re.search(want, part) is not None
+        return op == "equals" and part == want
+
+    def test(ref):
+        kind, check, o, s = tests.get(ref, ("?", "", None, None))
+        if kind == "rpmverifyfile_test":  # "<distro> is installed" (or, with none satisfy, isn't)
+            return check != "none satisfy", {}
+        if kind not in ("dpkginfo_test", "rpminfo_test") or o not in objs:
+            return False, {}
+        how, v = objs[o]
+        here = [b for b in (names.get(v, []) if how == "var" else [v]) if b in inst]
+        if s is None:
+            return bool(here), {}
+        if s not in states:
+            return False, {}
+        ok = [b for b in here if all(field_ok(b, f, op, want) for f, (op, want) in states[s].items())]
+        hit = {"at least one": bool(ok), "all": bool(here) and len(ok) == len(here), "none satisfy": not ok}.get(check, False)
+        fixed = states[s].get("evr", ("", ""))
+        return hit, ({b: fixed[1] for b in ok} if hit and fixed[0] == "less than" else {})
+
+    def judge(node):
+        op, kids, neg = node if len(node) == 3 and isinstance(node[1], list) else (None, None, None)
+        if op is None:
+            kind, ref, neg = node
+            hit, fixed = (True, {}) if kind == "D" else test(ref)
+        else:
+            results = [judge(k) for k in kids]
+            hit = all(r[0] for r in results) if op == "AND" else any(r[0] for r in results)
+            fixed = {b: f for h, fx in results if h for b, f in fx.items()}
+        return (not hit, {}) if neg else (hit, fixed if hit else {})
+
+    out = []
+    for title, sev, cves, crit in defs:
+        hit, fixed = judge(crit)
+        if hit and fixed:
+            out.append((title, sev, cves, fixed))
+    return out
+
+
+def dpkg_installed():
+    """{binary: (version, source package, arch)} for every installed deb."""
+    out = run("dpkg-query", "-W", "-f", "${db:Status-Abbrev}\t${Package}\t${Version}\t${source:Package}\t${Architecture}\n")
+    return {r[1]: (r[2], r[3] or r[1], r[4]) for r in (l.split("\t") for l in out.splitlines()) if len(r) == 5 and r[0].startswith("ii")}
+
+
+def rpm_installed():
+    """{name: (epoch:version-release, source package, arch)}; with several installed (kernels, multilib) the newest counts."""
+    out = run("rpm", "-qa", "--qf", "%{NAME}\t%|EPOCH?{%{EPOCH}}:{0}|:%{VERSION}-%{RELEASE}\t%{SOURCERPM}\t%{ARCH}\n")
+    inst = {}
+    for r in (l.split("\t") for l in out.splitlines()):
+        if len(r) == 4 and r[0] != "gpg-pubkey" and (r[0] not in inst or rpm_lt(inst[r[0]][0], r[1])):
+            inst[r[0]] = (r[1], r[2].rsplit("-", 2)[0] if r[2].endswith(".rpm") else r[0], r[3])
+    return inst
+
+
+def kev_ids(offline):
+    path = cached(KEV_URL, "kev.json", offline)
+    try:
+        return {v["cveID"] for v in json.load(open(path))["vulnerabilities"]} if path else set()
+    except (OSError, ValueError, KeyError, TypeError):
+        return set()
+
+
+SEVERITY = {"critical": 0, "high": 1, "important": 1, "medium": 2, "moderate": 2, "low": 3}
+SEVERITY_WORD = ("critical", "high", "medium", "low", "unrated")
+
+
+def vendor_rows(label, pm, notices, inst, kev, lt):
+    """One row per source package with pending security fixes: AFFECTED if exploited (KEV), Critical/High/Important."""
+    by_src = {}
+    for title, sev, cves, fixed in notices:
+        for b, f in fixed.items():
+            if b in inst and lt(inst[b][0], f):
+                g = by_src.setdefault(inst[b][1], {"bins": {}, "ids": set(), "sev": 4, "kev": set()})
+                g["bins"][b] = f if b not in g["bins"] or lt(g["bins"][b], f) else g["bins"][b]
+                g["ids"].add(re.split(r"\s*(--|:)\s", title)[0])
+                g["sev"] = min(g["sev"], SEVERITY.get(sev.strip().lower(), 4))
+                g["kev"] |= {c for c in cves if c in kev}
+    rows = []
+    for src, g in sorted(by_src.items(), key=lambda s: (not s[1]["kev"], s[1]["sev"], s[0])):
+        item = f"{label}: {src}"
+        VENDOR_FIXES[item] = g["bins"]
+        b0, ids = sorted(g["bins"])[0], sorted(g["ids"])
+        note = f"update to {g['bins'][b0]}+ ({', '.join(ids[:3])}{f' and {len(ids) - 3} more' if len(ids) > 3 else ''}"
+        note += f"; exploited: {', '.join(sorted(g['kev']))} in CISA KEV)" if g["kev"] else f"; {SEVERITY_WORD[g['sev']]} severity)"
+        status = "AFFECTED" if g["kev"] or g["sev"] <= 1 else "REVIEW"
+        rows.append((item, f"{' '.join(sorted(g['bins']))} ({pm})", inst[b0][0], status, note))
+    return rows
+
+
+def check_vendor(os_text, offline):
+    """Every installed package against the distro vendor's own security notices."""
+    d = dict(re.findall(r'^(\w+)="?([^"\n]*)"?$', os_text, re.M))
+    if d.get("ID") == "centos":  # Stream builds sort below RHEL's fixed ones even when they carry the fix
+        return [("CentOS Stream security notices", "-", "-", "UNKNOWN",
+                 "CentOS Stream publishes no security notices, so only the hand-picked checks above apply")]
+    if d.get("ID") not in VENDOR_OVAL:
+        return []
+    label, url, field = VENDOR_OVAL[d["ID"]]
+    deb = d["ID"] == "ubuntu"
+    key = d.get(field, "") if deb else d.get(field, "").split(".")[0]
+    if not key or not shutil.which("dpkg-query" if deb else "rpm"):
+        return []
+    path = cached(url.format(key), f"{d['ID']}-{key}.oval.xml.bz2", offline)
+    if not path:
+        return [(f"{label} security notices", "-", "-", "UNKNOWN",
+                 f"couldn't download {label}'s notices (run without --no-update-check, or check the connection)")]
+    inst, lt = (dpkg_installed(), deb_lt) if deb else (rpm_installed(), rpm_lt)
+    try:
+        notices = oval_notices(path, inst, lt)
+    except (OSError, EOFError, ET.ParseError) as e:
+        return [(f"{label} security notices", path, "-", "UNKNOWN", f"couldn't read {label}'s notices: {e}")]
+    return vendor_rows(label, "apt" if deb else "dnf", notices, inst, kev_ids(offline), lt)
 
 
 # --- CA bundles ---------------------------------------------------------------------------------
@@ -1386,7 +1653,7 @@ def patch_plan(rows, pm, release=None):
     updates, manual = {}, []
     for item, where, version, status, _ in rows:
         where = str(where)
-        if status != "AFFECTED":
+        if status != "AFFECTED" and not (status == "REVIEW" and item in VENDOR_FIXES):  # medium/low vendor fixes too
             continue
         distro = next((a for a in DISTRO if a["name"] == item), None)
         vadv = next((a for a in ADVISORIES["versions"] if a["name"] == item and "binary" in a), None)
@@ -1398,6 +1665,13 @@ def patch_plan(rows, pm, release=None):
             after = {p: candidate(pm, p) for p, _, _ in found}
             fixes = bool(found) and all(after[p] and distro_status(distro, release, after[p], src, lt)[0] == "OK" for p, _, src in found)
             before, after_fix = {p: v for p, v, _ in found}, distro.get("after_fix")
+        elif item in VENDOR_FIXES and fam in ("deb", "rpm") and where.endswith(f"({pm})"):
+            # vendor notices: every listed package must reach its fixed version
+            fixed = {b: f for b, f in VENDOR_FIXES[item].items() if PKG_NAME.match(b)}
+            found = installed(fam, sorted(fixed))
+            after = {p: candidate(pm, p) for p, _, _ in found}
+            fixes = bool(found) and all(after[p] and not lt(after[p], fixed[p]) for p, _, _ in found)
+            before, after_fix = {p: v for p, v, _ in found}, "restart services that use it (needrestart shows which)"
         elif vadv and pm and os.path.isabs(where) and owner(pm, where):
             pkg = owner(pm, where)
             after, before, after_fix = {pkg: candidate(pm, pkg)}, {pkg: version}, vadv.get("after_fix")
@@ -1430,7 +1704,8 @@ def patch_rows(rows, os_text=None):
 
 def execute(cmd):
     try:
-        p = subprocess.run(cmd, capture_output=True, text=True, timeout=3600)
+        # no stdin: a package that prompts fails instead of hanging, and can't swallow the answers typed for --fix
+        p = subprocess.run(cmd, capture_output=True, text=True, timeout=3600, stdin=subprocess.DEVNULL)
     except (OSError, subprocess.TimeoutExpired) as e:
         return 127, str(e)
     return p.returncode, (p.stdout + p.stderr)[-4000:]
@@ -1443,7 +1718,11 @@ def sha256_file(path):
 def recheck(u):
     rows = [r for a in ADVISORIES["versions"] if a["name"] in u["items"] for r in check_version(a)]
     rows += [r for r in check_distro() if r[0] in u["items"]]
-    return {f"{i} | {w}": next((r[3] for r in rows if (r[0], str(r[1])) == (i, w)), "NOT FOUND") for i, w in u["rows"]}
+    def status(i, w):
+        if i in VENDOR_FIXES:  # a notice row disappears once nothing is pending for that package
+            return next((r[3] for r in rows if r[0] == i), "OK")
+        return next((r[3] for r in rows if (r[0], str(r[1])) == (i, w)), "NOT FOUND")
+    return {f"{i} | {w}": status(i, w) for i, w in u["rows"]}
 
 
 def run_fix(rows, log_path, tty=None, os_text=None):
@@ -1706,7 +1985,8 @@ def main(argv):
         rows = scan_files(roots) + check_docker(args.docker)
         rows += check_skills(home=os.path.join(roots[0], ".no-home"), extra=FOUND_SKILL_DIRS)
     else:
-        rows = [r for adv in ADVISORIES["versions"] for r in check_version(adv)] + check_distro()
+        offline = bool(args.no_update_check or os.environ.get("SECINSPECT_NO_UPDATE_CHECK"))
+        rows = [r for adv in ADVISORIES["versions"] for r in check_version(adv)] + check_distro(offline=offline)
         rows += check_chromium_cache() + scan_files(roots) + check_docker(args.docker) + check_stores()
         rows += check_mcp(rows) + check_iocs() + check_skills(extra=FOUND_SKILL_DIRS) + check_hooks()
     if args.skills_baseline:

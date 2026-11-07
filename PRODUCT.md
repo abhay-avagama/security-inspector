@@ -23,7 +23,7 @@ Success for Avagama Consulting, which builds and maintains it, is **reputation**
 
 ## Positioning
 
-A hand-picked list, not a general dependency scanner. It covers what generic scanners (osv-scanner, Trivy, Grype) don't: exploited bugs checked against each distro's own fixed builds, Chromium copies that Puppeteer and Playwright cache and never update, archived MCP servers, and how exposed a machine is to an AI agent (unpinned MCP servers, agent permissions, SSH keys without a passphrase, `.env` files in agent folders). New advisories are added within hours of disclosure, from a queue of CISA KEV and cve.now items checked every 6 hours.
+Every installed package checked against the distro vendor's own notices, ranked so what's exploited comes first, plus a hand-picked list of what generic scanners (osv-scanner, Trivy, Grype) don't: exploited bugs checked against each distro's own fixed builds, Chromium copies that Puppeteer and Playwright cache and never update, archived MCP servers, and how exposed a machine is to an AI agent (unpinned MCP servers, agent permissions, SSH keys without a passphrase, `.env` files in agent folders). New advisories are added within hours of disclosure, from a queue of CISA KEV and cve.now items checked every 6 hours.
 
 ## Operating Context
 
@@ -46,7 +46,7 @@ A hand-picked list, not a general dependency scanner. It covers what generic sca
 
 Promises every version must keep:
 
-- **Nothing leaves the machine.** No data about the machine is sent. The only network call is a read-only GET of the public cve.now feed to warn when advisory data is stale, and `--no-update-check` turns it off. With `--fix`, the package manager downloads updates from the sources the machine already uses; nothing goes to us.
+- **Nothing leaves the machine.** No data about the machine is sent. The only network calls are read-only downloads of public files (the cve.now feed, the distro vendor's security notices, CISA's exploited list); the package list is matched on the machine. `--no-update-check` uses the last copies only. With `--fix`, the package manager downloads updates from the sources the machine already uses; nothing goes to us.
 - **Nothing changes without a yes.** `--fix` runs only from a signed installed copy, asks before every update, can't be told to skip asking, and refuses to run if its audit log has been edited.
 - **One command, no install.** `curl | sh`, standard library only, no dependencies. Installing is needed only for `--fix` and signed updates; scanning never needs it.
 - **Readable before running.** The `run` script, `secinspect.py` and `advisories.json` are linked from the page so people can read them first.
@@ -67,5 +67,5 @@ Credit line: "Built and maintained by Avagama Consulting" linking to avagama.co,
 1. Earn trust before asking for anything: show exactly what the tool reads, runs and sends.
 2. Accurate over alarming: a false "OK" is a security bug, and a false alarm wastes trust; distro backports and unreleased fixes are said plainly.
 3. Every finding ends in an action: the command to run or the setting to change.
-4. Stay narrow: exploited or critical issues in software people run on laptops and small servers, plus AI-agent exposure. Not a general scanner.
+4. Cover everything installed, rank what's exploited first: someone with 400 pending updates should see the five that matter at the top. Vendor data comes from the vendor, matched on the machine.
 5. Fast to the answer: someone arriving from an alert should reach the one-liner and the relevant check in seconds.

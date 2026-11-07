@@ -79,6 +79,7 @@ sudo python3 /opt/amiaffected/secinspect.py --fix                     # then app
 
 <h2 id="linux">On a Linux server</h2>
 <p>On Ubuntu, Debian and RHEL/AlmaLinux/Rocky it also checks the running kernel and the usual VPS software against each distro's own fixed packages, so a patched server isn't flagged just because the version number looks old.</p>
+<p>On Ubuntu, RHEL, AlmaLinux, Rocky and Oracle Linux it then checks <em>every</em> installed package against the vendor's own security notices (USN, RHSA, ALSA, RLSA, ELSA), with anything on CISA's exploited list first. The notices are downloaded to the server and matched there; the package list isn't sent anywhere. <a href="https://github.com/abhay-avagama/security-inspector#every-installed-package-against-the-vendors-notices">How it works</a>.</p>
 <table>
 <tr><td>Linux kernel</td><td>Four bugs on CISA KEV (CVE-2026-46300 and others) and the remote TCP bug CVE-2026-98432</td></tr>
 <tr><td>Web servers</td><td>nginx (CVE-2026-15176 and more), Apache httpd 2.4.69 fixes incl. mod_http2</td></tr>

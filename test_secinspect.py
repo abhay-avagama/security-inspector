@@ -445,6 +445,74 @@ def test_brew_server_packages():
         si.installed, si.candidate = saved
 
 
+def test_vendor_notices():
+    """Installed packages against a vendor OVAL file: both Canonical's and Red Hat's shapes, kernels skipped, KEV first."""
+    import bz2
+    import secinspect as si
+    oval = b"""<oval_definitions xmlns="http://oval.mitre.org/XMLSchema/oval-definitions-5"
+      xmlns:linux="http://oval.mitre.org/XMLSchema/oval-definitions-5#linux" xmlns:red="http://oval.mitre.org/XMLSchema/oval-definitions-5#linux"
+      xmlns:unix="http://oval.mitre.org/XMLSchema/oval-definitions-5#unix">
+     <definitions>
+      <definition id="d1" class="patch"><metadata><title>USN-1-1 -- OpenSSL update</title>
+        <advisory><severity>Medium</severity><cve>CVE-2026-1</cve></advisory></metadata>
+        <criteria><criterion test_ref="t1"/></criteria></definition>
+      <definition id="d2" class="patch"><metadata><title>RHSA-2026:2: git security update (Important)</title>
+        <reference source="CVE" ref_id="CVE-2026-2"/><advisory><severity>Important</severity></advisory></metadata>
+        <criteria operator="OR"><criterion test_ref="notrhel"/>
+          <criteria operator="AND"><criterion test_ref="isrhel"/><criterion test_ref="t2"/><criterion test_ref="t2sig"/></criteria></criteria></definition>
+      <definition id="d4" class="patch"><metadata><title>ELSA-2026-4: git FIPS build</title><advisory><severity>IMPORTANT</severity></advisory></metadata>
+        <criteria operator="AND"><criterion test_ref="t4"/><criterion test_ref="t4fips"/></criteria></definition>
+      <definition id="d3" class="patch"><metadata><title>USN-3-1 -- Linux kernel</title><advisory><severity>High</severity></advisory></metadata>
+        <criteria operator="AND"><criterion test_ref="t3"/><criterion test_ref="tk"/></criteria></definition>
+     </definitions>
+     <tests>
+      <linux:dpkginfo_test id="t1"><linux:object object_ref="o1"/><linux:state state_ref="s1"/></linux:dpkginfo_test>
+      <red:rpminfo_test id="t2"><red:object object_ref="o2"/><red:state state_ref="s2"/></red:rpminfo_test>
+      <red:rpminfo_test id="t2sig"><red:object object_ref="o2"/><red:state state_ref="sig"/></red:rpminfo_test>
+      <linux:dpkginfo_test id="t3"><linux:object object_ref="o1"/><linux:state state_ref="s1"/></linux:dpkginfo_test>
+      <unix:uname_test id="tk"/>
+      <red:rpmverifyfile_test id="notrhel" check="none satisfy"/><red:rpmverifyfile_test id="isrhel"/>
+      <red:rpminfo_test id="t4"><red:object object_ref="o2"/><red:state state_ref="s4"/></red:rpminfo_test>
+      <red:rpminfo_test id="t4fips"><red:object object_ref="o2"/><red:state state_ref="fips"/></red:rpminfo_test>
+     </tests>
+     <objects>
+      <linux:dpkginfo_object id="o1"><linux:name var_ref="v1"/></linux:dpkginfo_object>
+      <red:rpminfo_object id="o2"><red:name>git</red:name></red:rpminfo_object>
+     </objects>
+     <states>
+      <linux:dpkginfo_state id="s1"><linux:evr operation="less than">3.0.13-0ubuntu3.1</linux:evr></linux:dpkginfo_state>
+      <red:rpminfo_state id="s2"><red:evr operation="less than">0:2.43.5-1.el9_4</red:evr></red:rpminfo_state>
+      <red:rpminfo_state id="s4"><red:evr operation="less than">10:2.43.5-1.el9_fips</red:evr></red:rpminfo_state>
+      <red:rpminfo_state id="fips"><red:release operation="pattern match">fips</red:release></red:rpminfo_state>
+      <red:rpminfo_state id="sig"><red:signature_keyid operation="equals">199e2f91fd431d51</red:signature_keyid></red:rpminfo_state>
+     </states>
+     <variables><constant_variable id="v1"><value>openssl</value><value>libssl3t64</value></constant_variable></variables>
+    </oval_definitions>"""
+    inst = {"openssl": ("3.0.13-0ubuntu3", "openssl", "amd64"), "libssl3t64": ("3.0.13-0ubuntu3.1", "openssl", "amd64"),
+            "git": ("0:2.43.5-1.el9", "git", "x86_64")}
+    with tempfile.TemporaryDirectory() as t:
+        path = os.path.join(t, "o.xml.bz2")
+        open(path, "wb").write(bz2.compress(oval))
+        deb = si.oval_notices(path, {k: v for k, v in inst.items() if k != "git"}, si.deb_lt)
+        rpm = si.oval_notices(path, {"git": inst["git"]}, si.rpm_lt)
+        assert si.oval_notices(path, {"git": ("0:2.43.5-1.el9_4", "git", "x86_64")}, si.rpm_lt) == []  # already fixed
+    # the kernel notice (uname test) never counts; the fixed libssl3t64 isn't listed
+    assert deb == [("USN-1-1 -- OpenSSL update", "Medium", ["CVE-2026-1"], {"openssl": "3.0.13-0ubuntu3.1"})], deb
+    assert rpm == [("RHSA-2026:2: git security update (Important)", "Important", ["CVE-2026-2"], {"git": "0:2.43.5-1.el9_4"})], rpm
+    rows = si.vendor_rows("Ubuntu", "apt", deb, inst, set(), si.deb_lt)
+    assert rows == [("Ubuntu: openssl", "openssl (apt)", "3.0.13-0ubuntu3", "REVIEW",
+                     "update to 3.0.13-0ubuntu3.1+ (USN-1-1; medium severity)")], rows
+    assert si.VENDOR_FIXES["Ubuntu: openssl"] == {"openssl": "3.0.13-0ubuntu3.1"}
+    inst = {"git": ("0:2.43.5-1.el9", "git", "x86_64"), "curl": ("0:7.76.1-29.el9", "curl", "x86_64")}
+    curl = ("RHSA-2026:9: curl (Low)", "Low", ["CVE-2026-9"], {"curl": "0:7.76.1-31.el9"})
+    rows = si.vendor_rows("AlmaLinux", "dnf", [curl] + rpm, inst, {"CVE-2026-9"}, si.rpm_lt)
+    assert [(r[0], r[3]) for r in rows] == [("AlmaLinux: curl", "AFFECTED"), ("AlmaLinux: git", "AFFECTED")], rows  # KEV first
+    assert "exploited: CVE-2026-9 in CISA KEV" in rows[0][4] and rows[1][4].endswith("(RHSA-2026:2; high severity)")
+    assert si.deb_lt("1.0~rc1", "1.0") and si.deb_lt("1:0.1", "2:0") and not si.deb_lt("1.0-1ubuntu1", "1.0-1")
+    assert si.rpm_lt("0:2.43.5-1.el9", "0:2.43.5-1.el9_4") and si.rpm_lt("1.0~rc1-1", "1.0-1") and not si.rpm_lt("1:1-1", "0:9-9")
+    assert si.check_vendor('ID=debian\nVERSION_ID="12"\n', offline=True) == []  # no notices source for it yet
+
+
 def test_agent_update():
     import secinspect as si
     """--install pins a key; --update swaps files in only when both are signed by it and the data isn't older."""
@@ -565,6 +633,7 @@ def test_fix():
 if __name__ == "__main__":
     test_fix()
     test_agent_update()
+    test_vendor_notices()
     test_brew_server_packages()
     test_watch()
     test_skill_changes()

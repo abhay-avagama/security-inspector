@@ -4,11 +4,13 @@ One Python file that checks your machine for exploited Chrome bugs, the stale br
 Playwright leave behind, the archived Puppeteer MCP server, and the October 2026 PHP, Node.js, BIND,
 LiteLLM, GitLab and eMudhra issues and tells you what to do about each one. On a Linux VPS it also
 checks the kernel and the usual server software (nginx, Apache, MariaDB, MongoDB, WordPress and
-more) for the bugs being exploited right now.
+more) for the bugs being exploited right now. On Ubuntu, RHEL, AlmaLinux, Rocky and Oracle Linux it
+also checks every installed package against the vendor's own security notices, exploited ones first.
 
-No dependencies, and nothing about your machine is sent anywhere. The only network call is an
-optional read-only check of the public cve.now feed (see Staying current; disable with
-`--no-update-check`). Python 3.8+ on macOS or Linux (Windows partly, see below).
+No dependencies, and nothing about your machine is sent anywhere. The only network calls are
+read-only downloads of public files: the cve.now feed, your distro vendor's security notices and
+CISA's list of exploited CVEs (see Staying current; `--no-update-check` uses the last copies only).
+Python 3.8+ on macOS or Linux (Windows partly, see below).
 
 Quickest way, without cloning:
 
@@ -23,7 +25,7 @@ python3 secinspect.py                       # whole machine
 python3 secinspect.py ~/work ~/clients      # only search these folders for envs and bundles
 python3 secinspect.py --docker              # also look inside every local Docker image
 python3 secinspect.py --html report.html    # also write an HTML report
-python3 secinspect.py --no-update-check      # don't phone cve.now (offline/CI)
+python3 secinspect.py --no-update-check      # no downloads: use the last copies (offline/CI)
 ```
 
 Exit code is `1` if anything is affected, so it can fail a CI job.
@@ -173,6 +175,41 @@ cleared. Restarts (nginx, PHP-FPM, a database) are left to you and shown as the 
   hash of the one before, plus the hashes of the `secinspect.py` and `advisories.json` that made the
   decision. `--verify-log` says which line was edited, added or removed. If the log doesn't check out,
   `--fix` changes nothing. It stays on the machine.
+
+## Every installed package, against the vendor's notices
+
+The hand-picked checks above cover what's being exploited right now. On top of that, on a Linux
+server the tool lists every installed package (`dpkg` or `rpm`) and matches the list against the
+security notices your distro vendor publishes, downloaded and kept on the machine:
+
+| Distro | Notices | From |
+|---|---|---|
+| Ubuntu (every release Canonical publishes) | USN | `security-metadata.canonical.com` |
+| RHEL 8, 9 | RHSA | `security.access.redhat.com` |
+| AlmaLinux 8, 9, 10 | ALSA | `security.almalinux.org` |
+| Rocky Linux 8, 9 | RHSA (see below) | `security.access.redhat.com` |
+| Oracle Linux 8, 9, 10 | ELSA | `linux.oracle.com` |
+
+There's one row per source package with a pending fix: the version to update to, the notices, and
+how serious they are. A package with a CVE on [CISA's exploited list](https://www.cisa.gov/known-exploited-vulnerabilities-catalog)
+comes first and is AFFECTED, and so are Critical and High (Important) notices. Medium and Low ones
+are REVIEW, so they don't fail a CI job, but `--fix` offers them too.
+
+- **Nothing is sent.** These are plain downloads of public files, refreshed every 6 hours and kept in
+  `/var/cache/amiaffected` (or `~/.cache/amiaffected`). The package list stays on the machine.
+- **Each notice's conditions are checked, not just a version number.** Package version, release and
+  architecture are tested against what's installed. A condition the tool can't judge (a kernel
+  notice tied to the running kernel, a module stream, a FIPS build) counts as not met, so it can miss
+  a notice but won't invent one. The running-kernel check above covers exploited kernel bugs.
+- **Checked against the package manager.** What it flags matched the package manager's own list of
+  security updates: Ubuntu 22.04 with old packages installed 13 of 13 (`apt`), Ubuntu 24.04 5 of 5,
+  AlmaLinux 9 4 of 4, Oracle Linux 9 3 of 3, RHEL 9 0 of 0 (`dnf updateinfo --security`). On Rocky 9.3
+  it found all 57, plus 6 fixes Rocky ships but its own metadata doesn't mark as security updates.
+- **Rocky uses Red Hat's notices.** Rocky's own notices file stopped being updated in 2024, and Rocky
+  rebuilds RHEL with the same package versions, so Red Hat's data fits it exactly.
+- **Not covered yet:** Debian (next), RHEL 10 and Rocky 10 (Red Hat no longer publishes this format for
+  10), and CentOS Stream, which publishes no security notices at all. These say UNKNOWN or nothing,
+  rather than guess.
 
 ## Servers (Ubuntu, Debian, RHEL family)
 
