@@ -485,7 +485,11 @@ def test_agent_update():
             release("2026-11-07")
             assert si.update_agent(d, log) == 0
             assert "2026-11-07" in open(os.path.join(d, "advisories.json")).read()
-            assert set(os.listdir(d)) == {"allowed_signers", *si.AGENT_FILES}  # no temp files left behind
+            assert set(os.listdir(d)) == {"allowed_signers", *si.AGENT_FILES, *(f + ".sig" for f in si.AGENT_FILES)}  # no temp files
+            assert si.installed_copy_ok(d) is None  # --fix may run
+            open(os.path.join(d, "advisories.json"), "a").write(" ")
+            assert "advisories.json in" in si.installed_copy_ok(d)  # edited after install: --fix refuses
+            assert si.installed_copy_ok(site).startswith("--fix runs only from the installed copy")
         finally:
             si.fetch = fetch
         events = [json.loads(l)["event"] for l in open(log.path)]

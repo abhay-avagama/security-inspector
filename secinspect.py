@@ -1599,6 +1599,8 @@ def update_agent(d, log):
             return 1
         before = {f: sha256_file(os.path.join(d, f)) if os.path.exists(os.path.join(d, f)) else None for f in AGENT_FILES}
         after = {f: sha256_file(os.path.join(tmp, f)) for f in AGENT_FILES}
+        for f in AGENT_FILES:  # keep the signatures so --fix can re-check the installed files
+            os.replace(os.path.join(tmp, f + ".sig"), os.path.join(d, f + ".sig"))
         if before != after:
             # ponytail: two renames, not one atomic step; a crash between them leaves new data with the old script for one run
             for f in ("advisories.json", "secinspect.py"):
@@ -1608,6 +1610,21 @@ def update_agent(d, log):
         return 0
     finally:
         shutil.rmtree(tmp, ignore_errors=True)
+
+
+def installed_copy_ok(d=HERE):
+    """--fix runs only from an installed copy whose files still match their signatures, so what it decides comes from us."""
+    # ponytail: catches edited data or a swapped file; someone who can rewrite this script as root can also remove this check
+    signers = os.path.join(d, "allowed_signers")
+    if not os.path.exists(signers):
+        sudo, home = ("", "~/.local/share/amiaffected") if sys.platform == "darwin" else ("sudo ", "/opt/amiaffected")  # brew won't run as root
+        return "--fix runs only from the installed copy, which takes signed releases only. Install it once:\n" \
+               f"  curl -fsSL https://amiaffected.now/run | {sudo}sh -s -- --install\n" \
+               f"then run:  {sudo}python3 {home}/secinspect.py --fix"
+    if not shutil.which("ssh-keygen"):
+        return "signatures are checked with ssh-keygen, which isn't installed (apt-get install openssh-client, or dnf install openssh)"
+    bad = [f for f in AGENT_FILES if not sig_ok(signers, os.path.join(d, f), os.path.join(d, f + ".sig"))]
+    return f"{', '.join(bad)} in {d} doesn't match its signature: run --update, or --install again" if bad else None
 
 
 def install_agent(d, log, key=None):
@@ -1673,6 +1690,10 @@ def main(argv):
         return 0 if ok else 1
     if args.fix and (args.watch or args.files_only):
         ap.error("--fix can't be combined with --watch or --files-only")
+    if args.fix and (problem := installed_copy_ok()):
+        print(f"fix: {problem}", file=sys.stderr)
+        AuditLog(log_path).write("fix_refused", reason=problem.splitlines()[0])
+        return 1
     roots = args.dirs or [HOME, "/usr/local/lib", "/opt/homebrew/lib", *glob.glob("/usr/lib/python3*")]
     if not args.watch:  # cron mails anything printed, so a quiet day must print nothing
         print(f"Scanning {', '.join(roots)} for Python envs, lockfiles and CA bundles, give it a minute...", file=sys.stderr)

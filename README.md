@@ -146,9 +146,13 @@ site, in GitHub or in CI, so someone who takes over the site can change the file
 ## Apply the fixes, with your approval
 
 ```sh
-sudo python3 /opt/amiaffected/secinspect.py --fix           # the installed copy (see above)
-curl -fsSL https://amiaffected.now/run | sh -s -- --fix      # or a one-off from the site
+sudo python3 /opt/amiaffected/secinspect.py --fix                # Linux, after --install (see above)
+python3 ~/.local/share/amiaffected/secinspect.py --fix           # macOS: Homebrew won't run as root
 ```
+
+`--fix` runs only from the installed copy, and first checks that its `secinspect.py` and
+`advisories.json` still match their signatures. If either was edited after install, it refuses, logs
+why, and tells you to run `--update`. So whatever decides what gets upgraded came from a signed release.
 
 `--fix` scans, then offers the update for each affected package that apt, dnf or Homebrew can install,
 whether it comes from your distro or from a vendor repository you added (nginx.org, PGDG, MySQL,
@@ -242,7 +246,8 @@ roots and intermediates (base64 DER). A new Node or PHP release, another backdoo
 or another cracked intermediate is a data change, so send a pull request with a link to the
 advisory in `source`. Each release is signed by the maintainer before it goes out
 (`ssh-keygen -Y sign -f ~/.ssh/amiaffected_signing -n amiaffected secinspect.py advisories.json`),
-and CI fails if a `.sig` doesn't match its file.
+and CI fails if a `.sig` doesn't match its file. Every 6 hours a scheduled job also checks the files
+the site is serving and opens an issue if they don't verify.
 
 ## Not covered (yet)
 

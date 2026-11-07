@@ -17,3 +17,17 @@ jobs:
       - run: python3 .github/watch.py
         env:
           GH_TOKEN: ${{ github.token }}
+      - name: The live release is signed by the release key
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          d=$(mktemp -d)
+          for f in secinspect.py advisories.json secinspect.py.sig advisories.json.sig; do
+            curl -fsSL -A amiaffected "https://amiaffected.now/$f" -o "$d/$f" || true
+          done
+          python3 -c "import sys, secinspect as s; sys.exit(0 if s.release_signed(sys.argv[1]) else 1)" "$d" && exit 0
+          t="Live release doesn't match its signatures"
+          if [ "$(gh issue list --state open --search "\"$t\" in:title" --json number -q length)" = 0 ]; then
+            gh issue create --title "$t" --body "The files served at amiaffected.now don't verify against the release key in secinspect.py (checked $(date -u +%FT%TZ)). Installed copies refuse updates until they do. If a release was pushed unsigned, sign it and push. If not, someone may have changed the site: compare the live files with the repo before anything else."
+          fi
+          exit 1
