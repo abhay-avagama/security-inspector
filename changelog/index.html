@@ -35,6 +35,10 @@ h2[id]{scroll-margin-top:4.5rem}
 <main>
 <h1>Changelog</h1>
 <p>What the tool checks, and when each check went live. New exploited bugs usually land within a day of disclosure. Follow along with the <a href="/changelog.xml">RSS feed</a>.</p>
+<h2 id="2026-11-07">7 November 2026</h2>
+<ul class="log">
+<li><b>Install once, update only from signed releases</b>. --install keeps a copy in /opt/amiaffected with our release key pinned. --update takes a new release only when secinspect.py and advisories.json are both signed by that key and the data isn&#x27;t older than what&#x27;s installed; otherwise nothing changes and it says why. Every install, update and refusal goes into the audit log. The signing key stays offline. <a class="muted" href="https://github.com/abhay-avagama/security-inspector/commit/5f0970a">5f0970a</a></li>
+</ul>
 <h2 id="2026-11-06">6 November 2026</h2>
 <ul class="log">
 <li><b>Watch mode tells you when a fix is ready</b>. When the fixed build of an affected package shows up in your server&#x27;s package sources, from the distro or a vendor repository, watch mode sends one PATCH line saying so, ready for --fix. It never installs anything from cron. <a class="muted" href="https://github.com/abhay-avagama/security-inspector/commit/b0e3a8b">b0e3a8b</a></li>

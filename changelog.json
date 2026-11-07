@@ -1,4 +1,6 @@
 [
+  {"date": "2026-11-07", "commit": "5f0970a", "title": "Install once, update only from signed releases",
+   "body": "--install keeps a copy in /opt/amiaffected with our release key pinned. --update takes a new release only when secinspect.py and advisories.json are both signed by that key and the data isn't older than what's installed; otherwise nothing changes and it says why. Every install, update and refusal goes into the audit log. The signing key stays offline."},
   {"date": "2026-11-06", "commit": "b0e3a8b", "title": "Watch mode tells you when a fix is ready",
    "body": "When the fixed build of an affected package shows up in your server's package sources, from the distro or a vendor repository, watch mode sends one PATCH line saying so, ready for --fix. It never installs anything from cron."},
   {"date": "2026-11-06", "commit": "9b26bcf", "title": "Apply fixes with your approval",
