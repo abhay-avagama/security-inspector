@@ -1,4 +1,6 @@
 [
+  {"date": "2026-11-07", "commit": "44636f9", "title": "Homebrew packages that are behind",
+   "body": "nginx, httpd, MariaDB, MongoDB and Brotli installed with Homebrew (on a Mac or Linuxbrew) are now checked against the upstream fixes, like vendor packages on Linux. --fix offers brew upgrade for them, and watch mode says when the fix is available."},
   {"date": "2026-11-07", "commit": "5f0970a", "title": "Install once, update only from signed releases",
    "body": "--install keeps a copy in /opt/amiaffected with our release key pinned. --update takes a new release only when secinspect.py and advisories.json are both signed by that key and the data isn't older than what's installed; otherwise nothing changes and it says why. Every install, update and refusal goes into the audit log. The signing key stays offline."},
   {"date": "2026-11-06", "commit": "b0e3a8b", "title": "Watch mode tells you when a fix is ready",
