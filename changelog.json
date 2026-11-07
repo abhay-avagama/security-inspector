@@ -1,4 +1,6 @@
 [
+  {"date": "2026-11-07", "commit": "da8415c", "title": "Every installed package, against the vendor's notices",
+   "body": "On Ubuntu, RHEL, AlmaLinux, Rocky and Oracle Linux the tool now lists every installed package and matches it against the vendor's own security notices (USN, RHSA, ALSA, ELSA), downloaded to the server and matched there. Anything on CISA's exploited list comes first. --fix offers these updates too. Checked against apt and dnf's own security lists on six distro images."},
   {"date": "2026-11-07", "commit": "3edf047", "title": "--fix runs only from signed code",
    "body": "--fix now runs only from the installed copy (--install), and first checks that its files still match their signatures. If anything was edited after install, it changes nothing and says to run --update. A scheduled job also checks every 6 hours that the files on the site verify."},
   {"date": "2026-11-07", "commit": "44636f9", "title": "Homebrew packages that are behind",
