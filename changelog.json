@@ -1,4 +1,6 @@
 [
+  {"date": "2026-11-07", "commit": "3edf047", "title": "--fix runs only from signed code",
+   "body": "--fix now runs only from the installed copy (--install), and first checks that its files still match their signatures. If anything was edited after install, it changes nothing and says to run --update. A scheduled job also checks every 6 hours that the files on the site verify."},
   {"date": "2026-11-07", "commit": "44636f9", "title": "Homebrew packages that are behind",
    "body": "nginx, httpd, MariaDB, MongoDB and Brotli installed with Homebrew (on a Mac or Linuxbrew) are now checked against the upstream fixes, like vendor packages on Linux. --fix offers brew upgrade for them, and watch mode says when the fix is available."},
   {"date": "2026-11-07", "commit": "5f0970a", "title": "Install once, update only from signed releases",
