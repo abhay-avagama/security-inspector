@@ -15,7 +15,7 @@ p,li{color:var(--fg)}.muted{color:var(--muted)}
 pre{background:var(--code);border:1px solid var(--line);border-radius:6px;padding:1rem;overflow-x:auto;font:14px/1.5 ui-monospace,SFMono-Regular,Menlo,monospace}
 code{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:.9em}
 .run{position:relative}.run button{position:absolute;top:.6rem;right:.6rem;font:13px system-ui;padding:.25rem .6rem;border:1px solid var(--line);border-radius:4px;background:var(--bg);color:var(--fg);cursor:pointer}
-table{width:100%;border-collapse:collapse;font-size:15px}td{padding:.5rem .5rem .5rem 0;border-top:1px solid var(--line);vertical-align:top}td:first-child{font-weight:600;white-space:nowrap;padding-right:1rem}
+table{width:100%;border-collapse:collapse;font-size:15px}td,th{padding:.5rem .5rem .5rem 0;border-top:1px solid var(--line);vertical-align:top}th{text-align:left;font-size:.85em;color:var(--muted,inherit)}td:first-child{font-weight:600;white-space:nowrap;padding-right:1rem}
 a{color:var(--accent)}
 footer{margin-top:3rem;padding-top:1rem;border-top:1px solid var(--line);font-size:14px;color:var(--muted)}
 header.top{position:sticky;top:0;z-index:10;background:color-mix(in srgb,var(--bg) 88%,transparent);backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);border-bottom:1px solid var(--line)}
@@ -78,8 +78,19 @@ sudo python3 /opt/amiaffected/secinspect.py --fix                     # then app
 <p class="muted">The skills, MCP servers and extensions named in public as malicious or unsafe, with sources: the <a href="/watchlist/">agent watchlist</a>. Want a second pair of eyes on your agent setup? That's what our <a href="https://avagama.co/services/">agent security review</a> covers.</p>
 
 <h2 id="linux">On a Linux server</h2>
-<p>On Ubuntu, Debian and RHEL/AlmaLinux/Rocky it also checks the running kernel and the usual VPS software against each distro's own fixed packages, so a patched server isn't flagged just because the version number looks old.</p>
-<p>On Ubuntu, Debian, RHEL, AlmaLinux, Rocky and Oracle Linux it then checks <em>every</em> installed package against the vendor's own security notices (USN, DSA, RHSA, ALSA, ELSA), with anything on CISA's exploited list first. The notices are downloaded to the server and matched there; the package list isn't sent anywhere. <a href="https://github.com/abhay-avagama/security-inspector#every-installed-package-against-the-vendors-notices">How it works</a>.</p>
+<p>It reads <code>/etc/os-release</code>, lists every installed package with <code>dpkg</code> or <code>rpm</code>, and matches it against the distro vendor's own security notices, with anything on CISA's exploited list first. The notices are downloaded to the server and matched there; the package list isn't sent anywhere. Distro builds are judged by the vendor's fixed version, so a patched server isn't flagged just because the version number looks old. <a href="https://github.com/abhay-avagama/security-inspector#every-installed-package-against-the-vendors-notices">How it works</a>.</p>
+<table>
+<tr><th>Distro</th><th>Versions</th><th>Every package checked against</th></tr>
+<tr><td>Ubuntu</td><td>every supported release</td><td>Ubuntu Security Notices (USN)</td></tr>
+<tr><td>Debian</td><td>11, 12, 13</td><td>Debian security tracker (CVE, DSA)</td></tr>
+<tr><td>RHEL</td><td>8, 9</td><td>Red Hat advisories (RHSA)</td></tr>
+<tr><td>AlmaLinux</td><td>8, 9, 10</td><td>AlmaLinux advisories (ALSA)</td></tr>
+<tr><td>Rocky Linux</td><td>8, 9</td><td>Red Hat advisories (RHSA): Rocky's own stopped in 2024</td></tr>
+<tr><td>Oracle Linux</td><td>8, 9, 10</td><td>Oracle advisories (ELSA)</td></tr>
+<tr><td>Not yet</td><td></td><td>CentOS Stream, RHEL 10 and Rocky 10: no vendor notices to match yet. The hand-picked checks below still run</td></tr>
+<tr><td>Homebrew</td><td>macOS, Linuxbrew</td><td>The hand-picked server software below, against upstream fixes</td></tr>
+</table>
+<p>On top of that, these hand-picked checks cover what's being exploited right now, including the running kernel:</p>
 <table>
 <tr><td>Linux kernel</td><td>Four bugs on CISA KEV (CVE-2026-46300 and others) and the remote TCP bug CVE-2026-98432</td></tr>
 <tr><td>Web servers</td><td>nginx (CVE-2026-15176 and more), Apache httpd 2.4.69 fixes incl. mod_http2</td></tr>
