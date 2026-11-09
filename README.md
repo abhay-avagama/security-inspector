@@ -140,8 +140,9 @@ SHA256:J2gtbuBTYxZRpDwEsKM6owYkY38bCClyuybzmeCu01U
 From then on, `--update` downloads the new release and its signatures (`secinspect.py.sig`,
 `advisories.json.sig`) and checks them with `ssh-keygen -Y verify` against the pinned key (OpenSSH 8.1 or newer; on minimal
 images install `openssh-client`). It swaps the
-files in only if both match and the advisory data isn't older than what's installed, so an old release
-served again is refused too. If anything fails, nothing changes and it says why. Installs, updates and
+files in only if both match, the signed `advisories.json` names this exact `secinspect.py` (by its
+SHA-256), and the release isn't older than what's installed. So an old release served again is refused,
+and so is an older signed script slipped in beside new signed data. If anything fails, nothing changes and it says why. Installs, updates and
 refusals all go into the audit log below. The key that signs releases is kept offline, never on the
 site, in GitHub or in CI, so someone who takes over the site can change the files but can't sign them.
 

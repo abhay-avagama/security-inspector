@@ -14,7 +14,7 @@ Usage: python3 secinspect.py [dirs ...] [--docker] [--html report.html] [--no-up
        python3 secinspect.py --update     take a new release only if it's signed by the pinned key
   With no dirs, searches your home folder and system Python paths for envs, lockfiles and CA bundles.
   With dirs, searches only those. Installed programs and system trust stores are checked too, unless
-  --files-only. --audit-log FILE picks the log for --fix and --verify-log.
+  --files-only. --audit-log FILE picks the log that --fix, --install and --update write and --verify-log checks.
 """
 import argparse
 import base64
@@ -24,6 +24,7 @@ import getpass
 import glob
 import hashlib
 import html
+import http.client
 import json
 import os
 import platform
@@ -759,7 +760,9 @@ def oval_notices(path, inst, lt):
     """[(title, severity, [cve], {installed package: first fixed version})] for the notices in a vendor OVAL file
     (Canonical, Debian, Red Hat, Alma, Rocky, Oracle) whose conditions hold on this machine. inst is {name: (version, source,
     arch)}. Version, release, arch and existence tests are judged; signature and release-file tests pass; anything
-    else (kernel uname, module streams) counts as not met, so an unknown condition can miss a notice, never invent one."""
+    else (kernel uname with a state, module streams) is unknown, and unknown stays unknown even under negate, so a
+    condition it can't judge can miss a notice, never invent one. extend_definition (the OS check) and Debian's
+    release-file and state-less uname tests pass."""
     tests, objs, states, names, defs = {}, {}, {}, {}, []
 
     def tree(c):
@@ -822,13 +825,16 @@ def oval_notices(path, inst, lt):
         if kind == "uname_test" and s is None:
             return True, {}  # Debian's "architecture is all": uname exists; kernel tests carry a state and stay unmet
         if kind not in ("dpkginfo_test", "rpminfo_test") or o not in objs:
-            return False, {}
+            return None, {}  # can't judge it: unknown, which stays unknown under negate
+
         how, v = objs[o]
         here = [b for b in (names.get(v, []) if how == "var" else [v]) if b in inst]
         if s is None:
             return bool(here), {}
-        if s not in states:
-            return False, {}
+        if s not in states or any(f != "signature_keyid" and f not in ("evr", "version", "release", "arch")
+                                  or op not in ("equals", "pattern match") and (f, op) != ("evr", "less than")
+                                  for f, (op, _) in states[s].items()):
+            return None, {}
         ok = [b for b in here if all(field_ok(b, f, op, want) for f, (op, want) in states[s].items())]
         hit = {"at least one": bool(ok), "all": bool(here) and len(ok) == len(here), "none satisfy": not ok}.get(check, False)
         fixed = states[s].get("evr", ("", ""))
@@ -839,16 +845,22 @@ def oval_notices(path, inst, lt):
         if op is None:
             kind, ref, neg = node
             hit, fixed = (True, {}) if kind == "D" else test(ref)
-        else:
+        else:  # three-valued: None (unknown) never becomes True, not even through negate
             results = [judge(k) for k in kids]
-            hit = all(r[0] for r in results) if op == "AND" else any(r[0] for r in results)
-            fixed = {b: f for h, fx in results if h for b, f in fx.items()}
-        return (not hit, {}) if neg else (hit, fixed if hit else {})
+            hits = [h for h, _ in results]
+            if op == "AND":
+                hit = False if False in hits else None if None in hits else True
+            else:
+                hit = True if True in hits else None if None in hits else False
+            fixed = {b: f for h, fx in results if h is True for b, f in fx.items()}
+        if neg and hit is not None:
+            return not hit, {}
+        return hit, fixed if hit is True else {}
 
     out = []
     for title, sev, cves, crit in defs:
         hit, fixed = judge(crit)
-        if hit and fixed:
+        if hit is True and fixed:
             out.append((title, sev, cves, fixed))
     return out
 
@@ -871,11 +883,12 @@ def rpm_installed():
 
 
 def kev_ids(offline):
+    """CVE ids on CISA's exploited list, or None if it can't be had."""
     path = cached(KEV_URL, "kev.json", offline)
     try:
-        return {v["cveID"] for v in json.load(open(path))["vulnerabilities"]} if path else set()
+        return {v["cveID"] for v in json.load(open(path))["vulnerabilities"]} if path else None
     except (OSError, ValueError, KeyError, TypeError):
-        return set()
+        return None
 
 
 SEVERITY = {"critical": 0, "high": 1, "important": 1, "medium": 2, "moderate": 2, "low": 3}
@@ -909,8 +922,8 @@ def check_vendor(os_text, offline):
     """Every installed package against the distro vendor's own security notices."""
     d = dict(re.findall(r'^(\w+)="?([^"\n]*)"?$', os_text, re.M))
     if d.get("ID") == "centos":  # Stream builds sort below RHEL's fixed ones even when they carry the fix
-        return [("CentOS Stream security notices", "-", "-", "UNKNOWN",
-                 "CentOS Stream publishes no security notices, so only the hand-picked checks above apply")]
+        return [("CentOS security notices", "-", "-", "UNKNOWN",
+                 "CentOS publishes no security notices of its own, so only the hand-picked checks above apply")]
     if d.get("ID") not in VENDOR_OVAL:
         return []
     label, url, field = VENDOR_OVAL[d["ID"]]
@@ -931,7 +944,12 @@ def check_vendor(os_text, offline):
             notices = oval_notices(path, inst, lt)
     except (OSError, EOFError, ET.ParseError) as e:
         return [(f"{label} security notices", path, "-", "UNKNOWN", f"couldn't read {label}'s notices: {e}")]
-    return vendor_rows(label, "apt" if deb else "dnf", notices, inst, kev_ids(offline), lt)
+    kev = kev_ids(offline)
+    rows = vendor_rows(label, "apt" if deb else "dnf", notices, inst, kev or set(), lt)
+    if kev is None:
+        rows.append(("CISA exploited list", "-", "-", "UNKNOWN", "couldn't load CISA's KEV list, so exploited CVEs "
+                     "aren't ranked first or marked AFFECTED (run without --no-update-check, or check the connection)"))
+    return rows
 
 
 # --- CA bundles ---------------------------------------------------------------------------------
@@ -1109,7 +1127,8 @@ def scan_files(roots):
 
                 def read(p=p):
                     try:
-                        return open(p, "rb").read() if os.path.getsize(p) < MAX_READ else b""
+                        # isfile: not a device or FIFO behind a symlink (a repo's requirements.txt -> /dev/zero)
+                        return open(p, "rb").read(MAX_READ) if os.path.isfile(p) and os.path.getsize(p) < MAX_READ else b""
                     except OSError:
                         return b""
 
@@ -1506,9 +1525,15 @@ def watch_diff(rows, state_file):
     A finding is item + where + status, so AFFECTED -> OK shows as fixed and OK -> AFFECTED as new."""
     # compare with version numbers blanked: a kernel going 6.8.0-139 -> 147 while still affected is the same finding
     same = lambda k: re.sub(r"\d+(?:[.\-]\d+)+", "#", k)
-    now = {same(k): k for k in (f"{r[0]} | {r[1]} | {r[3]}" for r in rows if r[3] in ("AFFECTED", "REVIEW", "PATCH"))}
+    def keyed(keys):  # two installs that differ only in numbers (node v18 and v20) stay two findings
+        out, seen = {}, {}
+        for k in keys:
+            n = seen[same(k)] = seen.get(same(k), 0) + 1
+            out[same(k) + (f" #{n}" if n > 1 else "")] = k
+        return out
+    now = keyed(sorted(f"{r[0]} | {r[1]} | {r[3]}" for r in rows if r[3] in ("AFFECTED", "REVIEW", "PATCH")))
     try:
-        before = {same(k): k for k in json.load(open(state_file))["findings"]}
+        before = keyed(json.load(open(state_file))["findings"])
         first = False
     except (OSError, ValueError, KeyError, TypeError):
         before, first = {}, True
@@ -1552,12 +1577,12 @@ def notify(message, url=None, mail=None):
 
 # --- Fix: vendor updates through the package manager, approved at the terminal, logged ---------
 # Sanctity: the commands are built here, from package names the package manager itself reports.
-# Nothing from advisories.json is ever run; it only decides which installed packages need an update.
+# No command comes from advisories.json; it only decides which installed packages need an update.
 # The update comes from the sources this machine already trusts (signed apt/dnf repositories,
 # including vendor ones like nginx.org, PGDG or MySQL's, and Homebrew), never from us.
 
 PKG_NAME = re.compile(r"^[A-Za-z0-9][A-Za-z0-9+._@-]*$")
-KERNEL_PKG = re.compile(r"^(kernel(-uek|-rt)?(-core|-modules.*)?|linux-(image|modules)-.+)$")  # needs a reboot to count
+KERNEL_PKG = re.compile(r"^(kernel(-(uek|rt|64k|debug|zfcpdump))*(-core|-modules.*)?|linux-(image|modules)-.+)$")  # needs a reboot to count
 REFRESH = {"apt": ["apt-get", "update"], "dnf": ["dnf", "makecache"], "brew": ["brew", "update"]}
 
 
@@ -1599,7 +1624,7 @@ def verify_log(path):
 
 
 class AuditLog:
-    """Append-only JSON lines, hash-chained, readable only by the owner."""
+    """Append-only JSON lines, hash-chained; created readable only by the owner."""
     # ponytail: tamper-evident, not tamper-proof: root can rewrite the whole chain; keep a copy of the last hash elsewhere if that matters
     def __init__(self, path):
         self.path = path
@@ -1608,7 +1633,10 @@ class AuditLog:
             lines = open(path).read().splitlines()
         except FileNotFoundError:
             lines = []
-        self.prev = json.loads(lines[-1])["hash"] if lines else ""
+        try:
+            self.prev = json.loads(lines[-1])["hash"] if lines else ""
+        except (ValueError, KeyError, TypeError):  # a torn last line: keep logging; --verify-log reports the break
+            self.prev = "broken"
 
     def write(self, event, **data):
         e = {"time": datetime.datetime.now(datetime.timezone.utc).isoformat(timespec="seconds"), "host": platform.node(),
@@ -1678,7 +1706,7 @@ def upgrade_cmd(pm, pkgs):
 
 
 def patch_plan(rows, pm, release=None):
-    """AFFECTED rows split into (updates the configured sources can fix now, [(item, where, why)] for the rest).
+    """AFFECTED rows (and REVIEW vendor-notice rows) split into (updates the configured sources can fix now, [(item, where, why)] for the rest).
     An update is offered only if the candidate version itself passes the same check the scan used."""
     fam = {"apt": "deb", "dnf": "rpm", "brew": "brew"}.get(pm)
     lt = deb_lt if fam == "deb" else rpm_lt
@@ -1866,6 +1894,15 @@ def release_signed(d=HERE, key=None):
         return all(sig_ok(fh.name, os.path.join(d, f), os.path.join(d, f + ".sig")) for f in AGENT_FILES)
 
 
+def release_of(path):
+    """advisories.json's "release": {"script_sha256", "released"}, or {} (an install from before releases were stamped)."""
+    try:
+        rel = json.load(open(path)).get("release")
+        return rel if isinstance(rel, dict) else {}
+    except (OSError, ValueError, AttributeError):
+        return {}
+
+
 def newest_checked(path):
     try:
         return max(re.findall(r'"checked":\s*"([^"]+)"', open(path).read()), default="")
@@ -1875,8 +1912,11 @@ def newest_checked(path):
 
 def fetch(url):
     # Cloudflare in front of the site turns away Python's default User-Agent
-    with urllib.request.urlopen(urllib.request.Request(url, headers={"User-Agent": "amiaffected"}), timeout=60) as r:
-        return r.read()
+    try:
+        with urllib.request.urlopen(urllib.request.Request(url, headers={"User-Agent": "amiaffected"}), timeout=60) as r:
+            return r.read()
+    except http.client.HTTPException as e:  # a cut-off response isn't an OSError; callers handle OSError
+        raise OSError(f"{url}: {e!r}") from e
 
 
 def update_agent(d, log):
@@ -1904,8 +1944,13 @@ def update_agent(d, log):
             if not sig_ok(signers, os.path.join(tmp, f), os.path.join(tmp, f + ".sig")):
                 problem = f"{f} isn't signed by the pinned key"
                 break
-        if not problem and newest_checked(os.path.join(tmp, "advisories.json")) < newest_checked(os.path.join(d, "advisories.json")):
-            problem = "the downloaded advisories are older than the installed ones (an old release replayed?)"
+        new_rel, old_rel = release_of(os.path.join(tmp, "advisories.json")), release_of(os.path.join(d, "advisories.json"))
+        if not problem and new_rel.get("script_sha256") != sha256_file(os.path.join(tmp, "secinspect.py")):
+            # each file has its own signature, so the signed advisories name the script they belong to
+            problem = "secinspect.py isn't the one the signed advisories.json names (mixed or downgraded files?)"
+        elif not problem and (newest_checked(os.path.join(tmp, "advisories.json")) < newest_checked(os.path.join(d, "advisories.json"))
+                              or str(new_rel.get("released", "")) < str(old_rel.get("released", ""))):
+            problem = "the downloaded release is older than the installed one (an old release replayed?)"
         if problem:
             log.write("update_refused", dir=d, reason=problem)
             print(f"Update refused, nothing changed: {problem}", file=sys.stderr)
@@ -1986,7 +2031,7 @@ def main(argv):
     ap.add_argument("--fix", action="store_true",
                     help="offer the vendor's update for each affected package (apt, dnf, Homebrew), apply only what you "
                          "approve at the terminal, and log every step")
-    ap.add_argument("--audit-log", metavar="FILE", help="with --fix or --verify-log: the log to use "
+    ap.add_argument("--audit-log", metavar="FILE", help="the audit log --fix, --install and --update write and --verify-log checks "
                     "(default /var/log/amiaffected/audit.jsonl as root, else ~/.local/state/amiaffected/audit.jsonl)")
     ap.add_argument("--verify-log", action="store_true", help="check the --fix audit log hasn't been edited, then exit")
     ap.add_argument("--install", action="store_true", help="keep a copy in /opt/amiaffected (or ~/.local/share/amiaffected), "
@@ -2016,7 +2061,8 @@ def main(argv):
             print("update: " + line, file=sys.stderr)
     if not OPENSSL:
         print("openssl not found: CA bundles are judged by which roots they hold, not by a chain test", file=sys.stderr)
-    if args.files_only:  # the repo, not the runner: no binaries, caches, trust stores, keys or home configs
+    if args.files_only:  # the repo, not the runner: no binaries, caches, trust stores, keys or home configs (docker
+        # images are only listed by digest; --docker reads them)
         rows = scan_files(roots) + check_docker(args.docker)
         rows += check_skills(home=os.path.join(roots[0], ".no-home"), extra=FOUND_SKILL_DIRS)
     else:
@@ -2025,7 +2071,8 @@ def main(argv):
         rows += check_chromium_cache() + scan_files(roots) + check_docker(args.docker) + check_stores()
         rows += check_mcp(rows) + check_iocs() + check_skills(extra=FOUND_SKILL_DIRS) + check_hooks()
     if args.skills_baseline:
-        rows += check_skill_changes(skill_dirs(extra=FOUND_SKILL_DIRS), os.path.expanduser(args.skills_baseline))
+        home = os.path.join(roots[0], ".no-home") if args.files_only else HOME
+        rows += check_skill_changes(skill_dirs(home=home, extra=FOUND_SKILL_DIRS), os.path.expanduser(args.skills_baseline))
     if args.watch:  # cron mode: say only what changed
         new, fixed, first = watch_diff(rows + patch_rows(rows), os.path.expanduser(args.watch))
         if new or fixed or first:

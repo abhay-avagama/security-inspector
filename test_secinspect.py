@@ -1,4 +1,5 @@
 import io
+import hashlib
 import json
 import os
 import shutil
@@ -421,6 +422,10 @@ def test_watch():
         assert watch_diff(day5, st) == ([], [], False)
         new, fixed, _ = watch_diff(day4, st)  # applied: the PATCH line goes away without a FIXED line
         assert "FIXED" not in watch_message(new, fixed, False, day4)
+        one = [("Node.js", "/u/.nvm/versions/node/v18.1.0/bin/node", "18.1.0", "AFFECTED", "")]
+        watch_diff(one, st)
+        two = one + [("Node.js", "/u/.nvm/versions/node/v20.3.0/bin/node", "20.3.0", "AFFECTED", "")]
+        assert watch_diff(two, st)[0] == ["Node.js | /u/.nvm/versions/node/v20.3.0/bin/node | AFFECTED"]  # a second install
 
 
 class Tty(io.StringIO):  # a terminal: what's written to it isn't read back
@@ -551,6 +556,37 @@ def test_vendor_notices():
         ups, manual = si.patch_plan([(item, where, "-", "AFFECTED", "")], where[-4:-1])
         assert ups == [] and manual == [(item, where, "kernel updates need a reboot: use the fix plan")], (ups, manual)
     assert not si.KERNEL_PKG.match("kernel-tools") and not si.KERNEL_PKG.match("linux-libc-dev")
+    assert all(si.KERNEL_PKG.match(k) for k in ("kernel-64k-core", "kernel-debug-modules-extra", "kernel-uek", "kernel-zfcpdump"))
+    negated = b"""<oval_definitions xmlns="http://oval.mitre.org/XMLSchema/oval-definitions-5"
+      xmlns:r="http://oval.mitre.org/XMLSchema/oval-definitions-5#linux" xmlns:u="http://oval.mitre.org/XMLSchema/oval-definitions-5#unix">
+      <definitions><definition id="d" class="patch"><metadata><title>RHSA-1:1: x</title></metadata>
+        <criteria operator="AND"><criterion test_ref="k" negate="true"/><criterion test_ref="g"/></criteria></definition></definitions>
+      <tests><u:uname_test id="k"><u:object object_ref="uo"/><u:state state_ref="us"/></u:uname_test>
+        <r:rpminfo_test id="g"><r:object object_ref="go"/><r:state state_ref="gs"/></r:rpminfo_test></tests>
+      <objects><r:rpminfo_object id="go"><r:name>git</r:name></r:rpminfo_object></objects>
+      <states><r:rpminfo_state id="gs"><r:evr operation="less than">0:2</r:evr></r:rpminfo_state></states></oval_definitions>"""
+    with tempfile.TemporaryDirectory() as t:
+        path = os.path.join(t, "n.xml.bz2")
+        open(path, "wb").write(bz2.compress(negated))
+        assert si.oval_notices(path, {"git": ("0:1-1", "git", "x86_64")}, si.rpm_lt) == []  # NOT(unknown) isn't met
+        os.symlink("/dev/zero", os.path.join(t, "requirements.txt"))  # a repo can commit this
+        si.scan_files([t])  # returns instead of reading forever
+    kev_ids = si.kev_ids
+    si.kev_ids = lambda offline: None
+    try:
+        with tempfile.TemporaryDirectory() as t:
+            path = os.path.join(t, "n.xml.bz2")
+            open(path, "wb").write(bz2.compress(negated))
+            cached, inst, which = si.cached, si.rpm_installed, si.shutil.which
+            si.cached, si.rpm_installed = (lambda url, name, offline: path), (lambda: {})
+            si.shutil.which = lambda cmd: "/usr/bin/" + cmd
+            try:
+                rows = si.check_vendor('ID="almalinux"\nVERSION_ID="9.4"\n', offline=True)
+            finally:
+                si.cached, si.rpm_installed, si.shutil.which = cached, inst, which
+        assert rows[-1][:4] == ("CISA exploited list", "-", "-", "UNKNOWN"), rows
+    finally:
+        si.kev_ids = kev_ids
 
 
 def test_agent_update():
@@ -565,9 +601,11 @@ def test_agent_update():
             subprocess.run(["ssh-keygen", "-q", "-t", "ed25519", "-N", "", "-f", os.path.join(t, name)], check=True)
             return open(os.path.join(t, name + ".pub")).read().strip()
         good, bad = key("good"), key("bad")
-        def release(checked, signer="good"):
-            open(os.path.join(site, "secinspect.py"), "w").write("print('v')\n")
-            json.dump({"versions": [{"checked": checked}]}, open(os.path.join(site, "advisories.json"), "w"))
+        def release(checked, signer="good", script="print('v')\n", names=None, released=None):
+            open(os.path.join(site, "secinspect.py"), "w").write(script)
+            sha = hashlib.sha256((names or script).encode()).hexdigest()
+            json.dump({"release": {"script_sha256": sha, "released": released or checked + "T00:00:00Z"},
+                       "versions": [{"checked": checked}]}, open(os.path.join(site, "advisories.json"), "w"))
             for f in si.AGENT_FILES:
                 if os.path.exists(os.path.join(site, f + ".sig")):
                     os.remove(os.path.join(site, f + ".sig"))
@@ -590,6 +628,10 @@ def test_agent_update():
             release("2026-11-01")  # validly signed but older: a replay
             assert si.update_agent(d, log) == 1
             assert "2026-11-06" in open(os.path.join(d, "advisories.json")).read()
+            release("2026-11-07", script="print('old')\n", names="print('v')\n")  # old script beside new advisories
+            assert si.update_agent(d, log) == 1
+            release("2026-11-06", released="2026-11-05T00:00:00Z")  # same data date, older release: a replay
+            assert si.update_agent(d, log) == 1
             release("2026-11-07")
             assert si.update_agent(d, log) == 0
             assert "2026-11-07" in open(os.path.join(d, "advisories.json")).read()
@@ -602,8 +644,11 @@ def test_agent_update():
             si.fetch = fetch
         events = [json.loads(l)["event"] for l in open(log.path)]
         assert events == ["installed", "updated", "install_refused", "update_refused", "update_refused",
-                          "update_refused", "updated"], events
-        assert si.verify_log(log.path) == (True, 7)
+                          "update_refused", "update_refused", "update_refused", "updated"], events
+        assert si.verify_log(log.path) == (True, 9)
+        open(log.path, "a").write('{"torn')  # a partial write: logging goes on, --verify-log reports it
+        si.AuditLog(log.path).write("updated")
+        assert si.verify_log(log.path)[0] is False
 
 
 def test_fix():

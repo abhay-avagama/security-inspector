@@ -6,9 +6,11 @@ Add an entry to changelog.json with each change, run `python3 changelog.py`, com
 CI runs `python3 changelog.py --check`, which fails if any page or the feed is out of date.
 """
 import datetime
+import hashlib
 import html
 import json
 import pathlib
+import re
 import sys
 
 ROOT = pathlib.Path(__file__).parent
@@ -150,9 +152,22 @@ h2{font-size:1.35rem;margin:3rem 0 .25rem;letter-spacing:-.01em}h2+p{margin-top:
 """
 
 
+def release_stamp(adv_text, script, now):
+    """advisories.json with a "release" line naming secinspect.py's sha256 and when it last changed. Both files are
+    signed, so --update can refuse a mixed pair (an old signed script beside new signed advisories)."""
+    sha = hashlib.sha256(script).hexdigest()
+    m = re.search(r'^  "release": \{"script_sha256": "([0-9a-f]{64})", "released": "[^"]+"\},\n', adv_text, re.M)
+    if m and m.group(1) == sha:
+        return adv_text
+    line = f'  "release": {{"script_sha256": "{sha}", "released": "{now}"}},\n'
+    return adv_text.replace(m.group(0), line) if m else adv_text.replace("{\n", "{\n" + line, 1)
+
+
 if __name__ == "__main__":
     entries = sorted(json.loads((ROOT / "changelog.json").read_text()), key=lambda x: x["date"], reverse=True)
     out = render(entries)
+    now = datetime.datetime.now(datetime.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+    out["advisories.json"] = release_stamp((ROOT / "advisories.json").read_text(), (ROOT / "secinspect.py").read_bytes(), now)
     if "--check" in sys.argv:
         stale = [p for p, text in out.items() if not (ROOT / p).exists() or (ROOT / p).read_text() != text]
         sys.exit(f"out of date, run python3 changelog.py: {', '.join(stale)}" if stale else 0)

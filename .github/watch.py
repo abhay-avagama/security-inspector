@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Daily watch: finds newly exploited or newly published CVEs that Am I affected? doesn't check yet,
+"""Watch, every 6 hours: finds newly exploited or newly published CVEs that Am I affected? doesn't check yet,
 and opens one GitHub issue per CVE labelled `queue`, so adding them is a list to work through.
 
 Sources: CISA KEV (exploited in the wild), filtered to software people run on laptops and servers,

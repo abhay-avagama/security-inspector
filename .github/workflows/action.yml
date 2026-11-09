@@ -28,7 +28,10 @@ jobs:
           path: ${{ runner.temp }}/fixture
       - name: Check it failed for the right reason
         run: |
-          test "${{ steps.bad.outcome }}" = "success" && { echo "expected the fixture to fail"; exit 1; } || true
+          test "${{ steps.bad.outcome }}" = "success" && { echo "expected the fixture to fail"; exit 1; }
+          for want in "LiteLLM" "Deprecated MCP servers"; do
+            grep -q "$want.*AFFECTED" "$RUNNER_TEMP/amiaffected.txt" || { echo "no AFFECTED $want finding"; exit 1; }
+          done
       - name: The action on this repo, report only
         uses: ./
         with:
