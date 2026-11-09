@@ -5,11 +5,16 @@ browsers and the deprecated Puppeteer MCP server; on Linux servers also the kern
 MariaDB, MongoDB, WordPress and more). Stdlib only. Exit code 1 if anything is affected.
 
 Usage: python3 secinspect.py [dirs ...] [--docker] [--html report.html] [--no-update-check]
+       python3 secinspect.py --files-only DIR  only the files in DIR (lockfiles, MCP configs, skills, .env); for CI
+       python3 secinspect.py --watch STATE [--notify URL] [--mail ADDRESS]  for cron: report only what changed
+       python3 secinspect.py --skills-baseline FILE  also report skills that changed since the last run
        python3 secinspect.py --fix        offer each vendor update, apply only what you approve, log every step
        python3 secinspect.py --verify-log check the --fix audit log hasn't been edited
        python3 secinspect.py --install    keep a copy that updates only from signed releases (then --update from cron)
+       python3 secinspect.py --update     take a new release only if it's signed by the pinned key
   With no dirs, searches your home folder and system Python paths for envs, lockfiles and CA bundles.
-  With dirs, searches only those. Installed programs and system trust stores are always checked.
+  With dirs, searches only those. Installed programs and system trust stores are checked too, unless
+  --files-only. --audit-log FILE picks the log for --fix and --verify-log.
 """
 import argparse
 import base64
@@ -334,7 +339,7 @@ def skill_fingerprint(d):
 
 def check_skill_changes(dirs, baseline):
     """Opt-in (--skills-baseline FILE): compares every skill with the last run recorded in FILE, then
-    rewrites FILE. The only file the tool writes besides --html, and only because you named it."""
+    rewrites FILE (only because you named it)."""
     name, now = "AI agent: skill changes", datetime.datetime.now().strftime("%Y-%m-%d %H:%M")
     try:
         old = json.load(open(baseline))
@@ -1475,7 +1480,7 @@ def check_feed_updates(advs, timeout=6):
     """Best-effort: one 'data may be stale' line per tech with CVEs newer than its watermark.
 
     Read-only GET of the public cve.now feed; nothing about this machine is sent. Any
-    network/parse error is swallowed so the offline scan never depends on it."""
+    network/parse error is swallowed so the scan never depends on it."""
     lines = []
     for adv in advs:
         slug, checked = adv.get("feed"), adv.get("checked")
@@ -1494,7 +1499,7 @@ def check_feed_updates(advs, timeout=6):
     return lines
 
 
-# --- Watch mode: run daily from cron, speak only when something changes ---------------------------
+# --- Watch mode: run from cron (the --install line runs it every 6 hours), speak only when something changes ---------------------------
 
 def watch_diff(rows, state_file):
     """(new findings, fixed findings, first run?) against the last run, then records this run.
@@ -1552,6 +1557,7 @@ def notify(message, url=None, mail=None):
 # including vendor ones like nginx.org, PGDG or MySQL's, and Homebrew), never from us.
 
 PKG_NAME = re.compile(r"^[A-Za-z0-9][A-Za-z0-9+._@-]*$")
+KERNEL_PKG = re.compile(r"^(kernel(-uek|-rt)?(-core|-modules.*)?|linux-(image|modules)-.+)$")  # needs a reboot to count
 REFRESH = {"apt": ["apt-get", "update"], "dnf": ["dnf", "makecache"], "brew": ["brew", "update"]}
 
 
@@ -1684,7 +1690,8 @@ def patch_plan(rows, pm, release=None):
             continue
         distro = next((a for a in DISTRO if a["name"] == item), None)
         vadv = next((a for a in ADVISORIES["versions"] if a["name"] == item and "binary" in a), None)
-        if distro and distro.get("kernel"):  # ponytail: kernels need a reboot and a new package name; by hand for now
+        kernel = item in VENDOR_FIXES and any(KERNEL_PKG.match(b) for b in VENDOR_FIXES[item])
+        if kernel or (distro and distro.get("kernel")):  # ponytail: kernels need a reboot and a new package name; by hand for now
             manual.append((item, where, "kernel updates need a reboot: use the fix plan"))
             continue
         if distro and fam and where.endswith(f"({pm})"):
@@ -1974,7 +1981,8 @@ def main(argv):
     ap.add_argument("--skills-baseline", metavar="FILE",
                     help="remember a fingerprint of every installed skill in FILE and report what changed since the last run")
     ap.add_argument("--no-update-check", action="store_true",
-                    help="skip the cve.now advisory-freshness check (offline/CI; also $SECINSPECT_NO_UPDATE_CHECK)")
+                    help="offline: skip the cve.now advisory-freshness check and use only cached vendor notices, "
+                         "never downloading them (also $SECINSPECT_NO_UPDATE_CHECK)")
     ap.add_argument("--fix", action="store_true",
                     help="offer the vendor's update for each affected package (apt, dnf, Homebrew), apply only what you "
                          "approve at the terminal, and log every step")

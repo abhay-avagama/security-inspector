@@ -29,7 +29,7 @@ runs:
       run: |
         set +e
         out="$RUNNER_TEMP/amiaffected.txt"
-        args=(--files-only)
+        args=(--files-only --no-update-check)
         [ "$DOCKER" = "true" ] && args+=(--docker)
         [ -n "$HTML" ] && args+=(--html "$HTML")
         # the action's own pinned copy of the tool and its data, no curl | sh

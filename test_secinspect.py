@@ -544,6 +544,13 @@ def test_vendor_notices():
     merged = si.merge_vendor(hand, vendor)
     assert [r[0] for r in merged] == ["nginx HTTP/2", "OpenSSH", "Ubuntu: openssh"], merged  # OK rows aren't merged into
     assert merged[0][4] == "update to 1.24.0-2ubuntu7.1+; Ubuntu: nginx also pending: update to 1.24.0-2ubuntu7.3+ (USN-9-1; high severity)"
+    # vendor kernel notices are left for the user, like hand-picked kernel checks: they need a reboot
+    si.VENDOR_FIXES.update({"RHEL: kernel": {"kernel": "0:5.14.0-570.el9", "kernel-core": "0:5.14.0-570.el9"},
+                            "Ubuntu: linux-meta": {"linux-image-generic": "6.8.0.60.60"}})
+    for item, where in (("RHEL: kernel", "kernel kernel-core (dnf)"), ("Ubuntu: linux-meta", "linux-image-generic (apt)")):
+        ups, manual = si.patch_plan([(item, where, "-", "AFFECTED", "")], where[-4:-1])
+        assert ups == [] and manual == [(item, where, "kernel updates need a reboot: use the fix plan")], (ups, manual)
+    assert not si.KERNEL_PKG.match("kernel-tools") and not si.KERNEL_PKG.match("linux-libc-dev")
 
 
 def test_agent_update():
