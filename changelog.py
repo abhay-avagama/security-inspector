@@ -52,7 +52,7 @@ def render(entries):
 <h1>Changelog</h1>
 <p>What the tool checks, and when each check went live. New exploited bugs usually land within a day of disclosure. Follow along with the <a href="/changelog.xml">RSS feed</a>.</p>
 {body}
-<footer>Built and maintained by <a href="https://avagama.co">Avagama Consulting</a>. Every entry links to its commit on <a href="{REPO}">GitHub</a>.</footer>
+<footer>Built and maintained by <a href="https://avagama.co/services/?utm_source=amiaffected.now&amp;utm_medium=footer#security">Avagama Consulting</a>, who also test agents and MCP servers for security. Every entry links to its commit on <a href="{REPO}">GitHub</a>.</footer>
 </main></body></html>
 """
     rfc = lambda d: datetime.datetime.combine(datetime.date.fromisoformat(d), datetime.time(12)).strftime("%a, %d %b %Y %H:%M:%S +0000")
@@ -147,7 +147,7 @@ h2{font-size:1.35rem;margin:3rem 0 .25rem;letter-spacing:-.01em}h2+p{margin-top:
 <div class="patterns">
 {patterns}</div>
 <p class="muted" style="margin-top:2.5rem">Know of a skill or server that belongs here? Open an <a href="{REPO}/issues">issue</a> with the source. Want a second pair of eyes on your agent setup? That's what our <a href="https://avagama.co/services/">agent security review</a> covers.</p>
-<footer>Built and maintained by <a href="https://avagama.co">Avagama Consulting</a>. Generated from <a href="/advisories.json">advisories.json</a>, the same data the tool reads. What changed and when: the <a href="/changelog/">changelog</a>.</footer>
+<footer>Built and maintained by <a href="https://avagama.co/services/?utm_source=amiaffected.now&amp;utm_medium=footer#security">Avagama Consulting</a>, who also test agents and MCP servers for security. Generated from <a href="/advisories.json">advisories.json</a>, the same data the tool reads. What changed and when: the <a href="/changelog/">changelog</a>.</footer>
 </main></body></html>
 """
 
