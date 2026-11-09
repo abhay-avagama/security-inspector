@@ -37,6 +37,7 @@ h2[id]{scroll-margin-top:4.5rem}
 <p>What the tool checks, and when each check went live. New exploited bugs usually land within a day of disclosure. Follow along with the <a href="/changelog.xml">RSS feed</a>.</p>
 <h2 id="2026-11-09">9 November 2026</h2>
 <ul class="log">
+<li><b>--fix leaves every kernel to you</b>. Kernel updates found through the vendor&#x27;s notices are no longer offered by --fix: like the hand-picked kernel checks, they need a reboot, so the fix plan lists them for you to do. The GitHub Action now makes no network calls at all, as its description says. <a class="muted" href="https://github.com/abhay-avagama/security-inspector/commit/c89df08">c89df08</a></li>
 <li><b>Debian packages against Debian&#x27;s own notices</b>. Debian 11, 12 and 13 now get the same check of every installed package, against the security tracker&#x27;s notices. Debian rates no severity, so a package is AFFECTED only when one of its CVEs is on CISA&#x27;s exploited list; the rest are REVIEW and --fix offers them. A package a hand-picked check already flags now shows as one row, not two. Checked on Debian 12.0: everything apt would upgrade from the security archive, glibc first for CVE-2023-4911. <a class="muted" href="https://github.com/abhay-avagama/security-inspector/commit/e9ef868">e9ef868</a></li>
 </ul>
 <h2 id="2026-11-07">7 November 2026</h2>
