@@ -1,4 +1,6 @@
 [
+  {"date": "2026-11-09", "commit": "e9ef868", "title": "Debian packages against Debian's own notices",
+   "body": "Debian 11, 12 and 13 now get the same check of every installed package, against the security tracker's notices. Debian rates no severity, so a package is AFFECTED only when one of its CVEs is on CISA's exploited list; the rest are REVIEW and --fix offers them. A package a hand-picked check already flags now shows as one row, not two. Checked on Debian 12.0: everything apt would upgrade from the security archive, glibc first for CVE-2023-4911."},
   {"date": "2026-11-07", "commit": "da8415c", "title": "Every installed package, against the vendor's notices",
    "body": "On Ubuntu, RHEL, AlmaLinux, Rocky and Oracle Linux the tool now lists every installed package and matches it against the vendor's own security notices (USN, RHSA, ALSA, ELSA), downloaded to the server and matched there. Anything on CISA's exploited list comes first. --fix offers these updates too. Checked against apt and dnf's own security lists on six distro images."},
   {"date": "2026-11-07", "commit": "3edf047", "title": "--fix runs only from signed code",

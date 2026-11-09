@@ -35,6 +35,10 @@ h2[id]{scroll-margin-top:4.5rem}
 <main>
 <h1>Changelog</h1>
 <p>What the tool checks, and when each check went live. New exploited bugs usually land within a day of disclosure. Follow along with the <a href="/changelog.xml">RSS feed</a>.</p>
+<h2 id="2026-11-09">9 November 2026</h2>
+<ul class="log">
+<li><b>Debian packages against Debian&#x27;s own notices</b>. Debian 11, 12 and 13 now get the same check of every installed package, against the security tracker&#x27;s notices. Debian rates no severity, so a package is AFFECTED only when one of its CVEs is on CISA&#x27;s exploited list; the rest are REVIEW and --fix offers them. A package a hand-picked check already flags now shows as one row, not two. Checked on Debian 12.0: everything apt would upgrade from the security archive, glibc first for CVE-2023-4911. <a class="muted" href="https://github.com/abhay-avagama/security-inspector/commit/e9ef868">e9ef868</a></li>
+</ul>
 <h2 id="2026-11-07">7 November 2026</h2>
 <ul class="log">
 <li><b>Every installed package, against the vendor&#x27;s notices</b>. On Ubuntu, RHEL, AlmaLinux, Rocky and Oracle Linux the tool now lists every installed package and matches it against the vendor&#x27;s own security notices (USN, RHSA, ALSA, ELSA), downloaded to the server and matched there. Anything on CISA&#x27;s exploited list comes first. --fix offers these updates too. Checked against apt and dnf&#x27;s own security lists on six distro images. <a class="muted" href="https://github.com/abhay-avagama/security-inspector/commit/da8415c">da8415c</a></li>
