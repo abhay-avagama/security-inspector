@@ -470,7 +470,7 @@ def test_vendor_notices():
       <red:rpminfo_test id="t2"><red:object object_ref="o2"/><red:state state_ref="s2"/></red:rpminfo_test>
       <red:rpminfo_test id="t2sig"><red:object object_ref="o2"/><red:state state_ref="sig"/></red:rpminfo_test>
       <linux:dpkginfo_test id="t3"><linux:object object_ref="o1"/><linux:state state_ref="s1"/></linux:dpkginfo_test>
-      <unix:uname_test id="tk"/>
+      <unix:uname_test id="tk"><unix:object object_ref="uk"/><unix:state state_ref="sk"/></unix:uname_test>
       <red:rpmverifyfile_test id="notrhel" check="none satisfy"/><red:rpmverifyfile_test id="isrhel"/>
       <red:rpminfo_test id="t4"><red:object object_ref="o2"/><red:state state_ref="s4"/></red:rpminfo_test>
       <red:rpminfo_test id="t4fips"><red:object object_ref="o2"/><red:state state_ref="fips"/></red:rpminfo_test>
@@ -510,7 +510,40 @@ def test_vendor_notices():
     assert "exploited: CVE-2026-9 in CISA KEV" in rows[0][4] and rows[1][4].endswith("(RHSA-2026:2; high severity)")
     assert si.deb_lt("1.0~rc1", "1.0") and si.deb_lt("1:0.1", "2:0") and not si.deb_lt("1.0-1ubuntu1", "1.0-1")
     assert si.rpm_lt("0:2.43.5-1.el9", "0:2.43.5-1.el9_4") and si.rpm_lt("1.0~rc1-1", "1.0-1") and not si.rpm_lt("1:1-1", "0:9-9")
-    assert si.check_vendor('ID=debian\nVERSION_ID="12"\n', offline=True) == []  # no notices source for it yet
+    # Debian: one definition per CVE, on the source package, behind its release-file and architecture tests
+    debian = b"""<oval_definitions xmlns="http://oval.mitre.org/XMLSchema/oval-definitions-5"
+      xmlns:l="http://oval.mitre.org/XMLSchema/oval-definitions-5#linux" xmlns:i="http://oval.mitre.org/XMLSchema/oval-definitions-5#independent"
+      xmlns:u="http://oval.mitre.org/XMLSchema/oval-definitions-5#unix"><definitions>
+      <definition id="d" class="vulnerability"><metadata><title>CVE-2026-5 glibc</title><reference source="CVE" ref_id="CVE-2026-5"/></metadata>
+        <criteria operator="AND"><criterion test_ref="rel"/><criteria operator="OR"><criteria operator="AND">
+          <criterion test_ref="all"/><criterion test_ref="g"/></criteria></criteria></criteria></definition></definitions>
+      <tests><i:textfilecontent54_test id="rel"><i:object object_ref="ro"/><i:state state_ref="rs"/></i:textfilecontent54_test>
+        <u:uname_test id="all"><u:object object_ref="uo"/></u:uname_test>
+        <l:dpkginfo_test id="g"><l:object object_ref="go"/><l:state state_ref="gs"/></l:dpkginfo_test></tests>
+      <objects><i:textfilecontent54_object id="ro"><i:path>/etc</i:path><i:filename>debian_version</i:filename></i:textfilecontent54_object>
+        <u:uname_object id="uo"/><l:dpkginfo_object id="go"><l:name>glibc</l:name></l:dpkginfo_object></objects>
+      <states><i:textfilecontent54_state id="rs"><i:subexpression>12</i:subexpression></i:textfilecontent54_state>
+        <l:dpkginfo_state id="gs"><l:evr operation="less than">0:2.36-9+deb12u10</l:evr></l:dpkginfo_state></states>
+    </oval_definitions>"""
+    with tempfile.TemporaryDirectory() as t:
+        path = os.path.join(t, "d.xml.bz2")
+        open(path, "wb").write(bz2.compress(debian))
+        assert si.oval_notices(path, {"glibc": ("2.36-9+deb12u9", "glibc", "amd64")}, si.deb_lt) == [
+            ("CVE-2026-5 glibc", "", ["CVE-2026-5"], {"glibc": "0:2.36-9+deb12u10"})]
+    rows = si.vendor_rows("Debian", "apt", [("CVE-2026-5 glibc", "", ["CVE-2026-5"], {"libc6": "0:2.36-9+deb12u10"})],
+                          {"libc6": ("2.36-9+deb12u9", "glibc", "amd64")}, set(), si.deb_lt)
+    assert rows == [("Debian: glibc", "libc6 (apt)", "2.36-9+deb12u9", "REVIEW",
+                     "update to 2.36-9+deb12u10+ (CVE-2026-5; severity not rated)")], rows
+    # a hand-picked AFFECTED row and the vendor row for the same package become one row
+    hand = [("nginx HTTP/2", "nginx nginx-core (apt)", "1.24.0-2ubuntu7", "AFFECTED", "update to 1.24.0-2ubuntu7.1+"),
+            ("OpenSSH", "openssh-server (apt)", "1:9.6p1-3ubuntu13.5", "OK", "")]
+    si.VENDOR_FIXES.update({"Ubuntu: nginx": {"nginx-common": "1.24.0-2ubuntu7.3", "nginx-core": "1.24.0-2ubuntu7.3"},
+                            "Ubuntu: openssh": {"openssh-server": "1:9.6p1-3ubuntu13.9"}})
+    vendor = [("Ubuntu: nginx", "nginx-common nginx-core (apt)", "1.24.0-2ubuntu7", "AFFECTED", "update to 1.24.0-2ubuntu7.3+ (USN-9-1; high severity)"),
+              ("Ubuntu: openssh", "openssh-server (apt)", "1:9.6p1-3ubuntu13.5", "REVIEW", "update to 1:9.6p1-3ubuntu13.9+ (USN-8-1; medium severity)")]
+    merged = si.merge_vendor(hand, vendor)
+    assert [r[0] for r in merged] == ["nginx HTTP/2", "OpenSSH", "Ubuntu: openssh"], merged  # OK rows aren't merged into
+    assert merged[0][4] == "update to 1.24.0-2ubuntu7.1+; Ubuntu: nginx also pending: update to 1.24.0-2ubuntu7.3+ (USN-9-1; high severity)"
 
 
 def test_agent_update():

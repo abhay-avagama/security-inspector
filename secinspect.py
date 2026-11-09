@@ -674,7 +674,21 @@ def check_distro(os_text=None, offline=True):
     fam = "deb" if shutil.which("dpkg-query") else "rpm" if shutil.which("rpm") else None
     if not fam:
         return rows + [("Server packages", "-", "-", "UNKNOWN", "only apt (Ubuntu/Debian) and dnf (RHEL family) systems are checked")]
-    return rows + check_distro_fam(fam, os_release(os_text)) + check_vendor(os_text, offline)
+    return rows + merge_vendor(check_distro_fam(fam, os_release(os_text)), check_vendor(os_text, offline))
+
+
+def merge_vendor(hand, vendor):
+    """A vendor row for packages a hand-picked AFFECTED row already names goes into that row's note: one row to fix."""
+    hand = list(hand)
+    for v in vendor:
+        bins, pm = set(VENDOR_FIXES.get(v[0], ())), str(v[1]).rsplit(" (", 1)[-1]
+        i = next((i for i, h in enumerate(hand) if h[3] == "AFFECTED" and str(h[1]).endswith(f"({pm}")
+                  and bins & set(str(h[1]).rsplit(" (", 1)[0].split())), None)
+        if i is None:
+            hand.append(v)
+        else:
+            hand[i] = hand[i][:4] + (f"{hand[i][4]}; {v[0]} also pending: {v[4]}",)
+    return hand
 
 
 def check_distro_fam(fam, release):
@@ -709,6 +723,8 @@ VENDOR_OVAL = {
     # Rocky's own OVAL stopped being updated in 2024; Rocky rebuilds RHEL with identical package versions, so Red Hat's fits
     "rocky": ("Rocky Linux", "https://security.access.redhat.com/data/oval/v2/RHEL{0}/rhel-{0}.oval.xml.bz2", "VERSION_ID"),
     "ol": ("Oracle Linux", "https://linux.oracle.com/security/oval/com.oracle.elsa-ol{}.xml.bz2", "VERSION_ID"),
+    # one definition per fixed CVE, tested on the source package; Debian rates no severity, so KEV alone makes AFFECTED
+    "debian": ("Debian", "https://www.debian.org/security/oval/oval-definitions-{}.xml.bz2", "VERSION_CODENAME"),
 }
 KEV_URL = "https://www.cisa.gov/sites/default/files/feeds/known_exploited_vulnerabilities.json"
 VENDOR_FIXES = {}  # row item -> {binary package: first fixed version}, for --fix
@@ -736,7 +752,7 @@ def cached(url, name, offline, max_age=6 * 3600):
 
 def oval_notices(path, inst, lt):
     """[(title, severity, [cve], {installed package: first fixed version})] for the notices in a vendor OVAL file
-    (Canonical, Red Hat, Alma, Rocky, Oracle) whose conditions hold on this machine. inst is {name: (version, source,
+    (Canonical, Debian, Red Hat, Alma, Rocky, Oracle) whose conditions hold on this machine. inst is {name: (version, source,
     arch)}. Version, release, arch and existence tests are judged; signature and release-file tests pass; anything
     else (kernel uname, module streams) counts as not met, so an unknown condition can miss a notice, never invent one."""
     tests, objs, states, names, defs = {}, {}, {}, {}, []
@@ -759,6 +775,8 @@ def oval_notices(path, inst, lt):
             o, st = el.find("{*}object"), el.find("{*}state")
             tests[i] = (tag, el.get("check", "at least one"), o.get("object_ref") if o is not None else None,
                         st.get("state_ref") if st is not None else None)
+        elif tag == "textfilecontent54_object":
+            objs[i] = ("file", el.findtext("{*}filename"))
         elif tag in ("dpkginfo_object", "rpminfo_object"):
             n = el.find("{*}name")
             objs[i] = ("var", n.get("var_ref")) if n is not None and n.get("var_ref") else ("name", n.text if n is not None else None)
@@ -766,7 +784,7 @@ def oval_notices(path, inst, lt):
             states[i] = {k.tag.rsplit("}", 1)[-1]: (k.get("operation", "equals"), k.text or "") for k in el}
         elif tag == "constant_variable":
             names[i] = [v.text for v in el.findall("{*}value")]
-        elif tag == "definition" and el.get("class") == "patch":
+        elif tag == "definition" and el.get("class") in ("patch", "vulnerability"):
             sev, c = el.find(".//{*}severity"), el.find("{*}criteria")
             defs.append((" ".join(el.find(".//{*}title").text.split()), (sev.text or "") if sev is not None else "",
                          sorted({x.text for x in el.findall(".//{*}cve")} |
@@ -794,6 +812,10 @@ def oval_notices(path, inst, lt):
         kind, check, o, s = tests.get(ref, ("?", "", None, None))
         if kind == "rpmverifyfile_test":  # "<distro> is installed" (or, with none satisfy, isn't)
             return check != "none satisfy", {}
+        if kind == "textfilecontent54_test" and objs.get(o) == ("file", "debian_version"):
+            return True, {}  # "Debian 12 is installed": known from /etc/os-release
+        if kind == "uname_test" and s is None:
+            return True, {}  # Debian's "architecture is all": uname exists; kernel tests carry a state and stay unmet
         if kind not in ("dpkginfo_test", "rpminfo_test") or o not in objs:
             return False, {}
         how, v = objs[o]
@@ -826,10 +848,11 @@ def oval_notices(path, inst, lt):
     return out
 
 
-def dpkg_installed():
-    """{binary: (version, source package, arch)} for every installed deb."""
-    out = run("dpkg-query", "-W", "-f", "${db:Status-Abbrev}\t${Package}\t${Version}\t${source:Package}\t${Architecture}\n")
-    return {r[1]: (r[2], r[3] or r[1], r[4]) for r in (l.split("\t") for l in out.splitlines()) if len(r) == 5 and r[0].startswith("ii")}
+def dpkg_installed(source_version=False):
+    """{binary: (version, source package, arch)} for every installed deb; with source_version, the source's version."""
+    out = run("dpkg-query", "-W", "-f", "${db:Status-Abbrev}\t${Package}\t${Version}\t${source:Package}\t${Architecture}\t${source:Version}\n")
+    return {r[1]: (r[5] if source_version else r[2], r[3] or r[1], r[4])
+            for r in (l.split("\t") for l in out.splitlines()) if len(r) == 6 and r[0].startswith("ii")}
 
 
 def rpm_installed():
@@ -851,7 +874,7 @@ def kev_ids(offline):
 
 
 SEVERITY = {"critical": 0, "high": 1, "important": 1, "medium": 2, "moderate": 2, "low": 3}
-SEVERITY_WORD = ("critical", "high", "medium", "low", "unrated")
+SEVERITY_WORD = ("critical", "high", "medium", "low")
 
 
 def vendor_rows(label, pm, notices, inst, kev, lt):
@@ -862,7 +885,7 @@ def vendor_rows(label, pm, notices, inst, kev, lt):
             if b in inst and lt(inst[b][0], f):
                 g = by_src.setdefault(inst[b][1], {"bins": {}, "ids": set(), "sev": 4, "kev": set()})
                 g["bins"][b] = f if b not in g["bins"] or lt(g["bins"][b], f) else g["bins"][b]
-                g["ids"].add(re.split(r"\s*(--|:)\s", title)[0])
+                g["ids"].add(re.split(r"\s*(?:--|:)\s|\s", title)[0])  # USN-1-1 -- x, RHSA-2024:1: x, CVE-2024-1 glibc
                 g["sev"] = min(g["sev"], SEVERITY.get(sev.strip().lower(), 4))
                 g["kev"] |= {c for c in cves if c in kev}
     rows = []
@@ -870,8 +893,8 @@ def vendor_rows(label, pm, notices, inst, kev, lt):
         item = f"{label}: {src}"
         VENDOR_FIXES[item] = g["bins"]
         b0, ids = sorted(g["bins"])[0], sorted(g["ids"])
-        note = f"update to {g['bins'][b0]}+ ({', '.join(ids[:3])}{f' and {len(ids) - 3} more' if len(ids) > 3 else ''}"
-        note += f"; exploited: {', '.join(sorted(g['kev']))} in CISA KEV)" if g["kev"] else f"; {SEVERITY_WORD[g['sev']]} severity)"
+        note = f"update to {re.sub(r'^0:', '', g['bins'][b0])}+ ({', '.join(ids[:3])}{f' and {len(ids) - 3} more' if len(ids) > 3 else ''}"
+        note += f"; exploited: {', '.join(sorted(g['kev']))} in CISA KEV)" if g["kev"] else (f"; {SEVERITY_WORD[g['sev']]} severity)" if g["sev"] < 4 else "; severity not rated)")
         status = "AFFECTED" if g["kev"] or g["sev"] <= 1 else "REVIEW"
         rows.append((item, f"{' '.join(sorted(g['bins']))} ({pm})", inst[b0][0], status, note))
     return rows
@@ -886,7 +909,7 @@ def check_vendor(os_text, offline):
     if d.get("ID") not in VENDOR_OVAL:
         return []
     label, url, field = VENDOR_OVAL[d["ID"]]
-    deb = d["ID"] == "ubuntu"
+    deb = d["ID"] in ("ubuntu", "debian")
     key = d.get(field, "") if deb else d.get(field, "").split(".")[0]
     if not key or not shutil.which("dpkg-query" if deb else "rpm"):
         return []
@@ -894,9 +917,13 @@ def check_vendor(os_text, offline):
     if not path:
         return [(f"{label} security notices", "-", "-", "UNKNOWN",
                  f"couldn't download {label}'s notices (run without --no-update-check, or check the connection)")]
-    inst, lt = (dpkg_installed(), deb_lt) if deb else (rpm_installed(), rpm_lt)
+    inst, lt = (dpkg_installed(d["ID"] == "debian"), deb_lt) if deb else (rpm_installed(), rpm_lt)
     try:
-        notices = oval_notices(path, inst, lt)
+        if d["ID"] == "debian":  # tested on source packages: match by source, then name its installed binaries
+            notices = [(t, sev, c, {b: fx[x[1]] for b, x in inst.items() if x[1] in fx})
+                       for t, sev, c, fx in oval_notices(path, {x[1]: x for x in inst.values()}, lt)]
+        else:
+            notices = oval_notices(path, inst, lt)
     except (OSError, EOFError, ET.ParseError) as e:
         return [(f"{label} security notices", path, "-", "UNKNOWN", f"couldn't read {label}'s notices: {e}")]
     return vendor_rows(label, "apt" if deb else "dnf", notices, inst, kev_ids(offline), lt)

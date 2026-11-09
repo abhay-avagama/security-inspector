@@ -185,6 +185,7 @@ security notices your distro vendor publishes, downloaded and kept on the machin
 | Distro | Notices | From |
 |---|---|---|
 | Ubuntu (every release Canonical publishes) | USN | `security-metadata.canonical.com` |
+| Debian 11, 12, 13 | CVE, DSA | `www.debian.org/security/oval` |
 | RHEL 8, 9 | RHSA | `security.access.redhat.com` |
 | AlmaLinux 8, 9, 10 | ALSA | `security.almalinux.org` |
 | Rocky Linux 8, 9 | RHSA (see below) | `security.access.redhat.com` |
@@ -193,7 +194,9 @@ security notices your distro vendor publishes, downloaded and kept on the machin
 There's one row per source package with a pending fix: the version to update to, the notices, and
 how serious they are. A package with a CVE on [CISA's exploited list](https://www.cisa.gov/known-exploited-vulnerabilities-catalog)
 comes first and is AFFECTED, and so are Critical and High (Important) notices. Medium and Low ones
-are REVIEW, so they don't fail a CI job, but `--fix` offers them too.
+are REVIEW, so they don't fail a CI job, but `--fix` offers them too. Debian rates no severity, so
+there only an exploited CVE makes a row AFFECTED. When a hand-picked check above is already AFFECTED
+for the same package, the vendor's notices go into that row instead of a second one.
 
 - **Nothing is sent.** These are plain downloads of public files, refreshed every 6 hours and kept in
   `/var/cache/amiaffected` (or `~/.cache/amiaffected`). The package list stays on the machine.
@@ -205,9 +208,12 @@ are REVIEW, so they don't fail a CI job, but `--fix` offers them too.
   security updates: Ubuntu 22.04 with old packages installed 13 of 13 (`apt`), Ubuntu 24.04 5 of 5,
   AlmaLinux 9 4 of 4, Oracle Linux 9 3 of 3, RHEL 9 0 of 0 (`dnf updateinfo --security`). On Rocky 9.3
   it found all 57, plus 6 fixes Rocky ships but its own metadata doesn't mark as security updates.
+  On Debian 12.0 it found every package `apt` would upgrade from the security archive except tzdata
+  (time zone data, no CVE), with glibc first for CVE-2023-4911. Debian's file lists 61,000 CVEs, so
+  reading it takes about 10 seconds; the others take 1 to 3.
 - **Rocky uses Red Hat's notices.** Rocky's own notices file stopped being updated in 2024, and Rocky
   rebuilds RHEL with the same package versions, so Red Hat's data fits it exactly.
-- **Not covered yet:** Debian (next), RHEL 10 and Rocky 10 (Red Hat no longer publishes this format for
+- **Not covered yet:** RHEL 10 and Rocky 10 (Red Hat no longer publishes this format for
   10), and CentOS Stream, which publishes no security notices at all. These say UNKNOWN or nothing,
   rather than guess.
 
