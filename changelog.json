@@ -1,4 +1,6 @@
 [
+  {"date": "2026-11-10", "commit": "2ac776e", "title": "Pass the check on",
+   "body": "After the results, the tool now prints the one-line command to send a colleague, worded for whether anything was affected; the HTML report ends with it too, and the home page has a button that copies a short message with the command. It goes to stderr, so scripts reading the table are unaffected, and it stays out of --watch and --files-only runs. No tracking is added."},
   {"date": "2026-11-10", "commit": "d0c70df", "title": "A page for every advisory",
    "body": "Each advisory the tool checks now has its own page under /advisories/: what is affected, the fixed versions (per Ubuntu, Debian and RHEL release for server packages), where the tool looks and the source. The pages are generated from advisories.json, the same file the tool reads, so they never say more than it checks."},
   {"date": "2026-11-10", "commit": "17c0467", "title": "macOS and Firefox are checked",
