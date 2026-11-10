@@ -131,12 +131,26 @@ def advisory_pages():
                                       f'<title>{e(title)}</title>\n<meta name="description" content="{e(desc)}">\n<link rel="canonical" href="{SITE}{path}">\n'
                                       f'<style>{STYLE}{css}</style>{BEACON}</head>\n<body>{nav("/advisories/")}\n<main>\n')
     run = '<pre><code>curl -fsSL https://amiaffected.now/run | sh</code></pre>'
+    def title_name(a):  # "WordPress: s2Member" reads better in a search result as "the s2Member WordPress plugin"
+        n = a["name"]
+        return f"the {n.split(': ', 1)[1]} WordPress plugin" if n.startswith("WordPress: ") else n
+
+    def description(a):
+        """Under 160 characters: the CVE and the fixed version, which are what people search for."""
+        cves = a.get("cves", [])
+        what = f"{cves[0]}{f' and {len(cves) - 1} more' if len(cves) > 1 else ''}" if cves else f"the bad release {', '.join(a.get('bad', []))}".rstrip()
+        fixed = a.get("upstream_fixed") or (a["fixed"] if isinstance(a.get("fixed"), list) else None)
+        fixed = f" Fixed in {', '.join(fixed[:3])}." if fixed else f" Last safe release: {a['safe']}." if a.get("safe") else ""
+        tail = " One command checks it; nothing to install."
+        d = f"Check whether {title_name(a)} on your machine is affected by {what}.{fixed}"
+        return d + tail if len(d + tail) <= 160 else d if len(d) <= 160 else d[:157].rsplit(" ", 1)[0] + "…"
+
     out, items = {}, ""
     for (a, kind), sl in zip(advs, slugs):
         path = f"/advisories/{sl}/"
         cves = '<ul class="cves">' + "".join(f"<li>{nvd(c)}</li>" for c in a.get("cves", [])) + "</ul>" if a.get("cves") else ""
         out[f"advisories/{sl}/index.html"] = (
-            head(f"Am I affected by {a['name']}? · Am I affected?", f"{a['name']}: {a['about']}"[:300], path)
+            head(f"Am I affected by {title_name(a)}? · Am I affected?", description(a), path)
             + f'<p class="muted"><a href="/advisories/">Advisories</a> · {kind}</p>\n<h1>{e(a["name"])}</h1>\n<p class="lede">{e(a["about"][0].upper() + a["about"][1:])}.</p>\n{cves}\n'
             + f'<dl class="facts">{facts(a)}<dt>Source</dt><dd><a href="{e(a["source"])}">{e(a["source"])}</a></dd></dl>\n'
             + f'<h2>Check this machine</h2>\n<p>One command checks this and every other advisory against what is installed. Nothing about this machine is sent anywhere.</p>\n{run}\n{foot}\n</main></body></html>\n')
