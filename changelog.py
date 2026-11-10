@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Writes the generated pages: changelog/index.html and changelog.xml (RSS) from changelog.json, newest
-first, and watchlist/index.html (agent skills, MCP servers and extensions someone has flagged) from advisories.json.
+first, watchlist/index.html (agent skills, MCP servers and extensions someone has flagged), one page per advisory
+under advisories/ and sitemap.xml, all from advisories.json.
 
 Add an entry to changelog.json with each change, run `python3 changelog.py`, commit the outputs.
 CI runs `python3 changelog.py --check`, which fails if any page or the feed is out of date.
@@ -65,7 +66,87 @@ def render(entries):
 <description>Every check added to Am I affected?, newest first.</description>
 {items}</channel></rss>
 """
-    return {"changelog/index.html": page, "changelog.xml": feed, "watchlist/index.html": watchlist()}
+    return {"changelog/index.html": page, "changelog.xml": feed, "watchlist/index.html": watchlist(), **advisory_pages()}
+
+
+def slug(name):
+    return re.sub(r"[^a-z0-9]+", "-", name.lower()).strip("-")
+
+
+def advisory_pages():
+    """advisories/<slug>/index.html for every version, server-package and library check, an index, and sitemap.xml.
+    Only what advisories.json says, worded as the tool reports it, so a page never claims more than the tool checks."""
+    from secinspect import ADVISORIES
+    e = html.escape
+    kinds = [("versions", "App"), ("distro", "Linux server package"), ("packages", "Library or package")]
+    advs = [(a, kind) for key, kind in kinds for a in ADVISORIES[key]] + [(ADVISORIES["chromium_cache"], "Agent browser")]
+    slugs = [slug(a["name"]) for a, _ in advs]
+    assert len(set(slugs)) == len(slugs), "two advisories share a page name"
+    nvd = lambda c: f'<a href="https://nvd.nist.gov/vuln/detail/{e(c)}">{e(c)}</a>'
+    nofix = lambda v: "no fix yet" if v == "unfixed" else v
+    distro = {"ubuntu": "Ubuntu", "debian": "Debian", "el": "RHEL family", "alma": "AlmaLinux", "rocky": "Rocky", "ol": "Oracle Linux"}
+    rel_name = lambda r: " ".join([distro.get(r.split(":")[0], r.split(":")[0]), *r.split(":")[1:]])
+    code = lambda xs: ", ".join(f"<code>{e(x)}</code>" for x in xs)
+
+    def facts(a):
+        rows = []
+        if a.get("fixed") and isinstance(a["fixed"], list):
+            rows.append(("Fixed in", code(a["fixed"]) + (" (older branches get no fix: move to a listed one)" if a.get("branch_width") else "")))
+        for lo, hi, fix, *only in a.get("affected", []):
+            rows.append(("Affected", f"<code>{e(lo)}</code> to <code>{e(hi)}</code>{' on ' + e(only[0]) if only else ''}: {e(fix)}"))
+        if a.get("upstream_fixed"):
+            rows.append(("Fixed upstream in", code(a["upstream_fixed"])))
+        if isinstance(a.get("fixed"), dict):
+            cells = "".join(f"<tr><td>{e(rel_name(rel))}</td><td>{'' if isinstance(v, str) else e(pkg)}</td><td><code>{e(nofix(v if isinstance(v, str) else fx))}</code></td></tr>"
+                            for rel, v in a["fixed"].items() for pkg, fx in ([("", v)] if isinstance(v, str) else v.items()))
+            rows.append(("Fixed packages", f"<div class=\"tw\"><table><tr><th>Release</th><th>Package</th><th>Fixed in</th></tr>{cells}</table></div>"))
+        if a.get("bad"):
+            rows.append(("Bad versions", code(a["bad"]) + (f"; safe: <code>{e(a['safe'])}</code>" if a.get("safe") else "")))
+        if a.get("bad_range"):
+            rows.append(("Affected", f"<code>{e(a['bad_range'][0])}</code> to <code>{e(a['bad_range'][1])}</code>"))
+        if a.get("present_paths"):
+            rows.append(("Status", f"REVIEW whenever it's installed: {e(a['review_note'])}"))
+        if a.get("status") == "REVIEW":
+            rows.append(("Status", "REVIEW, not AFFECTED: a person needs to look"))
+        where = ([f"<code>{e(a['binary'])} {e(a['flag'])}</code>"] if a.get("binary") else []) + \
+                [f"<code>{e(p)}</code>" for p in a.get("globs", []) + a.get("version_files", []) + ([a["version_file"]] if a.get("version_file") else []) + a.get("present_paths", []) + a.get("dirs", [])] + \
+                [f"{e(fam)} package <code>{e(p)}</code>" for fam in ("deb", "rpm", "brew") for p in a.get(f"{fam}_packages", [])] + \
+                ([f"{e(a.get('ecosystem', 'pypi'))} package <code>{e(a['package'])}</code> in environments and lock files"] if a.get("package") else [])
+        if where:
+            rows.append(("Where it looks", "<br>".join(where)))
+        todo = a.get("cleanup") or a.get("after_fix")
+        if a.get("mitigation"):
+            rows.append(("Until you can update", e(a["mitigation"])))
+        if todo:
+            rows.append(("After fixing" if a.get("after_fix") else "Do this", e(todo)))
+        return "".join(f"<dt>{k}</dt><dd>{v}</dd>" for k, v in rows)
+
+    css = """.facts{display:grid;grid-template-columns:9rem 1fr;gap:.5rem 1rem;margin:1.5rem 0}.facts dt{color:var(--muted)}.facts dd{margin:0;min-width:0;overflow-wrap:anywhere}.tw{overflow-x:auto}
+.facts table{border-collapse:collapse;font-size:14px}.facts td,.facts th{border-bottom:1px solid var(--line);padding:.2rem .8rem .2rem 0;text-align:left}
+.cves{display:flex;flex-wrap:wrap;gap:.3rem .9rem;list-style:none;padding:0;font:14px ui-monospace,monospace}
+.alist{padding-left:1.1rem}.alist li{margin:.5rem 0}@media (max-width:560px){.facts{grid-template-columns:1fr;gap:0}.facts dd{margin-bottom:.6rem}}"""
+    foot = (f'<footer>Built and maintained by <a href="https://avagama.co/services/?utm_source=amiaffected.now&amp;utm_medium=footer#security">Avagama Consulting</a>, '
+            f'who also test agents and MCP servers for security. Generated from <a href="/advisories.json">advisories.json</a>, the same data the tool reads.</footer>')
+    head = lambda title, desc, path: (f'<!doctype html>\n<html lang="en"><head><meta charset="utf-8">\n<meta name="viewport" content="width=device-width, initial-scale=1">\n'
+                                      f'<title>{e(title)}</title>\n<meta name="description" content="{e(desc)}">\n<link rel="canonical" href="{SITE}{path}">\n'
+                                      f'<style>{STYLE}{css}</style>{BEACON}</head>\n<body>{nav("/advisories/")}\n<main>\n')
+    run = '<pre><code>curl -fsSL https://amiaffected.now/run | sh</code></pre>'
+    out, items = {}, ""
+    for (a, kind), sl in zip(advs, slugs):
+        path = f"/advisories/{sl}/"
+        cves = '<ul class="cves">' + "".join(f"<li>{nvd(c)}</li>" for c in a.get("cves", [])) + "</ul>" if a.get("cves") else ""
+        out[f"advisories/{sl}/index.html"] = (
+            head(f"Am I affected by {a['name']}? · Am I affected?", f"{a['name']}: {a['about']}"[:300], path)
+            + f'<p class="muted"><a href="/advisories/">Advisories</a> · {kind}</p>\n<h1>{e(a["name"])}</h1>\n<p class="lede">{e(a["about"][0].upper() + a["about"][1:])}.</p>\n{cves}\n'
+            + f'<dl class="facts">{facts(a)}<dt>Source</dt><dd><a href="{e(a["source"])}">{e(a["source"])}</a></dd></dl>\n'
+            + f'<h2>Check this machine</h2>\n<p>One command checks this and every other advisory against what is installed. Nothing about this machine is sent anywhere.</p>\n{run}\n{foot}\n</main></body></html>\n')
+        items += f'<li><a href="{path}">{e(a["name"])}</a> <span class="muted">· {kind}</span><br><span class="muted">{e(a["about"][:160])}{"…" if len(a["about"]) > 160 else ""}</span></li>\n'
+    out["advisories/index.html"] = (head("Advisories · Am I affected?", "Every vulnerability Am I affected? checks for, one page each: what's affected, the fixed versions and where the tool looks.", "/advisories/")
+                                    + f'<h1>Advisories</h1>\n<p>Every advisory the tool checks, one page each: what is affected, the fixed versions and where it looks. Agent skills and MCP servers are on the <a href="/watchlist/">watchlist</a>.</p>\n{run}\n<ul class="alist">\n{items}</ul>\n{foot}\n</main></body></html>\n')
+    urls = ["/", "/changelog/", "/watchlist/", "/advisories/"] + [f"/advisories/{sl}/" for sl in slugs]
+    out["sitemap.xml"] = ('<?xml version="1.0" encoding="UTF-8"?>\n<!-- Generated by changelog.py from advisories.json: edit the URL list there, not here. -->\n'
+                          '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n' + "".join(f"  <url><loc>{SITE}{u}</loc></url>\n" for u in urls) + "</urlset>\n")
+    return out
 
 
 def watchlist():
@@ -172,6 +253,6 @@ if __name__ == "__main__":
         stale = [p for p, text in out.items() if not (ROOT / p).exists() or (ROOT / p).read_text() != text]
         sys.exit(f"out of date, run python3 changelog.py: {', '.join(stale)}" if stale else 0)
     for p, text in out.items():
-        (ROOT / p).parent.mkdir(exist_ok=True)
+        (ROOT / p).parent.mkdir(parents=True, exist_ok=True)
         (ROOT / p).write_text(text)
     print("wrote", ", ".join(out))

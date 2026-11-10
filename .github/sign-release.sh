@@ -33,10 +33,10 @@ else
   echo "Signed and committed."
 fi
 
-if [ -z "$(git log --oneline origin/main..HEAD)" ]; then
+if [ -z "$(git --no-pager log --oneline origin/main..HEAD)" ]; then
   echo "Nothing to push."; exit 0
 fi
-echo; echo "About to push:"; git log --oneline origin/main..HEAD
+echo; echo "About to push:"; git --no-pager log --oneline origin/main..HEAD
 printf "Push to GitHub? [y/N] "; read -r a
 [ "$a" = y ] || [ "$a" = Y ] || { echo "Not pushed."; exit 0; }
 git push
