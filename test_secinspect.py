@@ -233,7 +233,9 @@ def test_chrome():
     assert status("Google Chrome / Chromium", (153, 0, 8010, 35)) == "AFFECTED"
     assert status("Google Chrome / Chromium", (155, 0, 8059, 39)) == "AFFECTED"  # Oct 27 critical fixes
     assert status("Google Chrome / Chromium", (156, 0, 8078, 81)) == "AFFECTED"  # Nov 3 critical fixes
-    assert status("Google Chrome / Chromium", (157, 0, 8103, 38)) == "OK"
+    assert status("Google Chrome / Chromium", (157, 0, 8103, 38)) == "AFFECTED"  # CVE-2026-125350, exploited
+    assert status("Google Chrome / Chromium", (157, 0, 8103, 50)) == "OK"
+    assert version_status(CHROMIUM, (157, 0, 8103, 49))[0] == "AFFECTED"
     assert version_status(CHROMIUM, (142, 0, 7444, 175))[0] == "AFFECTED"
     assert version_status(CHROMIUM, (156, 0, 8078, 47))[0] == "AFFECTED"  # Puppeteer 25.16.0's build
     assert version_status(CHROMIUM, (156, 0, 8078, 73))[0] == "AFFECTED"
