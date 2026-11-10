@@ -227,6 +227,31 @@ def test_web_apps():
     assert got == {"old": "AFFECTED", "new": "OK", "ancient": "AFFECTED"}, got
 
 
+def test_zero_day():
+    import importlib.util
+    spec = importlib.util.spec_from_file_location("watch", os.path.join(os.path.dirname(os.path.abspath(__file__)), ".github", "watch.py"))
+    w = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(w)
+    post = lambda day, title, html: {"published": {"$t": day + "T10:00:00Z"}, "title": {"$t": title}, "content": {"$t": html},
+                                     "link": [{"rel": "alternate", "href": "https://c/" + day}]}
+    feed = {"feed": {"entry": [
+        post("2026-11-09", "Stable Channel Update for Desktop", "<p>High CVE-2026-1: UAF in XML.</p> Google is aware that an exploit for CVE-2026-125350 exists in the wild."),
+        post("2026-11-09", "Stable Channel Update for Desktop", "High CVE-2026-2: no exploit statement."),
+        post("2026-11-01", "Stable Channel Update for Desktop", "Google is aware that an exploit for CVE-2026-9 exists in the wild."),  # too old
+        post("2026-11-09", "Chrome Beta for Android Update", "an exploit for CVE-2026-8 exists in the wild")]}}  # not desktop
+    assert [c for c, _, _ in w.chrome_exploited(feed, "2026-11-07")] == ["CVE-2026-125350"]
+    index = ('<tr><td><a href="https://support.apple.com/en-us/1" class="x">macOS Tahoe 26.7.3</a></td><td>macOS</td><td>09 Nov 2026</td></tr>'
+             '<tr><td><a href="https://support.apple.com/en-us/2">iOS 18.7.9</a></td><td>iPhone</td><td>01 Oct 2026</td></tr>')
+    assert w.apple_index(index, "2026-11-07") == [("https://support.apple.com/en-us/1", "macOS Tahoe 26.7.3")]
+    note = ("<p>WebKit</p><p>Impact: Processing web content may lead to code execution. Apple is aware of a report that this issue "
+            "may have been exploited.</p><p>CVE-2026-86950: anon</p><p>Kernel</p><p>Impact: An app may gain root.</p><p>CVE-2026-86951</p>")
+    assert w.apple_exploited(note) == ["CVE-2026-86950"]
+    yml = ("announced: November 9, 2026\nadvisories:\n  CVE-2026-7:\n    title: UAF\n    description: |\n      We have had reports of this "
+           "vulnerability being exploited in the wild\n  CVE-2026-6:\n    description: |\n      We are aware that exploit code for this is "
+           "public however we are not aware of any attacks in the wild abusing this flaw\n")
+    assert w.mozilla_exploited(yml) == ["CVE-2026-7"]
+
+
 def test_chrome():
     assert ver("Google Chrome for Testing 153.0.8010.12") == (153, 0, 8010, 12)
     assert ver("v24.22.1") == (24, 22, 1)
@@ -730,6 +755,7 @@ if __name__ == "__main__":
     test_postgres()
     test_queue_nov3()
     test_chrome()
+    test_zero_day()
     test_mcp()
     test_distro()
     test_web_apps()

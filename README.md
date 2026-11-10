@@ -293,6 +293,12 @@ advisory in `source`. Each release is signed by the maintainer before it goes ou
 and CI fails if a `.sig` doesn't match its file. Every 6 hours a scheduled job also checks the files
 the site is serving and opens an issue if they don't verify.
 
+The same job looks for CVEs the tool doesn't check yet and opens a `queue` issue for each: newly
+exploited ones from CISA's KEV list, new ones in the cve.now feed for every tech already tracked, and
+zero-days, which are bugs the vendor's own release notes say are exploited (Chrome Releases, Apple
+security releases, Mozilla advisories). Zero-days often reach KEV days later, so they get a
+`zero-day` label and go to the top of the queue.
+
 ## Not covered (yet)
 
 - Chrome's own root store (Chrome updates itself; check `chrome://version`)

@@ -11,7 +11,9 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - run: gh label create queue --color 0e8a16 --description "CVE to add to the tool" --force
+      - run: |
+          gh label create queue --color 0e8a16 --description "CVE to add to the tool" --force
+          gh label create zero-day --color b60205 --description "Vendor says it's exploited: add first" --force
         env:
           GH_TOKEN: ${{ github.token }}
       - run: python3 .github/watch.py
