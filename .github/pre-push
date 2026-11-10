@@ -1,20 +1,27 @@
 #!/bin/sh
 # Git pre-push hook: refuse to push a commit whose secinspect.py / advisories.json don't match their
 # signatures, so an unsigned release can't go live by riding along with another push.
+# The key comes from the already-published secinspect.py (origin/main), not from the commit being pushed,
+# so a commit that swaps in a new key and signs with it is refused too. Rotating the key on purpose:
+# push that one commit with --no-verify.
 # Install: sh .github/sign-release.sh --install-hook
 zero=0000000000000000000000000000000000000000
+k=$(mktemp -d)
+git show origin/main:secinspect.py > "$k/secinspect.py" 2>/dev/null && git show origin/main:advisories.json > "$k/advisories.json" 2>/dev/null \
+  || { git show HEAD:secinspect.py > "$k/secinspect.py"; git show HEAD:advisories.json > "$k/advisories.json"; }  # first push: no origin/main yet
 while read -r _ sha _ _; do
   [ "$sha" = "$zero" ] && continue  # deleting a branch
   d=$(mktemp -d)
   for f in secinspect.py advisories.json secinspect.py.sig advisories.json.sig; do
     git show "$sha:$f" > "$d/$f" 2>/dev/null || true
   done
-  if ! python3 -I -c "import sys; sys.path.insert(0, sys.argv[1]); import secinspect as s; sys.exit(0 if s.release_signed(sys.argv[1]) else 1)" "$d" 2>/dev/null; then
-    rm -rf "$d"
-    echo "Push refused: secinspect.py / advisories.json at $(git rev-parse --short "$sha") aren't signed."
+  if ! python3 -I -c "import sys; sys.path.insert(0, sys.argv[1]); import secinspect as s; sys.exit(0 if s.release_signed(sys.argv[2]) else 1)" "$k" "$d" 2>/dev/null; then
+    rm -rf "$d" "$k"
+    echo "Push refused: secinspect.py / advisories.json at $(git rev-parse --short "$sha") aren't signed by the published release key."
     echo "Ask Abhay to run: sh .github/sign-release.sh"
     exit 1
   fi
   rm -rf "$d"
 done
+rm -rf "$k"
 exit 0

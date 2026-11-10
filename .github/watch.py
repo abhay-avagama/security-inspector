@@ -176,7 +176,12 @@ def main(argv):
     known = known_cves()
     since = (date.today() - timedelta(days=args.days)).isoformat()
     zsince = (date.today() - timedelta(days=3)).isoformat()  # vendor notes are same-day; KEV can lag weeks
-    cands = zero_day_candidates(zsince, known) + kev_candidates(get(KEV_URL), since, known) + feed_candidates(known)
+    try:
+        kev = kev_candidates(get(KEV_URL), since, known)
+    except Exception as e:  # don't let CISA being down stop the zero-day and feed checks (or the signature step after)
+        print(f"skip CISA KEV: {e}", file=sys.stderr)
+        kev = []
+    cands = zero_day_candidates(zsince, known) + kev + feed_candidates(known)
     seen = set()
     for c in cands:
         if c["cve"] in seen:
