@@ -10,7 +10,7 @@ import tempfile
 
 from secinspect import (ADVISORIES, AAA, CHROMIUM, INTERMEDIATES, MCP, ROOTS, agent_config_rows, by_branch, check_hooks, check_iocs, check_skill_changes, watch_diff, watch_message, check_skills, skill_file_findings, chain_accepts, check_mcp, env_rows, ssh_key_encrypted, unpinned, check_overrides, check_version,
                         chromium_version, distro_status, fix_for, installed, inspect_file, ver,
-                        fix_hint, fix_plan, html_report, new_cves, nums, os_release, pem, roots_in, scan_files,
+                        fix_hint, fix_plan, html_report, share_line, new_cves, nums, os_release, pem, roots_in, scan_files,
                         scan_image_tar, test_bundle, upstream, version_status)
 
 PHP = [(8, 5, 12), (8, 4, 27), (8, 3, 36), (8, 2, 35)]
@@ -132,6 +132,7 @@ def test_scan_files():
         expected(rows)
         assert rows[-1][1].startswith("1 app CA bundles"), rows[-1]
         html_report(rows, f"{d}/r.html")
+        assert "Pass it on" in open(f"{d}/r.html").read() and "amiaffected.now/run" in open(f"{d}/r.html").read()
         assert "cook.pth" in open(f"{d}/r.html").read()
 
 
@@ -266,6 +267,11 @@ def test_macos_firefox():
             open(f"{d}/{app}/c/application.ini", "w").write(body)
         rows = check_version({**ff, "version_files": [f"{d}/*/c/application.ini"]})
     assert [(r[2], r[3]) for r in rows] == [("153.6.0", "OK")]
+
+
+def test_share_line():
+    assert share_line([("x", "-", "1", "AFFECTED", "")]).startswith("Colleagues on the same setup")
+    assert share_line([("x", "-", "1", "OK", ""), ("y", "-", "-", "REVIEW", "")]).startswith("Nothing affected here")
 
 
 def test_chrome():
@@ -771,6 +777,7 @@ if __name__ == "__main__":
     test_postgres()
     test_queue_nov3()
     test_chrome()
+    test_share_line()
     test_macos_firefox()
     test_zero_day()
     test_mcp()

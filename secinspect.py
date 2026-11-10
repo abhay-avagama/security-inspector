@@ -1401,6 +1401,16 @@ def fix_plan(rows):
     return sorted(plan, key=lambda x: (STATUSES.index(x[0]), -x[3]))
 
 
+RUN_CMD = "curl -fsSL https://amiaffected.now/run | sh"
+
+
+def share_line(rows):
+    """The line that asks people to pass the check on: worded for whether anything here was affected."""
+    if any(r[3] == "AFFECTED" for r in rows):
+        return "Colleagues on the same setup are likely affected too. Send them the check: "
+    return "Nothing affected here. To check a colleague's laptop or a server, send them: "
+
+
 def html_report(rows, path):
     e = html.escape
     cls = lambda s: s.replace(" ", "")
@@ -1462,12 +1472,14 @@ summary{{cursor:pointer;padding:8px 0;display:flex;gap:8px;align-items:center;fl
 .leaves{{list-style:none;padding-left:14px;border-left:1px solid var(--line);margin:4px 0 10px}}
 .leaves li{{padding:6px 0;border-bottom:1px solid var(--line)}} .leaves li:last-child{{border-bottom:0}}
 .note{{color:var(--muted);font-size:13px;margin-top:3px}}
+.share{{background:var(--card);border:1px solid var(--line);border-radius:8px;padding:10px 12px;font:13px ui-monospace,monospace;overflow-x:auto}}
 .fix details summary{{color:var(--muted);font-size:12px}} .fix ul{{margin:6px 0 0;padding-left:18px}}
 </style></head><body><main><h1>Am I affected?</h1>
 <p class="sub">{e(platform.node())} · {e(platform.platform())} · {when}</p><div class="stats">{counts}</div>
 {fixhtml}
 <h2>Issues by component</h2>{tree}
-<h2>Advisories checked</h2><ul class="sources">{sources}</ul></main></body></html>""")
+<h2>Advisories checked</h2><ul class="sources">{sources}</ul>
+<h2>Pass it on</h2><p class="sub">{e(share_line(rows))}</p><pre class="share">{e(RUN_CMD)}</pre></main></body></html>""")
 
 
 FEED_URL = "https://cve.now/feed?tech={}&format=json"
@@ -2083,6 +2095,8 @@ def main(argv):
     widths = [max(len(str(r[i])) for r in rows) for i in range(4)]
     for r in rows:
         print("  ".join(str(c).ljust(w) for c, w in zip(r, widths)), r[4])
+    if not args.files_only:  # stderr, so the table on stdout stays clean for scripts; not in CI or cron
+        print("\n" + share_line(rows) + RUN_CMD, file=sys.stderr)
     if args.html:
         html_report(rows, args.html)
         print(f"Report written to {os.path.abspath(args.html)}", file=sys.stderr)
