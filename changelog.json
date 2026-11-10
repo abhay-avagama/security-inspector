@@ -1,4 +1,6 @@
 [
+  {"date": "2026-11-10", "commit": "da01f02", "title": "Chrome before 157.0.8103.50 is flagged",
+   "body": "Google fixed CVE-2026-125350, a use-after-free in Chrome's XML code that is being exploited, on 9 Nov in 157.0.8103.50. Older Chrome and Chromium, and the Puppeteer and Playwright browsers older than that, are now flagged. Update and relaunch the browser."},
   {"date": "2026-11-09", "commit": "dc74879", "title": "A second review of the tool's own code",
    "body": "A review against its own design notes found and fixed: --update now refuses an older signed script served beside newer signed data (advisories.json names the script's SHA-256); scanning a repo with a symlink to /dev/zero no longer reads forever; a vendor condition the tool can't judge can't produce a notice through negation; more kernel builds (64k, debug) are left to you by --fix; a torn audit-log line or a cut-off download no longer crashes the tool; when CISA's exploited list can't be loaded it says so; watch mode reports a second affected install of the same thing."},
   {"date": "2026-11-09", "commit": "c89df08", "title": "--fix leaves every kernel to you",

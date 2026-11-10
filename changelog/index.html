@@ -35,6 +35,10 @@ h2[id]{scroll-margin-top:4.5rem}
 <main>
 <h1>Changelog</h1>
 <p>What the tool checks, and when each check went live. New exploited bugs usually land within a day of disclosure. Follow along with the <a href="/changelog.xml">RSS feed</a>.</p>
+<h2 id="2026-11-10">10 November 2026</h2>
+<ul class="log">
+<li><b>Chrome before 157.0.8103.50 is flagged</b>. Google fixed CVE-2026-125350, a use-after-free in Chrome&#x27;s XML code that is being exploited, on 9 Nov in 157.0.8103.50. Older Chrome and Chromium, and the Puppeteer and Playwright browsers older than that, are now flagged. Update and relaunch the browser. <a class="muted" href="https://github.com/abhay-avagama/security-inspector/commit/da01f02">da01f02</a></li>
+</ul>
 <h2 id="2026-11-09">9 November 2026</h2>
 <ul class="log">
 <li><b>A second review of the tool&#x27;s own code</b>. A review against its own design notes found and fixed: --update now refuses an older signed script served beside newer signed data (advisories.json names the script&#x27;s SHA-256); scanning a repo with a symlink to /dev/zero no longer reads forever; a vendor condition the tool can&#x27;t judge can&#x27;t produce a notice through negation; more kernel builds (64k, debug) are left to you by --fix; a torn audit-log line or a cut-off download no longer crashes the tool; when CISA&#x27;s exploited list can&#x27;t be loaded it says so; watch mode reports a second affected install of the same thing. <a class="muted" href="https://github.com/abhay-avagama/security-inspector/commit/dc74879">dc74879</a></li>
