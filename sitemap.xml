@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- ponytail: no lastmod, so it never goes stale; add one if pages start being generated per advisory. -->
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
+  <url><loc>https://amiaffected.now/</loc></url>
+  <url><loc>https://amiaffected.now/changelog/</loc></url>
+  <url><loc>https://amiaffected.now/watchlist/</loc></url>
+</urlset>
