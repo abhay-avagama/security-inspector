@@ -5,3 +5,6 @@ __pycache__/
 
 # Marketing to-dos for this team, kept locally and never committed
 /marketing/
+# EGM design contract and drift reports: local review notes, not published
+EGM.md
+*_DRIFT_REPORT.md
