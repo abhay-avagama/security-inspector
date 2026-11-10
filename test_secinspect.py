@@ -252,6 +252,22 @@ def test_zero_day():
     assert w.mozilla_exploited(yml) == ["CVE-2026-7"]
 
 
+def test_macos_firefox():
+    assert status("macOS", (26, 7)) == "AFFECTED"  # CVE-2026-86950, exploited
+    assert status("macOS", (26, 7, 1)) == "OK" and status("macOS", (15, 8, 3)) == "OK" and status("macOS", (27, 2)) == "OK"
+    assert status("macOS", (14, 8, 4)) == "AFFECTED"  # Sonoma: no more fixes
+    assert status("Firefox", (159, 0)) == "AFFECTED" and status("Firefox", (159, 0, 1)) == "OK"
+    assert status("Firefox", (153, 6)) == "OK" and status("Firefox", (140, 17)) == "AFFECTED"  # ESR 140 is done
+    ff = next(a for a in ADVISORIES["versions"] if a["name"] == "Firefox")
+    with tempfile.TemporaryDirectory() as d:
+        for app, body in (("Firefox", "[App]\nVendor=Mozilla\nName=Firefox\nRemotingName=firefox-esr\nVersion=153.6.0\n"),
+                          ("Thunderbird", "[App]\nName=Thunderbird\nVersion=60.0\n")):
+            os.makedirs(f"{d}/{app}/c")
+            open(f"{d}/{app}/c/application.ini", "w").write(body)
+        rows = check_version({**ff, "version_files": [f"{d}/*/c/application.ini"]})
+    assert [(r[2], r[3]) for r in rows] == [("153.6.0", "OK")]
+
+
 def test_chrome():
     assert ver("Google Chrome for Testing 153.0.8010.12") == (153, 0, 8010, 12)
     assert ver("v24.22.1") == (24, 22, 1)
@@ -755,6 +771,7 @@ if __name__ == "__main__":
     test_postgres()
     test_queue_nov3()
     test_chrome()
+    test_macos_firefox()
     test_zero_day()
     test_mcp()
     test_distro()
