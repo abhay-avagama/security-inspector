@@ -26,6 +26,7 @@ header.top ul{display:flex;gap:.25rem;list-style:none;margin:0 0 0 auto;padding:
 header.top li a{display:block;padding:.35rem .5rem;border-radius:6px;font-size:15px;color:var(--muted);text-decoration:none;white-space:nowrap}
 header.top li a:hover{color:var(--fg);background:var(--code)}header.top li a[aria-current]{color:var(--fg);background:var(--code);font-weight:600}
 h2[id]{scroll-margin-top:4.5rem}
+.oss{border:1px solid var(--line);border-left:3px solid var(--accent);background:var(--code);border-radius:8px;padding:.9rem 1.1rem;margin:1.5rem 0}.oss p{margin:.5rem 0 0}.oss p.badges{margin:0}.badges{display:flex;flex-wrap:wrap;gap:.4rem}.badge{display:inline-flex;font:12px/1 ui-monospace,SFMono-Regular,Menlo,monospace;border-radius:4px;overflow:hidden;text-decoration:none;border:1px solid var(--line)}.badge span{padding:.3rem .45rem}.badge span:first-child{background:var(--fg);color:var(--bg)}.badge span:last-child{background:var(--bg);color:var(--fg);font-weight:600}a.badge:hover span:last-child{color:var(--accent)}
 @media (max-width:560px){header.top nav{flex-direction:column;align-items:stretch;height:auto;gap:0;padding:.55rem 16px .4rem}header.top ul{margin:.3rem -.5rem 0;gap:0;flex-wrap:wrap}header.top li a{padding:.3rem .5rem;font-size:14.5px}}
 </style>
 <!-- Cloudflare Web Analytics --><script type='module' src='https://static.cloudflareinsights.com/beacon.min.js' data-cf-beacon='{"token": "80f6571899284bf291a1308fcd194bde"}'></script><!-- End Cloudflare Web Analytics --></head>
@@ -35,7 +36,10 @@ h2[id]{scroll-margin-top:4.5rem}
 <main>
 <h1>Am I affected?</h1>
 <p>One Python file that checks your machine for the Chrome bugs being exploited right now, the old browsers Puppeteer and Playwright leave behind, and the October 2026 PHP, Node.js, BIND, LiteLLM, GitLab and eMudhra issues, and tells you what to do about each one.</p>
-<p><strong>Open source, so read it before you run it.</strong> Every line of the scanner, its advisory data and its tests is on <a href="https://github.com/abhay-avagama/security-inspector">GitHub</a> under the MIT licence, and each release is signed. No dependencies, and nothing about your machine is sent anywhere. Python 3.8+ on macOS or Linux.</p>
+<div class="oss">
+<p class="badges"><a class="badge" href="https://github.com/abhay-avagama/security-inspector"><span>source</span><span>GitHub</span></a><a class="badge" href="https://github.com/abhay-avagama/security-inspector/blob/main/LICENSE"><span>licence</span><span>MIT</span></a><a class="badge" href="https://github.com/abhay-avagama/security-inspector#install-it-with-signed-updates"><span>releases</span><span>signed</span></a><span class="badge"><span>python</span><span>3.8+</span></span><span class="badge"><span>dependencies</span><span>none</span></span></p>
+<p><strong>Open source, so read it before you run it.</strong> Every line of the scanner, its advisory data and its tests is on <a href="https://github.com/abhay-avagama/security-inspector">GitHub</a>. Nothing about your machine is sent anywhere. Runs on macOS or Linux.</p>
+</div>
 
 <div class="run"><pre id="cmd">curl -fsSL https://amiaffected.now/run | sh</pre><button type="button" onclick="navigator.clipboard.writeText(document.getElementById('cmd').textContent).then(()=>{this.textContent='Copied'})">Copy</button></div>
 <p class="muted">Rather read it first? <a href="/run">run</a> is ten lines; it fetches <a href="/secinspect.py">secinspect.py</a> and <a href="/advisories.json">advisories.json</a> into a temp folder and runs them. Pass options after <code>sh -s --</code>:</p>
