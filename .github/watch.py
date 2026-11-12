@@ -132,6 +132,20 @@ def kev_candidates(kev, since, known):
     return out
 
 
+def kev_digest(kev, today, known):
+    """One issue a week listing what CISA added that matched none of WATCH: the gaps no other check would raise."""
+    monday = today - timedelta(days=today.weekday())
+    week = [v for v in kev["vulnerabilities"] if (monday - timedelta(days=7)).isoformat() <= v["dateAdded"] < monday.isoformat()
+            and v["cveID"] not in known and not any(w in f'{v["vendorProject"]} {v["product"]}'.lower() for w in WATCH)]
+    if not week:
+        return []
+    label = f"KEV week of {(monday - timedelta(days=7)).isoformat()}"
+    return [{"cve": label, "title": f"{len(week)} exploited bug(s) in software we don't watch",
+             "why": "Added to CISA KEV last week, outside the WATCH keywords. Add a check, or a keyword, for any that run on laptops "
+                    "or servers our users have; close the rest.",
+             "detail": "\n".join(f'- {v["cveID"]} {v["vendorProject"]} {v["product"]}: {v["vulnerabilityName"]}' for v in week),
+             "fix": "", "source": "https://www.cisa.gov/known-exploited-vulnerabilities-catalog"}]
+
 def feed_candidates(known):
     out = []
     for adv in ADVISORIES["versions"]:
@@ -203,7 +217,8 @@ def main(argv):
     since = (date.today() - timedelta(days=args.days)).isoformat()
     zsince = (date.today() - timedelta(days=3)).isoformat()  # vendor notes are same-day; KEV can lag weeks
     try:
-        kev = kev_candidates(get(KEV_URL), since, known)
+        catalog = get(KEV_URL)
+        kev = kev_candidates(catalog, since, known) + kev_digest(catalog, date.today(), known)
     except Exception as e:  # don't let CISA being down stop the zero-day and feed checks (or the signature step after)
         print(f"skip CISA KEV: {e}", file=sys.stderr)
         kev = []

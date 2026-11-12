@@ -262,6 +262,14 @@ def test_zero_day():
              "... Microsoft Edge for Stable (Version 156.0.4314.58)")
     assert w.awaiting_candidates(notes, edge) == []  # Android alone isn't the desktop fix
     assert w.awaiting_candidates("Microsoft Edge for Stable (Version 157.0.4341.61) " + notes, edge)[0]["cve"] == "Microsoft Edge 157.0.4341.61"
+    from datetime import date
+    kev = {"vulnerabilities": [
+        {"cveID": "CVE-2026-1", "vendorProject": "Acme", "product": "Router", "vulnerabilityName": "RCE", "dateAdded": "2026-11-04"},
+        {"cveID": "CVE-2026-2", "vendorProject": "Google", "product": "Chromium V8", "vulnerabilityName": "UAF", "dateAdded": "2026-11-05"},  # watched
+        {"cveID": "CVE-2026-3", "vendorProject": "Acme", "product": "VPN", "vulnerabilityName": "Auth bypass", "dateAdded": "2026-11-10"}]}  # this week
+    d = w.kev_digest(kev, date(2026, 11, 13), set())
+    assert d[0]["cve"] == "KEV week of 2026-11-02" and "CVE-2026-1" in d[0]["detail"] and "CVE-2026-2" not in d[0]["detail"] and "CVE-2026-3" not in d[0]["detail"]
+    assert w.kev_digest(kev, date(2026, 11, 13), {"CVE-2026-1"}) == []
 
 
 def test_macos_firefox():
