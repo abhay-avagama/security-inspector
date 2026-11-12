@@ -306,6 +306,69 @@ def test_electron_edge_brave():
     assert status("Brave", (1, 100, 51)) == "AFFECTED" and status("Brave", (1, 101, 47)) == "OK"
 
 
+def test_osv():
+    import secinspect as si
+    L = si.lock_packages
+    assert L("a/package-lock.json", b'{"packages": {"": {"version": "1.0.0"}, "node_modules/lodash": {"version": "4.17.20"}, '
+             b'"node_modules/a/node_modules/@scope/x": {"version": "2.0.0"}}}') == {("npm", "lodash", "4.17.20"), ("npm", "@scope/x", "2.0.0")}
+    assert L("requirements-dev.txt", b"requests==2.19.0\nflask>=2\nuvicorn[standard]==0.30.1  # pinned\n") == {("PyPI", "requests", "2.19.0"), ("PyPI", "uvicorn", "0.30.1")}
+    assert L("uv.lock", b'[[package]]\nname = "jinja2"\nversion = "3.1.2"\nsource = {}\n') == {("PyPI", "jinja2", "3.1.2")}
+    assert L("Cargo.lock", b'[[package]]\nname = "hyper"\nversion = "0.14.10"\n') == {("crates.io", "hyper", "0.14.10")}
+    assert L("go.sum", b"golang.org/x/net v0.17.0 h1:abc=\ngolang.org/x/net v0.17.0/go.mod h1:def=\n") == {("Go", "golang.org/x/net", "v0.17.0")}
+    assert L("pnpm-lock.yaml", b"packages:\n\n  /lodash@4.17.20:\n    resolution: {}\n  '@babel/core@7.24.0':\n    resolution: {}\n"
+             b"  react-dom@18.2.0(react@18.2.0):\n") == {("npm", "lodash", "4.17.20"), ("npm", "@babel/core", "7.24.0"), ("npm", "react-dom", "18.2.0")}
+    assert L("yarn.lock", b'lodash@^4.17.0, lodash@^4.17.20:\n  version "4.17.20"\n\n"@babel/core@npm:^7.0.0":\n  version: 7.24.0\n') == \
+        {("npm", "lodash", "4.17.20"), ("npm", "@babel/core", "7.24.0")}
+    assert L("bun.lock", b'{"packages": {"lodash": ["lodash@4.17.20", "", {}, "sha512-x"]}}') == {("npm", "lodash", "4.17.20")}
+    assert L("Pipfile.lock", b'{"default": {"django": {"version": "==3.2.0"}}, "develop": {"x": {"version": "*"}}}') == {("PyPI", "django", "3.2.0")}
+    assert L("package-lock.json", b"not json") == set()
+
+    vulns = {"GHSA-1": {"aliases": ["CVE-2021-23337"], "database_specific": {"severity": "HIGH"},
+                        "affected": [{"package": {"name": "lodash"}, "ranges": [{"events": [{"introduced": "0"}, {"fixed": "4.17.21"}]}]}]},
+             "GHSA-2": {"database_specific": {"severity": "MODERATE"},
+                        "affected": [{"package": {"name": "lodash"}, "ranges": [{"events": [{"fixed": "3.0.0"}, {"introduced": "4.0.0"}, {"fixed": "4.17.12"}]}]}]},
+             "PYSEC-3": {"affected": [{"package": {"name": "python-jose"}, "ranges": [{"events": [{"fixed": "3.5.1"}]}]}]}}
+    sent = []
+    def fake(url, body=None):
+        if body is None:
+            return vulns[url.rsplit("/", 1)[1]]
+        sent.append(body)
+        hits = {"lodash": ["GHSA-1", "GHSA-2"], "python_jose": ["PYSEC-3"]}
+        return {"results": [{"vulns": [{"id": i} for i in hits.get(q["package"]["name"], [])]} for q in body["queries"]]}
+    with tempfile.TemporaryDirectory() as d:
+        open(f"{d}/package-lock.json", "w").write('{"packages": {"node_modules/lodash": {"version": "4.17.20"}, "node_modules/ms": {"version": "2.1.3"}}}')
+        si.FOUND_LOCKFILES.clear(); si.FOUND_DIST_INFO.clear()
+        si.FOUND_LOCKFILES.add(f"{d}/package-lock.json")
+        si.FOUND_DIST_INFO.add((f"{d}/site-packages", "python_jose", "3.5.0"))
+        rows = {r[2]: r for r in si.check_osv(fetch=fake)}
+        assert rows["npm lodash 4.17.20"][3] == "AFFECTED" and "fixed in 4.17.21" in rows["npm lodash 4.17.20"][4], rows
+        assert "CVE-2021-23337" in rows["npm lodash 4.17.20"][4] and "(high)" in rows["npm lodash 4.17.20"][4]
+        assert rows["PyPI python_jose 3.5.0"][3] == "REVIEW" and "fixed in 3.5.1" in rows["PyPI python_jose 3.5.0"][4]  # unrated
+        assert "npm ms 2.1.3" not in rows and len(sent[0]["queries"]) == 3
+        assert si.check_osv(fetch=lambda u, b=None: (_ for _ in ()).throw(OSError("offline")))[0][3] == "UNKNOWN"
+        si.FOUND_LOCKFILES.clear(); si.FOUND_DIST_INFO.clear()
+        assert si.check_osv(fetch=fake)[0][3] == "NOT FOUND"
+    assert "lockfile" in fix_for(si.OSV_ITEM, "/x/package-lock.json")[1]
+
+
+def test_dev_tools():
+    assert status("Python", (3, 13, 17)) == "AFFECTED" and status("Python", (3, 13, 18)) == "OK" and status("Python", (3, 15, 2)) == "OK"
+    assert status("Python", (3, 10, 22)) == "AFFECTED"  # end-of-life
+    assert status("Git", (2, 56, 0)) == "AFFECTED" and status("Git", (2, 56, 1)) == "OK" and status("Git", (2, 50, 2)) == "OK"
+    assert status("Git", (2, 49, 1)) == "AFFECTED"  # no fix below 2.50
+    assert status("curl", (8, 22, 0)) == "AFFECTED" and status("curl", (8, 23, 0)) == "OK" and status("curl", (8, 11, 1)) == "OK"
+    assert status("curl", (8, 20, 2)) == "OK" and status("curl", (8, 20, 1)) == "AFFECTED"  # 8.20.x backport
+    with tempfile.TemporaryDirectory() as d:  # distro copies under /usr/bin are left to the vendor notices
+        fake = f"{d}/python3"
+        open(fake, "w").write("#!/bin/sh\necho Python 3.12.3\n")
+        os.chmod(fake, 0o755)
+        py = {**ADV["Python"], "binary": "no-such-binary", "globs": [fake]}
+        assert [r[3] for r in check_version(py)] == ["AFFECTED"]
+        assert check_version({**py, "skip_prefixes": [os.path.realpath(d)]})[0][3] == "NOT FOUND"
+    assert fix_for("Git", "/Library/Developer/CommandLineTools/usr/bin/git")[1].startswith("softwareupdate")
+    assert fix_for("Git", "/opt/homebrew/Cellar/git/2.56.0/bin/git")[1] == "brew upgrade git"
+
+
 def test_share_line():
     assert share_line([("x", "-", "1", "AFFECTED", "")]).startswith("Colleagues on the same setup")
     assert share_line([("x", "-", "1", "OK", ""), ("y", "-", "-", "REVIEW", "")]).startswith("Nothing affected here")
@@ -815,6 +878,8 @@ if __name__ == "__main__":
     test_queue_nov3()
     test_chrome()
     test_electron_edge_brave()
+    test_osv()
+    test_dev_tools()
     test_share_line()
     test_macos_firefox()
     test_zero_day()

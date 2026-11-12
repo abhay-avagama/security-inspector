@@ -7,6 +7,9 @@
   <url><loc>https://amiaffected.now/advisories/</loc></url>
   <url><loc>https://amiaffected.now/advisories/php/</loc></url>
   <url><loc>https://amiaffected.now/advisories/node-js/</loc></url>
+  <url><loc>https://amiaffected.now/advisories/python/</loc></url>
+  <url><loc>https://amiaffected.now/advisories/git/</loc></url>
+  <url><loc>https://amiaffected.now/advisories/curl/</loc></url>
   <url><loc>https://amiaffected.now/advisories/bind/</loc></url>
   <url><loc>https://amiaffected.now/advisories/gitlab/</loc></url>
   <url><loc>https://amiaffected.now/advisories/wordpress/</loc></url>

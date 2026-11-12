@@ -1,5 +1,5 @@
 {
-  "release": {"script_sha256": "1c46e77c8d4655866fcec56705d612fc3b52945b3ebb3cab950b47371ed547c6", "released": "2026-11-12T18:42:51Z"},
+  "release": {"script_sha256": "5b96deb1d78d0200795a3965de0f74495cfe3cae2f98d73827cc990f9d56665a", "released": "2026-11-12T18:51:53Z"},
   "versions": [
     {
       "name": "PHP",
@@ -79,6 +79,128 @@
       "branch_width": 1,
       "feed": "node",
       "checked": "2026-11-12T12:00:00Z"
+    },
+    {
+      "name": "Python",
+      "about": "CVE-2026-115557 (rated critical): Python's ssl module trusted the compromised eMudhra intermediates, so a certificate chained to them could impersonate any TLS server; fixed on 25 Oct 2026 with CVE-2026-114583 (tarfile extraction writing outside its folder) and Expat fixes",
+      "source": "https://www.python.org/downloads/release/python-3152/",
+      "cves": [
+        "CVE-2026-115557",
+        "CVE-2026-114583",
+        "CVE-2026-77214",
+        "CVE-2026-102633"
+      ],
+      "binary": "python3",
+      "flag": "--version",
+      "globs": [
+        "~/.pyenv/versions/*/bin/python3",
+        "~/.local/share/uv/python/*/bin/python3",
+        "/opt/homebrew/opt/python@3*/bin/python3",
+        "/usr/local/opt/python@3*/bin/python3",
+        "/Library/Frameworks/Python.framework/Versions/3.*/bin/python3",
+        "~/.asdf/installs/python/*/bin/python3",
+        "~/miniconda3/bin/python3",
+        "~/anaconda3/bin/python3",
+        "/opt/conda/bin/python3"
+      ],
+      "skip_prefixes": [
+        "/usr/bin/",
+        "/bin/",
+        "/System/"
+      ],
+      "version_regex": "Python (\\d+\\.\\d+\\.\\d+)",
+      "fixed": [
+        "3.15.2",
+        "3.14.10",
+        "3.13.18",
+        "3.12.16",
+        "3.11.18"
+      ],
+      "branch_width": 2,
+      "checked": "2026-11-13T09:00:00Z"
+    },
+    {
+      "name": "Git",
+      "about": "CVE-2026-111760 (rated high) and five more fixed on 3 Nov 2026: cloning a malicious repository with --recurse-submodules can run the attacker's code through planted hooks or config",
+      "source": "https://github.com/git/git/security/advisories/GHSA-vp2w-7xxj-jvxr",
+      "cves": [
+        "CVE-2026-111760",
+        "CVE-2026-113408",
+        "CVE-2026-114466",
+        "CVE-2026-114467",
+        "CVE-2026-114469",
+        "CVE-2026-105437"
+      ],
+      "binary": "git",
+      "flag": "--version",
+      "globs": [
+        "/opt/homebrew/bin/git",
+        "/usr/local/bin/git",
+        "/Library/Developer/CommandLineTools/usr/bin/git",
+        "/Applications/Xcode.app/Contents/Developer/usr/bin/git"
+      ],
+      "skip_prefixes": [
+        "/usr/bin/",
+        "/bin/"
+      ],
+      "version_regex": "git version (\\d+\\.\\d+\\.\\d+)",
+      "fixed": [
+        "2.56.1",
+        "2.55.1",
+        "2.54.1",
+        "2.53.1",
+        "2.52.1",
+        "2.51.3",
+        "2.50.2"
+      ],
+      "branch_width": 2,
+      "mitigation": "until you can update, don't clone untrusted repositories with --recurse-submodules",
+      "checked": "2026-11-13T09:00:00Z"
+    },
+    {
+      "name": "curl",
+      "about": "CVE-2026-92392 (rated high, fixed 14 Oct 2026 in 8.23.0): curl 8.12.0 to 8.22.0 can use freed memory during an HTTP/2 upload when a malicious server resets the stream; checked for the curl you installed yourself, since macOS and Linux distros patch their own",
+      "source": "https://curl.se/docs/CVE-2026-92392.html",
+      "cves": [
+        "CVE-2026-92392"
+      ],
+      "binary": "curl",
+      "flag": "--version",
+      "globs": [
+        "/opt/homebrew/opt/curl/bin/curl",
+        "/usr/local/opt/curl/bin/curl",
+        "/usr/local/bin/curl",
+        "~/.local/bin/curl"
+      ],
+      "skip_prefixes": [
+        "/usr/bin/",
+        "/bin/",
+        "/System/"
+      ],
+      "version_regex": "^curl (\\d+\\.\\d+\\.\\d+)",
+      "affected": [
+        [
+          "8.12.0",
+          "8.14.2",
+          "CVE-2026-92392 (rated high): an HTTP/2 upload to a malicious server can free memory curl still uses, which curl says can lead to code execution: update to 8.23.0+"
+        ],
+        [
+          "8.15.0",
+          "8.16.1",
+          "CVE-2026-92392 (rated high): an HTTP/2 upload to a malicious server can free memory curl still uses, which curl says can lead to code execution: update to 8.23.0+"
+        ],
+        [
+          "8.17.0",
+          "8.20.1",
+          "CVE-2026-92392 (rated high): an HTTP/2 upload to a malicious server can free memory curl still uses, which curl says can lead to code execution: update to 8.23.0+"
+        ],
+        [
+          "8.21.0",
+          "8.22.0",
+          "CVE-2026-92392 (rated high): an HTTP/2 upload to a malicious server can free memory curl still uses, which curl says can lead to code execution: update to 8.23.0+"
+        ]
+      ],
+      "checked": "2026-11-13T09:00:00Z"
     },
     {
       "name": "BIND",

@@ -52,6 +52,9 @@ version-feed technologies, so they aren't tracked this way — refresh them from
 | **Puppeteer / Playwright browsers** | Every Chromium in `~/.cache/puppeteer`, `~/.cache/ms-playwright` and `~/Library/Caches/ms-playwright` (and `$PUPPETEER_CACHE_DIR` / `$PLAYWRIGHT_BROWSERS_PATH`). They never update themselves, so builds before 157.0.8103.50 are flagged. Puppeteer (25.16.0, Chromium 156.0.8078.47) is still behind; Playwright 1.65.0 ships 158.0.8127.18 but launches Chromium with the sandbox off by default, so the fix is to run them on your installed Chrome: `channel: 'chrome'`, plus `chromiumSandbox: true` in Playwright. The version comes from the folder name or Info.plist where possible. |
 | **Archived MCP servers** | `.mcp.json`, `mcp.json`, `claude_desktop_config.json`, `~/.claude.json` and the Claude, VS Code, Cursor, Windsurf, Gemini and Codex configs. `@modelcontextprotocol/server-puppeteer` is affected (prompt injection can start any program, and [no fix is coming](https://www.helpnetsecurity.com/2026/11/03/mcphantom-deprecated-mcp-servers/)); the other archived reference servers are flagged for review. |
 | **PHP** CVE-2026-109618 / 109619 (PHP2Shell) | `php -v` for every PHP on PATH and in Homebrew. Fixed in 8.5.12 / 8.4.27 / 8.3.36 / 8.2.35; older branches are affected with no fix. |
+| **Python** CVE-2026-115557 (the ssl module trusted the cracked eMudhra intermediates), CVE-2026-114583 | `--version` of every Python you installed: pyenv, uv, Homebrew, python.org, asdf, conda. Fixed in 3.15.2 / 3.14.10 / 3.13.18 / 3.12.16 / 3.11.18; 3.10 and older get no fixes. Copies in `/usr/bin` and `/bin` are skipped, because distros patch them without changing the version; the vendor notices check those. |
+| **Git** CVE-2026-111760 and five more (3 Nov 2026) | `git --version` for Homebrew's and Apple's Git (Command Line Tools and Xcode). Cloning a malicious repository with `--recurse-submodules` can run its code. Fixed in 2.56.1 / 2.55.1 / 2.54.1 / 2.53.1 / 2.52.1 / 2.51.3 / 2.50.2; nothing below 2.50 got the fix. |
+| **curl** CVE-2026-92392 | `curl --version` for curl you installed yourself (Homebrew, `/usr/local`), since macOS and distros patch their own. 8.12.0 to 8.22.0 can use freed memory during an HTTP/2 upload to a malicious server; fixed in 8.23.0 (and 8.20.2, 8.16.2, 8.14.3). |
 | **Node.js** Nov 11 2026 release (15 CVEs, incl. HTTPS memory leaks of TLS private keys and HTTP/2 crashes) | Every `node` on PATH, nvm, Volta, fnm and Homebrew. Fixed in 26.13.1 / 24.22.3 / 22.23.5; end-of-life lines are always affected. |
 | **BIND 9** CVE-2026-94300 | `named -v` against ISC's affected ranges. |
 | **GitLab** CVE-2026-110264 + 11 more | Self-managed Omnibus version file. GitLab.com and Dedicated are already patched. |
@@ -181,6 +184,19 @@ cleared. Restarts (nginx, PHP-FPM, a database) are left to you and shown as the 
   decision. `--verify-log` says which line was edited, added or removed. If the log doesn't check out,
   `--fix` changes nothing. It stays on the machine.
 
+## Every dependency, against OSV (opt-in)
+
+```sh
+curl -fsSL https://amiaffected.now/run | sh -s -- --osv ~/work
+```
+
+`--osv` checks every package pinned in the lockfiles it finds (`package-lock.json`, `pnpm-lock.yaml`, `yarn.lock`,
+`bun.lock`, `requirements*.txt` pins, `poetry.lock`, `uv.lock`, `Pipfile.lock`, `Cargo.lock`, `go.sum`) and every installed
+Python package against [OSV.dev](https://osv.dev), Google's open vulnerability database. It is off by default because
+it sends the package names and versions to `api.osv.dev` (it says how many before it does); nothing else about the machine
+is sent. Critical and high findings are AFFECTED, the rest REVIEW, each with the version that fixes it. It works with
+`--files-only` too, so a CI job can check a repository's dependencies.
+
 ## Every installed package, against the vendor's notices
 
 The hand-picked checks above cover what's being exploited right now. On top of that, on a Linux
@@ -306,6 +322,7 @@ security releases, Mozilla advisories). Zero-days often reach KEV days later, so
 ## Not covered (yet)
 
 - Chrome's own root store (Chrome updates itself; check `chrome://version`)
+- The OpenSSH client (its latest fixes have no CVEs) and the OpenSSL command line (it doesn't say which library your apps load)
 - Opera, Vivaldi and Arc (their own version numbers don't say which Chromium fixes they carry), and Electron apps on Windows
 - Perl `Mozilla::CA`, Go binaries with embedded roots
 - Docker layers compressed with zstd, and files deleted in a later layer are still reported

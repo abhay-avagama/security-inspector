@@ -19,6 +19,7 @@ Usage: python3 secinspect.py [dirs ...] [--docker] [--html report.html] [--no-up
 import argparse
 import base64
 import bz2
+import concurrent.futures
 import datetime
 import getpass
 import glob
@@ -115,7 +116,8 @@ def check_version(adv):
         def parse(out):  # PostgreSQL says 16.10: two parts, so it brings its own pattern
             m = re.search(adv["version_regex"], out) if "version_regex" in adv else None
             return nums(m[1]) if m else ver(out) if "version_regex" not in adv else None
-        found = [(b, parse(run(b, adv["flag"]))) for b in binaries(adv["binary"], *adv.get("globs", []))]
+        skip = tuple(adv.get("skip_prefixes", ()))  # distro builds backport fixes without a new version: the vendor notices judge those
+        found = [(b, parse(run(b, adv["flag"]))) for b in binaries(adv["binary"], *adv.get("globs", [])) if not b.startswith(skip) or not skip]
     if not found:
         return [(name, "-", "-", "NOT FOUND", adv.get("not_found", ""))]
     return [(name, p, fmt(v) if v else "?", *(version_status(adv, v) if v else ("UNKNOWN", "couldn't read version")))
@@ -1105,7 +1107,9 @@ def bundle_summary(bundles):
 # --- File checks, shared by the folder walk and Docker layers -----------------------------------
 
 LOCKFILE = re.compile(r"(requirements.*\.txt|pyproject\.toml|uv\.lock|poetry\.lock|Pipfile\.lock"
-                      r"|package-lock\.json|pnpm-lock\.yaml|yarn\.lock|bun\.lock)$")
+                      r"|package-lock\.json|pnpm-lock\.yaml|yarn\.lock|bun\.lock|Cargo\.lock|go\.sum)$")
+FOUND_LOCKFILES = set()  # ponytail: filled by the file walk, read again only with --osv
+FOUND_DIST_INFO = set()  # (site-packages folder, name, version) of installed Python packages
 SKIP = {"node_modules", ".git", ".Trash"}
 MAX_READ = 50_000_000  # cap per-file reads (disk and tar members) so an untrusted file can't exhaust memory
 
@@ -1134,6 +1138,10 @@ def inspect_file(path, read):
 
     rows, bundles = [], []
     base, parent = os.path.basename(path), os.path.basename(os.path.dirname(path))
+    if LOCKFILE.search(base) and base != "pyproject.toml":  # pyproject.toml holds ranges, not what is installed
+        FOUND_LOCKFILES.add(path)
+    if base == "METADATA" and (m := re.fullmatch(r"(.+)-([^-]+)\.dist-info", parent)):
+        FOUND_DIST_INFO.add((os.path.dirname(os.path.dirname(path)), m[1], m[2]))
     for pkg in PACKAGES:
         name, status = pkg["name"], pkg.get("status", "AFFECTED")
         pat = re.escape(pkg["package"]).replace(r"\-", "[-_]")  # dist-info folders say python_jose
@@ -1201,6 +1209,101 @@ def scan_files(roots):
         if not any(r[0] == pkg["name"] for r in rows):
             rows.append((pkg["name"], "-", "-", "NOT FOUND", ""))
     return rows + bundle_summary(bundles)
+
+
+# --- Every pinned dependency, against OSV (opt-in: --osv) --------------------------------------------
+# Off by default because it sends package names and versions to api.osv.dev; nothing else leaves the machine.
+
+OSV_ITEM = "Dependencies (OSV)"
+OSV_BATCH = "https://api.osv.dev/v1/querybatch"
+OSV_VULN = "https://api.osv.dev/v1/vulns/{}"
+OSV_SEVERITY = {"CRITICAL": 0, "HIGH": 1, "MODERATE": 2, "MEDIUM": 2, "LOW": 3}
+
+
+def lock_packages(path, data):
+    """{(ecosystem, name, version)} pinned in one lockfile.
+    ponytail: format-shaped regexes like npm_versions, not full parsers; npm v1 lockfiles are skipped."""
+    base, text, out = os.path.basename(path), data.decode("utf-8", "replace"), set()
+    try:
+        if base == "package-lock.json":
+            pk = json.loads(text).get("packages", {})
+            out = {("npm", k.rsplit("node_modules/", 1)[1], v["version"]) for k, v in pk.items()
+                   if "node_modules/" in k and isinstance(v, dict) and isinstance(v.get("version"), str)}
+        elif base == "Pipfile.lock":
+            j = json.loads(text)
+            out = {("PyPI", n, v["version"][2:]) for sec in ("default", "develop") for n, v in (j.get(sec) or {}).items()
+                   if isinstance(v, dict) and str(v.get("version", "")).startswith("==")}
+    except (ValueError, AttributeError):
+        return set()
+    if base.startswith("requirements"):
+        out = {("PyPI", n, v) for n, v in re.findall(r"(?m)^\s*([A-Za-z0-9][\w.-]*)(?:\[[^\]]*\])?\s*==\s*([\w.!+]+)", text)}
+    elif base in ("poetry.lock", "uv.lock", "Cargo.lock"):
+        out = {("crates.io" if base == "Cargo.lock" else "PyPI", n, v) for n, v in re.findall(r'(?m)^name = "([^"]+)"\nversion = "([^"]+)"', text)}
+    elif base == "go.sum":
+        out = {("Go", n, v) for n, v in re.findall(r"(?m)^(\S+) (v[^\s/]+) h1:", text)}
+    elif base == "pnpm-lock.yaml":
+        out = {("npm", n, v) for n, v in re.findall(r"(?m)^\s+'?/?(@?[^@\s'/][^@\s']*)@(\d[^\s:'(]*)(?:\([^\n]*\))?'?:", text)}
+    elif base == "yarn.lock":
+        out = {("npm", n, v) for n, v in re.findall(r'(?m)^"?(@?[^@\s",]+)@[^\n]*:\n\s+version:? "?([^"\s]+)', text)}
+    elif base == "bun.lock":
+        out = {("npm", n, v) for n, v in re.findall(r'\[\s*"(@?[^"@]+)@(\d[^"]*)"', text)}
+    return out
+
+
+def osv_fetch(url, body=None):
+    req = urllib.request.Request(url, data=None if body is None else json.dumps(body).encode(),
+                                 headers={"User-Agent": "amiaffected", "Content-Type": "application/json"})
+    with urllib.request.urlopen(req, timeout=30) as r:
+        return json.load(r)
+
+
+def vkey(v):
+    return tuple(int(x) for x in re.findall(r"\d+", v))
+
+
+def check_osv(fetch=osv_fetch):
+    where = {}  # (ecosystem, name, version) -> lockfiles / site-packages that have it
+    for p in sorted(FOUND_LOCKFILES):
+        try:
+            data = open(p, "rb").read(MAX_READ) if os.path.isfile(p) else b""
+        except OSError:
+            data = b""
+        for k in lock_packages(p, data):
+            where.setdefault(k, []).append(p)
+    for site, n, v in FOUND_DIST_INFO:
+        where.setdefault(("PyPI", n, v), []).append(site)
+    if not where:
+        return [(OSV_ITEM, "-", "-", "NOT FOUND", "no lockfiles or installed Python packages found")]
+    keys = sorted(where)
+    print(f"osv: sending {len(keys)} package names and versions to api.osv.dev, nothing else", file=sys.stderr)
+    try:
+        hits = {}
+        for i in range(0, len(keys), 1000):  # ponytail: a package with >1000 advisories would need next_page_token
+            batch = keys[i:i + 1000]
+            res = fetch(OSV_BATCH, {"queries": [{"package": {"name": n, "ecosystem": e}, "version": v} for e, n, v in batch]})["results"]
+            hits.update({k: [x["id"] for x in r["vulns"]] for k, r in zip(batch, res) if r.get("vulns")})
+        ids = sorted({i for v in hits.values() for i in v})
+        with concurrent.futures.ThreadPoolExecutor(8) as ex:
+            details = dict(zip(ids, ex.map(lambda i: fetch(OSV_VULN.format(i)), ids)))
+    except (OSError, ValueError, KeyError, TypeError) as e:
+        return [(OSV_ITEM, "-", "-", "UNKNOWN", f"couldn't check with api.osv.dev: {e}")]
+    norm = lambda s: re.sub(r"[-_.]+", "-", s).lower()  # PyPI: python_jose is python-jose
+    rows = []
+    for (eco, name, v), vids in sorted(hits.items()):
+        worst, fixes, labels = 9, [], []
+        for i in vids:
+            d = details.get(i) or {}
+            worst = min(worst, OSV_SEVERITY.get(str((d.get("database_specific") or {}).get("severity", "")).upper(), 9))
+            labels.append(next((a for a in d.get("aliases", []) if a.startswith("CVE-")), i))
+            fixed = [ev["fixed"] for a in d.get("affected", []) if norm(a.get("package", {}).get("name", "")) == norm(name)
+                     for r in a.get("ranges", []) for ev in r.get("events", []) if "fixed" in ev and vkey(ev["fixed"]) > vkey(v)]
+            if fixed:
+                fixes.append(min(fixed, key=vkey))  # the first fix above this version, per advisory
+        sev = {0: "critical", 1: "high", 2: "medium", 3: "low"}.get(worst, "unrated")
+        note = (f"{len(vids)} known ({sev}): {', '.join(labels[:3])}{', …' if len(labels) > 3 else ''}; "
+                + (f"fixed in {max(fixes, key=vkey)}" if fixes else "no fixed version listed"))
+        rows += [(OSV_ITEM, p, f"{eco} {name} {v}", "AFFECTED" if worst <= 1 else "REVIEW", note) for p in where[(eco, name, v)]]
+    return rows or [(OSV_ITEM, f"{len(keys)} packages", "-", "OK", "no known vulnerabilities in OSV")]
 
 
 def scan_image_tar(label, stream):
@@ -1392,6 +1495,16 @@ def fix_for(item, where, note=""):
                     "puppeteer.launch({ channel: 'chrome' })   # keep Chrome updated; then: rm -rf ~/.cache/puppeteer")
         return ("Run Playwright on your installed Chrome, sandbox on, and delete its cached browsers",
                 "chromium.launch({ channel: 'chrome', chromiumSandbox: true })   # MCP: npx @playwright/mcp@<pinned> --browser chrome; then delete the chromium* folders in the ms-playwright cache")
+    if item == "Git":
+        if "/xcode.app/" in w or "/commandlinetools/" in w:
+            return ("Update Apple's Git", "softwareupdate --list, then install the Command Line Tools or Xcode update it shows")
+        if "/homebrew/" in w or w.startswith("/usr/local/"):
+            return ("Upgrade Homebrew Git", "brew upgrade git")
+    if item == "curl" and ("/homebrew/" in w or w.startswith("/usr/local/")):
+        return ("Upgrade Homebrew curl", "brew upgrade curl")
+    if item == OSV_ITEM:
+        return ("Update vulnerable dependencies",
+                "upgrade each to the fixed version shown, then refresh the lockfile (npm install, uv lock, poetry lock, cargo update, go get)")
     if item == ELECTRON["name"]:
         return ("Update apps built on an unsupported Electron",
                 "update each app from its own menu or site; if it is already current, ask its maker for a build on a supported Electron, and don't open untrusted links or files in it")
@@ -2107,6 +2220,9 @@ def main(argv):
     ap.add_argument("--no-update-check", action="store_true",
                     help="offline: skip the cve.now advisory-freshness check and use only cached vendor notices, "
                          "never downloading them (also $SECINSPECT_NO_UPDATE_CHECK)")
+    ap.add_argument("--osv", action="store_true",
+                    help="also check every package pinned in the lockfiles found (npm, PyPI, Cargo, Go) and installed Python "
+                         "packages against OSV.dev; sends their names and versions to api.osv.dev, nothing else")
     ap.add_argument("--fix", action="store_true",
                     help="offer the vendor's update for each affected package (apt, dnf, Homebrew), apply only what you "
                          "approve at the terminal, and log every step")
@@ -2144,11 +2260,13 @@ def main(argv):
         # images are only listed by digest; --docker reads them)
         rows = scan_files(roots) + check_docker(args.docker)
         rows += check_skills(home=os.path.join(roots[0], ".no-home"), extra=FOUND_SKILL_DIRS)
+        rows += check_osv() if args.osv else []
     else:
         offline = bool(args.no_update_check or os.environ.get("SECINSPECT_NO_UPDATE_CHECK"))
         rows = [r for adv in ADVISORIES["versions"] for r in check_version(adv)] + check_distro(offline=offline)
         rows += check_chromium_cache() + check_electron() + scan_files(roots) + check_docker(args.docker) + check_stores()
         rows += check_mcp(rows) + check_iocs() + check_skills(extra=FOUND_SKILL_DIRS) + check_hooks()
+        rows += check_osv() if args.osv else []
     if args.skills_baseline:
         home = os.path.join(roots[0], ".no-home") if args.files_only else HOME
         rows += check_skill_changes(skill_dirs(home=home, extra=FOUND_SKILL_DIRS), os.path.expanduser(args.skills_baseline))

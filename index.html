@@ -46,6 +46,7 @@ h2[id]{scroll-margin-top:4.5rem}
 <pre>curl -fsSL https://amiaffected.now/run | sh -s -- --html report.html   # HTML report
 curl -fsSL https://amiaffected.now/run | sh -s -- --docker             # also scan Docker images
 curl -fsSL https://amiaffected.now/run | sh -s -- ~/work               # only search this folder
+curl -fsSL https://amiaffected.now/run | sh -s -- --osv ~/work         # also every dependency in its lockfiles, via OSV.dev
 curl -fsSL https://amiaffected.now/run | sh -s -- --skills-baseline ~/.amiaffected-skills.json   # also show what changed in your agent skills since last time
 curl -fsSL https://amiaffected.now/run | sudo sh -s -- --install     # keep a copy that updates only from signed releases
 sudo python3 /opt/amiaffected/secinspect.py --fix                     # then apply the updates you approve, one by one</pre>
@@ -63,6 +64,9 @@ sudo python3 /opt/amiaffected/secinspect.py --fix                     # then app
 <tr><td>Puppeteer / Playwright</td><td>The Chromium builds they download into their caches, which never update themselves. The latest Puppeteer (25.16.0) still ships a build without the October and November fixes, and Playwright turns Chrome's sandbox off by default. If your agent browses the web, point it at your installed Chrome with <code>channel: 'chrome'</code> and <code>chromiumSandbox: true</code></td></tr>
 <tr><td>MCP servers</td><td>Configs for Claude, Cursor, VS Code, Windsurf, Gemini and Codex that still run the archived Puppeteer MCP server (remote code execution, no fix coming) or other archived reference servers</td></tr>
 <tr><td>PHP</td><td>CVE-2026-109618 / 109619 (PHP2Shell), every PHP on PATH and in Homebrew</td></tr>
+<tr><td>Python</td><td>CVE-2026-115557 (rated critical): the ssl module trusted the cracked eMudhra intermediates. Fixed in 3.15.2 / 3.14.10 / 3.13.18 / 3.12.16 / 3.11.18 for Pythons you installed (pyenv, uv, Homebrew, python.org, conda); 3.10 and older get no fixes</td></tr>
+<tr><td>Git</td><td>CVE-2026-111760: cloning a malicious repository with submodules can run its code. Fixed in 2.56.1 and back to 2.50.2, including Apple's and Homebrew's Git</td></tr>
+<tr><td>curl</td><td>CVE-2026-92392 (rated high), an HTTP/2 upload bug in 8.12.0 to 8.22.0, for curl you installed yourself</td></tr>
 <tr><td>Node.js</td><td>The Nov 11 2026 release (15 CVEs, incl. HTTPS servers leaking TLS private keys) across PATH, nvm, Volta, fnm and Homebrew</td></tr>
 <tr><td>BIND 9</td><td>CVE-2026-94300 against ISC's affected ranges</td></tr>
 <tr><td>GitLab</td><td>CVE-2026-110264 and 11 more on self-managed Omnibus</td></tr>

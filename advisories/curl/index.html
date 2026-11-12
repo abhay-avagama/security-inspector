@@ -1,0 +1,48 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Am I affected by curl? · Am I affected?</title>
+<meta name="description" content="Check whether curl on your machine is affected by CVE-2026-92392. One command checks it; nothing to install.">
+<link rel="canonical" href="https://amiaffected.now/advisories/curl/">
+<style>
+:root{--bg:#fbfaf7;--fg:#1c1b19;--muted:#6b675f;--line:#e4e0d8;--code:#f1eee8;--accent:#b4361c}
+@media (prefers-color-scheme:dark){:root{--bg:#161513;--fg:#ece9e3;--muted:#9c978d;--line:#2e2c28;--code:#211f1c;--accent:#f0805f}}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--fg);font:17px/1.6 ui-sans-serif,system-ui,-apple-system,sans-serif}
+main{max-width:44rem;margin:0 auto;padding:3rem 16px 4rem}
+h1{font-size:2.6rem;line-height:1.1;margin:0 0 1rem;letter-spacing:-.02em}
+h2{font-size:1.1rem;margin:2.5rem 0 .5rem}
+p,li{color:var(--fg)}.muted{color:var(--muted)}
+pre{background:var(--code);border:1px solid var(--line);border-radius:6px;padding:1rem;overflow-x:auto;font:14px/1.5 ui-monospace,SFMono-Regular,Menlo,monospace}
+code{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:.9em}
+.run{position:relative}.share button{font:13px system-ui;padding:.2rem .6rem;margin-left:.3rem;border:1px solid var(--line);border-radius:4px;background:var(--bg);color:var(--fg);cursor:pointer}.run button{position:absolute;top:.6rem;right:.6rem;font:13px system-ui;padding:.25rem .6rem;border:1px solid var(--line);border-radius:4px;background:var(--bg);color:var(--fg);cursor:pointer}
+table{width:100%;border-collapse:collapse;font-size:15px}td,th{padding:.5rem .5rem .5rem 0;border-top:1px solid var(--line);vertical-align:top}th{text-align:left;font-size:.85em;color:var(--muted,inherit)}td:first-child{font-weight:600;white-space:nowrap;padding-right:1rem}
+a{color:var(--accent)}
+footer{margin-top:3rem;padding-top:1rem;border-top:1px solid var(--line);font-size:14px;color:var(--muted)}
+header.top{position:sticky;top:0;z-index:10;background:color-mix(in srgb,var(--bg) 88%,transparent);backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);border-bottom:1px solid var(--line)}
+header.top nav{max-width:44rem;margin:0 auto;padding:0 16px;display:flex;align-items:center;gap:1rem;height:3.25rem}
+header.top .brand{font-weight:700;color:var(--fg);text-decoration:none;white-space:nowrap;letter-spacing:-.01em}
+header.top ul{display:flex;gap:.25rem;list-style:none;margin:0 0 0 auto;padding:0;overflow-x:auto;scrollbar-width:none}header.top ul::-webkit-scrollbar{display:none}
+header.top li a{display:block;padding:.35rem .5rem;border-radius:6px;font-size:15px;color:var(--muted);text-decoration:none;white-space:nowrap}
+header.top li a:hover{color:var(--fg);background:var(--code)}header.top li a[aria-current]{color:var(--fg);background:var(--code);font-weight:600}
+h2[id]{scroll-margin-top:4.5rem}
+.oss{border:1px solid var(--line);border-left:3px solid var(--accent);background:var(--code);border-radius:8px;padding:.9rem 1.1rem;margin:1.5rem 0}.oss p{margin:.5rem 0 0}.oss p.badges{margin:0}.badges{display:flex;flex-wrap:wrap;gap:.4rem}.badge{display:inline-flex;font:12px/1 ui-monospace,SFMono-Regular,Menlo,monospace;border-radius:4px;overflow:hidden;text-decoration:none;border:1px solid var(--line)}.badge span{padding:.3rem .45rem}.badge span:first-child{background:var(--fg);color:var(--bg)}.badge span:last-child{background:var(--bg);color:var(--fg);font-weight:600}a.badge:hover span:last-child{color:var(--accent)}
+@media (max-width:560px){header.top nav{flex-direction:column;align-items:stretch;height:auto;gap:0;padding:.55rem 16px .4rem}header.top ul{margin:.3rem -.5rem 0;gap:0;flex-wrap:wrap}header.top li a{padding:.3rem .5rem;font-size:14.5px}}
+.facts{display:grid;grid-template-columns:9rem 1fr;gap:.5rem 1rem;margin:1.5rem 0}.facts dt{color:var(--muted)}.facts dd{margin:0;min-width:0;overflow-wrap:anywhere}.tw{overflow-x:auto}
+.facts table{border-collapse:collapse;font-size:14px}.facts td,.facts th{border-bottom:1px solid var(--line);padding:.2rem .8rem .2rem 0;text-align:left}
+.cves{display:flex;flex-wrap:wrap;gap:.3rem .9rem;list-style:none;padding:0;font:14px ui-monospace,monospace}
+.alist{padding-left:1.1rem}.alist li{margin:.5rem 0}@media (max-width:560px){.facts{grid-template-columns:1fr;gap:0}.facts dd{margin-bottom:.6rem}}</style><!-- Cloudflare Web Analytics --><script type='module' src='https://static.cloudflareinsights.com/beacon.min.js' data-cf-beacon='{"token": "80f6571899284bf291a1308fcd194bde"}'></script><!-- End Cloudflare Web Analytics --></head>
+<body><header class="top"><nav aria-label="Site"><a class="brand" href="/">Am I affected?</a><ul>
+<li><a href="/#checks">Checks</a></li><li><a href="/#agents">Agents</a></li><li><a href="/#linux">Linux</a></li><li><a href="/advisories/" aria-current="page">Advisories</a></li><li><a href="/watchlist/">Watchlist</a></li><li><a href="/changelog/">Changelog</a></li><li><a href="https://github.com/abhay-avagama/security-inspector">GitHub</a></li>
+</ul></nav></header>
+<main>
+<p class="muted"><a href="/advisories/">Advisories</a> · App</p>
+<h1>curl</h1>
+<p class="lede">CVE-2026-92392 (rated high, fixed 14 Oct 2026 in 8.23.0): curl 8.12.0 to 8.22.0 can use freed memory during an HTTP/2 upload when a malicious server resets the stream; checked for the curl you installed yourself, since macOS and Linux distros patch their own.</p>
+<ul class="cves"><li><a href="https://nvd.nist.gov/vuln/detail/CVE-2026-92392">CVE-2026-92392</a></li></ul>
+<dl class="facts"><dt>Affected</dt><dd><code>8.12.0</code> to <code>8.14.2</code>: CVE-2026-92392 (rated high): an HTTP/2 upload to a malicious server can free memory curl still uses, which curl says can lead to code execution: update to 8.23.0+</dd><dt>Affected</dt><dd><code>8.15.0</code> to <code>8.16.1</code>: CVE-2026-92392 (rated high): an HTTP/2 upload to a malicious server can free memory curl still uses, which curl says can lead to code execution: update to 8.23.0+</dd><dt>Affected</dt><dd><code>8.17.0</code> to <code>8.20.1</code>: CVE-2026-92392 (rated high): an HTTP/2 upload to a malicious server can free memory curl still uses, which curl says can lead to code execution: update to 8.23.0+</dd><dt>Affected</dt><dd><code>8.21.0</code> to <code>8.22.0</code>: CVE-2026-92392 (rated high): an HTTP/2 upload to a malicious server can free memory curl still uses, which curl says can lead to code execution: update to 8.23.0+</dd><dt>Where it looks</dt><dd><code>curl --version</code><br><code>/opt/homebrew/opt/curl/bin/curl</code><br><code>/usr/local/opt/curl/bin/curl</code><br><code>/usr/local/bin/curl</code><br><code>~/.local/bin/curl</code></dd><dt>Source</dt><dd><a href="https://curl.se/docs/CVE-2026-92392.html">https://curl.se/docs/CVE-2026-92392.html</a></dd></dl>
+<h2>Check this machine</h2>
+<p>One command checks this and every other advisory against what is installed. Nothing about this machine is sent anywhere.</p>
+<pre><code>curl -fsSL https://amiaffected.now/run | sh</code></pre>
+<footer>Built and maintained by <a href="https://avagama.co/services/?utm_source=amiaffected.now&amp;utm_medium=footer#security">Avagama Consulting</a>, who also test agents and MCP servers for security. Generated from <a href="/advisories.json">advisories.json</a>, the same data the tool reads.</footer>
+</main></body></html>
