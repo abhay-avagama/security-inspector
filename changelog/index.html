@@ -35,6 +35,10 @@ h2[id]{scroll-margin-top:4.5rem}
 <main>
 <h1>Changelog</h1>
 <p>What the tool checks, and when each check went live. New exploited bugs usually land within a day of disclosure. Follow along with the <a href="/changelog.xml">RSS feed</a>.</p>
+<h2 id="2026-11-12">12 November 2026</h2>
+<ul class="log">
+<li><b>Node.js before 26.13.1, 24.22.3 or 22.23.5 is flagged</b>. Node.js fixed 15 bugs on 11 Nov. The worst let an HTTPS server leak other connections&#x27; memory, TLS private keys included, and let anyone crash HTTP/2 and TLS servers remotely. Node is now flagged below 26.13.1, 24.22.3 or 22.23.5; end-of-life lines stay flagged. Update Node and restart anything running on it. <a class="muted" href="https://github.com/abhay-avagama/security-inspector/commit/faba645">faba645</a></li>
+</ul>
 <h2 id="2026-11-10">10 November 2026</h2>
 <ul class="log">
 <li><b>Pass the check on</b>. After the results, the tool now prints the one-line command to send a colleague, worded for whether anything was affected; the HTML report ends with it too, and the home page has a button that copies a short message with the command. It goes to stderr, so scripts reading the table are unaffected, and it stays out of --watch and --files-only runs. No tracking is added. <a class="muted" href="https://github.com/abhay-avagama/security-inspector/commit/2ac776e">2ac776e</a></li>
