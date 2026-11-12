@@ -2,6 +2,7 @@ __pycache__/
 *.html
 .env
 !index.html
+!404.html
 
 # Marketing to-dos for this team, kept locally and never committed
 /marketing/
