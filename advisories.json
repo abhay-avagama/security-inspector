@@ -25,12 +25,12 @@
       "branch_width": 2,
       "after_fix": "restart PHP-FPM/workers",
       "feed": "php",
-      "checked": "2026-11-06T10:00:00Z"
+      "checked": "2026-11-12T12:00:00Z"
     },
     {
       "name": "Node.js",
-      "about": "Oct 21 2026 release: 10 CVEs incl. CVE-2026-111497 (Brotli RCE); also refreshes Node's bundled CA store for eMudhra",
-      "source": "https://nodejs.org/en/blog/vulnerability/october-2026-security-releases",
+      "about": "Nov 11 2026 release: 15 CVEs, incl. CVE-2026-123864 (HTTPS servers leak other connections' memory, TLS private keys included) and remote HTTP/2 and TLS crashes; also carries the Oct 21 fixes (CVE-2026-111497, Brotli RCE) and the refreshed eMudhra CA store",
+      "source": "https://nodejs.org/en/blog/vulnerability/november-2026-security-releases",
       "cves": [
         "CVE-2026-105481",
         "CVE-2026-105482",
@@ -46,7 +46,22 @@
         "CVE-2026-48618",
         "CVE-2026-48930",
         "CVE-2026-48931",
-        "CVE-2026-58043"
+        "CVE-2026-58043",
+        "CVE-2026-126051",
+        "CVE-2026-123872",
+        "CVE-2026-123874",
+        "CVE-2026-123875",
+        "CVE-2026-123877",
+        "CVE-2026-123867",
+        "CVE-2026-123868",
+        "CVE-2026-123871",
+        "CVE-2026-123863",
+        "CVE-2026-123864",
+        "CVE-2026-123865",
+        "CVE-2026-123866",
+        "CVE-2026-123829",
+        "CVE-2026-123828",
+        "CVE-2026-123862"
       ],
       "binary": "node",
       "flag": "-v",
@@ -57,13 +72,13 @@
         "/opt/homebrew/opt/node*/bin/node"
       ],
       "fixed": [
-        "26.12.1",
-        "24.22.1",
-        "22.23.4"
+        "26.13.1",
+        "24.22.3",
+        "22.23.5"
       ],
       "branch_width": 1,
       "feed": "node",
-      "checked": "2026-10-23T12:00:00Z"
+      "checked": "2026-11-12T12:00:00Z"
     },
     {
       "name": "BIND",
@@ -266,7 +281,7 @@
           "CVE-2026-125350 is exploited in the wild: update to 157.0.8103.50+ and relaunch the browser"
         ]
       ],
-      "checked": "2026-11-10T06:00:00Z",
+      "checked": "2026-11-12T12:00:00Z",
       "feed": "chrome"
     },
     {

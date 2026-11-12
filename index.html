@@ -57,7 +57,7 @@ sudo python3 /opt/amiaffected/secinspect.py --fix                     # then app
 <tr><td>Puppeteer / Playwright</td><td>The Chromium builds they download into their caches, which never update themselves. The latest Puppeteer (25.16.0) still ships a build without the October and November fixes, and Playwright turns Chrome's sandbox off by default. If your agent browses the web, point it at your installed Chrome with <code>channel: 'chrome'</code> and <code>chromiumSandbox: true</code></td></tr>
 <tr><td>MCP servers</td><td>Configs for Claude, Cursor, VS Code, Windsurf, Gemini and Codex that still run the archived Puppeteer MCP server (remote code execution, no fix coming) or other archived reference servers</td></tr>
 <tr><td>PHP</td><td>CVE-2026-109618 / 109619 (PHP2Shell), every PHP on PATH and in Homebrew</td></tr>
-<tr><td>Node.js</td><td>The Oct 21 2026 release (10 CVEs incl. Brotli RCE) across PATH, nvm, Volta, fnm and Homebrew</td></tr>
+<tr><td>Node.js</td><td>The Nov 11 2026 release (15 CVEs, incl. HTTPS servers leaking TLS private keys) across PATH, nvm, Volta, fnm and Homebrew</td></tr>
 <tr><td>BIND 9</td><td>CVE-2026-94300 against ISC's affected ranges</td></tr>
 <tr><td>GitLab</td><td>CVE-2026-110264 and 11 more on self-managed Omnibus</td></tr>
 <tr><td>LiteLLM</td><td>The 1.107.0 backdoor: installed copies, lockfiles, malware files and bad Docker image digests</td></tr>

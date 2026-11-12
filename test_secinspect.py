@@ -30,7 +30,10 @@ def test_versions():
     assert "restart" in version_status(ADV["PHP"], (8, 5, 11))[1]
     assert status("Node.js", (26, 7, 0)) == "AFFECTED"
     assert status("Node.js", (20, 19, 2)) == "AFFECTED"  # EOL
-    assert status("Node.js", (24, 22, 1)) == "OK"
+    assert status("Node.js", (24, 22, 1)) == "AFFECTED"  # before the Nov 11 2026 release
+    assert status("Node.js", (24, 22, 3)) == "OK"
+    assert status("Node.js", (26, 13, 1)) == "OK"
+    assert status("Node.js", (22, 23, 4)) == "AFFECTED"
     assert status("GitLab", (18, 11, 13)) == "OK"
     assert status("GitLab", (18, 5, 0)) == "AFFECTED"
     assert status("BIND", (9, 18, 50)) == "AFFECTED"
