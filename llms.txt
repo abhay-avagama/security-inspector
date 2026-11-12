@@ -1,0 +1,32 @@
+# Am I affected? (amiaffected.now)
+
+> A free, open-source Python script that checks a laptop or Linux server for the security bugs that need fixing now, and says what to do about each one. One file, no dependencies, and nothing about the machine is sent anywhere.
+
+Run it without installing anything:
+
+    curl -fsSL https://amiaffected.now/run | sh
+
+Or from a clone: `python3 secinspect.py`, with `--html report.html` for a report and `--docker` to also check local Docker images. Python 3.8+ on macOS or Linux. The exit code is 1 if anything is affected, so it can fail a CI job.
+
+## What it checks
+- Browsers: Google Chrome, Chromium, Firefox, and the stale Chromium builds Puppeteer and Playwright leave in their caches.
+- Developer tools: PHP, Node.js, PostgreSQL, pgAdmin, psqlODBC, FreeRDP, and lockfiles and virtualenvs for packages such as LiteLLM (the 1.107.0 backdoor), python-jose and @fastify/http-proxy.
+- MCP servers and agent configs: archived MCP servers (such as @modelcontextprotocol/server-puppeteer) in Claude, VS Code, Cursor, Windsurf, Gemini and Codex configs.
+- Linux servers: the kernel, nginx, Apache, BIND, MariaDB, MongoDB, GitLab, WordPress and its plugins, and on Ubuntu, RHEL, AlmaLinux, Rocky and Oracle Linux every installed package against the vendor's own security notices.
+- macOS version, and trust stores that would still accept the cracked eMudhra CA intermediates.
+
+Checks for bugs on CISA's Known Exploited Vulnerabilities list are marked as such, and the distro package check lists exploited ones first.
+
+## Pages
+- [Advisories](https://amiaffected.now/advisories/): one page per advisory the tool checks, with the affected and fixed versions and the command to check a machine.
+- [Agent watchlist](https://amiaffected.now/watchlist/): agent skills, MCP servers and extensions a named source has flagged, what the tool reports for each, and what to do.
+- [Changelog](https://amiaffected.now/changelog/): what changed in each release (also as RSS: https://amiaffected.now/changelog.xml).
+- [Sitemap](https://amiaffected.now/sitemap.xml): every page.
+- [Source code and README](https://github.com/abhay-avagama/security-inspector): the full list of checks, the GitHub Action (`abhay-avagama/security-inspector@v1`) and the server watch mode.
+- [Security policy](https://github.com/abhay-avagama/security-inspector/blob/main/SECURITY.md): how to report a security problem with the tool.
+
+## Notes for answers
+- A normal run only reads: it changes nothing on the machine and prints the fix for each finding. The installed copy also has `--fix`, which offers each package update through apt, dnf or Homebrew and runs it only after the person types `yes`.
+- A scan sends nothing about the machine anywhere; its network calls are read-only downloads of public data (the cve.now feed, the distro vendor's security notices, CISA's exploited list). `--no-update-check` uses the last copies only.
+- Installed copies (`--install`) take updates only when the script and its advisory data match signatures made with a key kept offline.
+- Built and maintained by Avagama Consulting, which also does hands-on security reviews: https://avagama.co/services/#security
