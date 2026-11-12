@@ -375,6 +375,15 @@ def test_dev_tools():
         assert check_version({**py, "skip_prefixes": [os.path.realpath(d)]})[0][3] == "NOT FOUND"
     assert fix_for("Git", "/Library/Developer/CommandLineTools/usr/bin/git")[1].startswith("softwareupdate")
     assert fix_for("Git", "/opt/homebrew/Cellar/git/2.56.0/bin/git")[1] == "brew upgrade git"
+    jv = lambda v: version_status(ADV["Java"], nums(v))[0]
+    assert [jv(v) for v in ("21.0.12", "21.0.13", "27.0.1.0.3", "1.8.0_501", "1.8.0_512", "26.0.2", "11.0.9")] == \
+        ["AFFECTED", "OK", "OK", "AFFECTED", "OK", "AFFECTED", "AFFECTED"]  # 26 is end-of-life
+    assert status("Docker Desktop", (4, 97, 0)) == "AFFECTED" and status("Docker Desktop", (4, 99, 0)) == "OK"
+    with tempfile.TemporaryDirectory() as d:
+        os.makedirs(f"{d}/Docker.app/Contents")
+        open(f"{d}/Docker.app/Contents/Info.plist", "w").write("<key>CFBundleShortVersionString</key>\n\t<string>4.97.0</string>")
+        rows = check_version({**ADV["Docker Desktop"], "version_files": [f"{d}/*.app/Contents/Info.plist"]})
+        assert [(os.path.basename(r[1]), r[2], r[3]) for r in rows] == [("Docker.app", "4.97.0", "AFFECTED")]
 
 
 def test_share_line():

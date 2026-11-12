@@ -10,6 +10,8 @@
   <url><loc>https://amiaffected.now/advisories/python/</loc></url>
   <url><loc>https://amiaffected.now/advisories/git/</loc></url>
   <url><loc>https://amiaffected.now/advisories/curl/</loc></url>
+  <url><loc>https://amiaffected.now/advisories/java/</loc></url>
+  <url><loc>https://amiaffected.now/advisories/docker-desktop/</loc></url>
   <url><loc>https://amiaffected.now/advisories/bind/</loc></url>
   <url><loc>https://amiaffected.now/advisories/gitlab/</loc></url>
   <url><loc>https://amiaffected.now/advisories/wordpress/</loc></url>

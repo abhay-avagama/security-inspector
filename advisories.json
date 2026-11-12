@@ -203,6 +203,64 @@
       "checked": "2026-11-13T09:00:00Z"
     },
     {
+      "name": "Java",
+      "about": "Oracle's October 2026 Critical Patch Update (20 Oct): about 50 JDK fixes, and on 21 and 24 Oct CVE-2026-91403 and CVE-2026-114820 (rated 9.1): the JDK still trusted the cracked eMudhra intermediates, so anyone on the network could intercept TLS. This check uses the 20 Oct versions every vendor shares; the eMudhra fix came later and is numbered per vendor (Oracle .0.3 builds, Corretto 21.0.13.0.11 and similar; Temurin hadn't shipped it by 13 Nov)",
+      "source": "https://openjdk.org/groups/vulnerability/advisories/2026-10-24",
+      "cves": [
+        "CVE-2026-91403",
+        "CVE-2026-114820",
+        "CVE-2026-91415"
+      ],
+      "binary": "java",
+      "flag": "-version",
+      "globs": [
+        "/Library/Java/JavaVirtualMachines/*/Contents/Home/bin/java",
+        "~/Library/Java/JavaVirtualMachines/*/Contents/Home/bin/java",
+        "~/.sdkman/candidates/java/*/bin/java",
+        "/opt/homebrew/opt/openjdk*/bin/java",
+        "/usr/local/opt/openjdk*/bin/java",
+        "/usr/lib/jvm/*/bin/java"
+      ],
+      "skip_prefixes": [
+        "/usr/bin/",
+        "/bin/"
+      ],
+      "version_regex": "version \"([0-9._]+)\"",
+      "fixed": [
+        "27.0.1",
+        "25.0.5",
+        "21.0.13",
+        "17.0.21",
+        "11.0.33",
+        "1.8.0.511"
+      ],
+      "branch_width": 1,
+      "after_fix": "and get your vendor's eMudhra build (Oracle .0.3, Corretto .0.10/.0.11) once it's out",
+      "checked": "2026-11-13T09:00:00Z"
+    },
+    {
+      "name": "Docker Desktop",
+      "about": "CVE-2026-98432 (rated 9.8): a use-after-free in the TCP code of the Linux kernel inside Docker Desktop's VM, fixed on 3 Nov 2026 in 4.98.0; 4.97.0 also fixed CVE-2026-99999 (a container can corrupt the VM's network stack) and logs that held API keys and OAuth tokens in clear text",
+      "source": "https://docs.docker.com/desktop/release-notes/",
+      "cves": [
+        "CVE-2026-98432",
+        "CVE-2026-99999",
+        "CVE-2026-114409"
+      ],
+      "version_files": [
+        "/Applications/Docker.app/Contents/Info.plist",
+        "~/Applications/Docker.app/Contents/Info.plist"
+      ],
+      "version_regex": "<key>CFBundleShortVersionString</key>\\s*<string>([0-9.]+)</string>",
+      "match_required": true,
+      "fixed": [
+        "4.98.0"
+      ],
+      "branch_width": 1,
+      "after_fix": "then quit and reopen Docker Desktop",
+      "checked": "2026-11-13T09:00:00Z"
+    },
+    {
       "name": "BIND",
       "about": "CVE-2026-94300: GSS-TSIG replay can corrupt memory in named",
       "source": "https://kb.isc.org/docs/cve-2026-94300",
