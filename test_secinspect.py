@@ -11,7 +11,7 @@ import tempfile
 from secinspect import (ADVISORIES, AAA, CHROMIUM, INTERMEDIATES, MCP, ROOTS, agent_config_rows, by_branch, check_hooks, check_iocs, check_skill_changes, watch_diff, watch_message, check_skills, skill_file_findings, chain_accepts, check_mcp, env_rows, ssh_key_encrypted, unpinned, check_overrides, check_version,
                         chromium_version, distro_status, fix_for, installed, inspect_file, ver,
                         fix_hint, fix_plan, html_report, share_line, new_cves, nums, os_release, pem, roots_in, scan_files,
-                        scan_image_tar, test_bundle, upstream, version_status)
+                        scan_image_tar, test_bundle, upstream, version_status, ELECTRON, check_electron)
 
 PHP = [(8, 5, 12), (8, 4, 27), (8, 3, 36), (8, 2, 35)]
 ADV = {a["name"]: a for a in ADVISORIES["versions"]}
@@ -254,6 +254,14 @@ def test_zero_day():
            "vulnerability being exploited in the wild\n  CVE-2026-6:\n    description: |\n      We are aware that exploit code for this is "
            "public however we are not aware of any attacks in the wild abusing this flaw\n")
     assert w.mozilla_exploited(yml) == ["CVE-2026-7"]
+    rel = [{"version": "45.3.1"}, {"version": "46.0.0-beta.3"}, {"version": "44.11.2"}]
+    assert w.electron_candidates(rel, [43, 44, 45]) == []  # a beta doesn't count
+    assert w.electron_candidates(rel + [{"version": "46.0.0"}], [43, 44, 45])[0]["cve"] == "Electron 46"
+    edge = next(a for a in ADVISORIES["versions"] if a["name"] == "Microsoft Edge")
+    notes = ("Microsoft Edge for Android (Version 157.0.4341.53) ... Microsoft Edge for Stable (Version 157.0.4341.42) "
+             "... Microsoft Edge for Stable (Version 156.0.4314.58)")
+    assert w.awaiting_candidates(notes, edge) == []  # Android alone isn't the desktop fix
+    assert w.awaiting_candidates("Microsoft Edge for Stable (Version 157.0.4341.61) " + notes, edge)[0]["cve"] == "Microsoft Edge 157.0.4341.61"
 
 
 def test_macos_firefox():
@@ -270,6 +278,32 @@ def test_macos_firefox():
             open(f"{d}/{app}/c/application.ini", "w").write(body)
         rows = check_version({**ff, "version_files": [f"{d}/*/c/application.ini"]})
     assert [(r[2], r[3]) for r in rows] == [("153.6.0", "OK")]
+
+
+def test_electron_edge_brave():
+    with tempfile.TemporaryDirectory() as d:
+        def app(path, e, c, pad=0):
+            os.makedirs(os.path.dirname(path), exist_ok=True)
+            open(path, "wb").write(b"x" * pad + f"Electron/{e}".encode() + b"\0junk\0" + f"Chrome/{c}".encode())
+            os.chmod(path, 0o755)
+        fw = "Contents/Frameworks/Electron Framework.framework/Electron Framework"
+        app(f"{d}/Applications/Old.app/{fw}", "30.1.2", "124.0.6367.243", pad=(1 << 22) - 5)  # split across two reads
+        app(f"{d}/Applications/New.app/{fw}", "44.9.3", "152.0.7977.167")
+        app(f"{d}/opt/slack/slack", "46.0.0", "160.0.1.1")  # Linux: biggest executable beside resources/app.asar
+        open(f"{d}/opt/slack/tiny-helper", "w").write("#!/bin/sh")
+        os.chmod(f"{d}/opt/slack/tiny-helper", 0o755)
+        os.makedirs(f"{d}/opt/slack/resources")
+        open(f"{d}/opt/slack/resources/app.asar", "w").write("")
+        rows = check_electron({**ELECTRON, "mac": [f"{d}/Applications/*.app/{fw}"], "linux": [f"{d}/opt/*/resources/app.asar"]})
+        got = {os.path.basename(r[1]): (r[2], r[3]) for r in rows}
+        assert got == {"Old.app": ("Electron 30.1.2, Chromium 124.0.6367.243", "AFFECTED"),
+                       "New.app": ("Electron 44.9.3, Chromium 152.0.7977.167", "OK"),
+                       "slack": ("Electron 46.0.0, Chromium 160.0.1.1", "UNKNOWN")}, got
+        assert check_electron({**ELECTRON, "mac": [], "linux": []})[0][3] == "NOT FOUND"
+    assert "supported Electron" in fix_for(ELECTRON["name"], "/Applications/Old.app")[1]
+    assert status("Microsoft Edge", (157, 0, 4341, 42)) == "AFFECTED" and status("Microsoft Edge", (157, 0, 4341, 53)) == "OK"
+    assert status("Brave", (1, 98, 63)) == "AFFECTED" and status("Brave", (1, 99, 56)) == "OK"
+    assert status("Brave", (1, 100, 51)) == "AFFECTED" and status("Brave", (1, 101, 47)) == "OK"
 
 
 def test_share_line():
@@ -780,6 +814,7 @@ if __name__ == "__main__":
     test_postgres()
     test_queue_nov3()
     test_chrome()
+    test_electron_edge_brave()
     test_share_line()
     test_macos_firefox()
     test_zero_day()

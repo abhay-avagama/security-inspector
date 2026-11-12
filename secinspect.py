@@ -161,6 +161,66 @@ def check_chromium_cache():
     return rows or [(name, "-", "-", "NOT FOUND", "")]
 
 
+# --- Electron apps --------------------------------------------------------------------------------
+# VS Code, Cursor, Slack, Postman... each ships its own Chromium. Electron backports Chrome's security
+# fixes only to its newest three majors, so an app on an older one keeps every Chrome bug fixed since.
+
+ELECTRON = ADVISORIES["electron"]
+ELECTRON_TAG = re.compile(rb"Electron/(\d+\.\d+\.\d+)")
+CHROME_TAG = re.compile(rb"Chrome/(\d+\.\d+\.\d+\.\d+)")
+
+
+def electron_binaries(adv=ELECTRON):
+    """{app folder: binary holding the Electron and Chrome version strings}."""
+    out = {}
+    for g in adv["mac"]:  # .../X.app/Contents/Frameworks/Electron Framework.framework/Electron Framework
+        for fw in glob.glob(os.path.expanduser(g)):
+            out.setdefault(fw.split(".app/Contents/")[0] + ".app", fw)
+    for g in adv["linux"]:  # the app's main executable sits next to resources/app.asar
+        for asar in glob.glob(os.path.expanduser(g)):
+            d = os.path.dirname(os.path.dirname(asar))
+            exes = [p for p in glob.glob(os.path.join(d, "*")) if os.path.isfile(p) and os.access(p, os.X_OK)]
+            if exes:
+                out.setdefault(d, max(exes, key=os.path.getsize))
+    return out
+
+
+def electron_versions(path):
+    """(Electron version, Chromium version) read from the binary without running it."""
+    found, tail = {}, b""
+    try:
+        with open(path, "rb") as f:
+            while len(found) < 2 and (chunk := f.read(1 << 22)):
+                buf = tail + chunk
+                for key, rx in (("e", ELECTRON_TAG), ("c", CHROME_TAG)):
+                    if key not in found and (m := rx.search(buf)):
+                        found[key] = m[1].decode()
+                tail = buf[-64:]  # a version string split across two reads
+    except OSError:
+        pass
+    return found.get("e"), found.get("c")
+
+
+def check_electron(adv=ELECTRON):
+    name, sup = adv["name"], adv["supported"]
+    rows = []
+    for app, binary in sorted(electron_binaries(adv).items()):
+        e, c = electron_versions(binary)
+        if not e:
+            rows.append((name, app, "?", "UNKNOWN", "couldn't read its Electron version"))
+            continue
+        major = int(e.split(".")[0])
+        shown = f"Electron {e}" + (f", Chromium {c}" if c else "")
+        if major < min(sup):
+            rows.append((name, app, shown, "AFFECTED", f"Electron {major} no longer gets Chrome's security fixes (only {min(sup)}-{max(sup)} do): "
+                         "update the app; if it is already up to date, its maker ships an unsupported Electron"))
+        elif major > max(sup):
+            rows.append((name, app, shown, "UNKNOWN", "newer than the Electron versions this release knows"))
+        else:
+            rows.append((name, app, shown, "OK", ""))
+    return rows or [(name, "-", "-", "NOT FOUND", "")]
+
+
 # --- MCP servers that will never be patched -------------------------------------------------------
 
 # --- How safe is this machine for an AI agent? -----------------------------------------------------
@@ -1332,6 +1392,13 @@ def fix_for(item, where, note=""):
                     "puppeteer.launch({ channel: 'chrome' })   # keep Chrome updated; then: rm -rf ~/.cache/puppeteer")
         return ("Run Playwright on your installed Chrome, sandbox on, and delete its cached browsers",
                 "chromium.launch({ channel: 'chrome', chromiumSandbox: true })   # MCP: npx @playwright/mcp@<pinned> --browser chrome; then delete the chromium* folders in the ms-playwright cache")
+    if item == ELECTRON["name"]:
+        return ("Update apps built on an unsupported Electron",
+                "update each app from its own menu or site; if it is already current, ask its maker for a build on a supported Electron, and don't open untrusted links or files in it")
+    if item == "Microsoft Edge":
+        return ("Update Edge when the fix lands", "Edge menu > Settings > About Microsoft Edge (edge://settings/help), then Restart")
+    if item == "Brave":
+        return ("Update Brave and relaunch it", "Brave menu > About Brave (brave://settings/help), then Relaunch")
     if item == MCP["name"]:
         if note.startswith("remote code"):
             return ("Remove the Puppeteer MCP server (no fix is coming)",
@@ -1447,7 +1514,7 @@ def html_report(rows, path):
                  f'<ul class="leaves">{leaves}</ul></details>')
 
     sources = "".join(f'<li><a href="{e(a["source"])}">{e(a["name"])}</a>: {e(a["about"])}</li>'
-                      for a in ADVISORIES["versions"] + DISTRO + PACKAGES + ADVISORIES.get("iocs", []) + [CHROMIUM, MCP, AGENT, SKILLS, {"name": "eMudhra CA", **ADVISORIES["ca"]}])
+                      for a in ADVISORIES["versions"] + DISTRO + PACKAGES + ADVISORIES.get("iocs", []) + [CHROMIUM, ELECTRON, MCP, AGENT, SKILLS, {"name": "eMudhra CA", **ADVISORIES["ca"]}])
     when = datetime.datetime.now().strftime("%d %b %Y, %H:%M")
     open(path, "w").write(f"""<!doctype html><html><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1"><title>Am I affected? — report</title><style>
@@ -2080,7 +2147,7 @@ def main(argv):
     else:
         offline = bool(args.no_update_check or os.environ.get("SECINSPECT_NO_UPDATE_CHECK"))
         rows = [r for adv in ADVISORIES["versions"] for r in check_version(adv)] + check_distro(offline=offline)
-        rows += check_chromium_cache() + scan_files(roots) + check_docker(args.docker) + check_stores()
+        rows += check_chromium_cache() + check_electron() + scan_files(roots) + check_docker(args.docker) + check_stores()
         rows += check_mcp(rows) + check_iocs() + check_skills(extra=FOUND_SKILL_DIRS) + check_hooks()
     if args.skills_baseline:
         home = os.path.join(roots[0], ".no-home") if args.files_only else HOME

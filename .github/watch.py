@@ -20,7 +20,7 @@ import urllib.request
 from datetime import date, datetime, timedelta
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-from secinspect import ADVISORIES, FEED_URL, new_cves  # noqa: E402
+from secinspect import ADVISORIES, FEED_URL, new_cves, nums  # noqa: E402
 
 KEV_URL = "https://www.cisa.gov/sites/default/files/feeds/known_exploited_vulnerabilities.json"
 # ponytail: keyword match on vendor/product; widen this list when a miss shows up
@@ -152,6 +152,32 @@ def feed_candidates(known):
     return out
 
 
+ELECTRON_RELEASES = "https://releases.electronjs.org/releases.json"
+
+
+def electron_candidates(releases, supported):
+    """A stable Electron major newer than the ones we list means the oldest listed one just lost support."""
+    majors = {int(r["version"].split(".")[0]) for r in releases if "-" not in r["version"]}
+    newest = max(majors, default=0)
+    if newest <= max(supported):
+        return []
+    return [{"cve": f"Electron {newest}", "title": f"Electron {newest} is out: update the supported list ({', '.join(map(str, supported))})",
+             "why": f"Electron supports its newest three majors, so {newest} ending up stable moves the oldest out of support.",
+             "detail": f"Set electron.supported in advisories.json to {list(range(newest - 2, newest + 1))} and update its about text.",
+             "fix": "", "source": "https://www.electronjs.org/docs/latest/tutorial/electron-timelines"}]
+
+
+def awaiting_candidates(page, adv):
+    """The vendor said a fix is coming (Edge): queue once their notes list a newer build than the last affected one."""
+    w = adv["awaiting"]
+    newer = sorted({v for v in re.findall(w["regex"], page) if nums(v) > nums(w["above"])}, key=nums)
+    if not newer:
+        return []
+    return [{"cve": f'{adv["name"]} {newer[-1]}', "title": f'{adv["name"]} {newer[-1]} is out: is it the fix we were waiting for?',
+             "why": f'The {adv["name"]} entry waits for a vendor fix; their notes now list {", ".join(newer)}.',
+             "detail": "Check the notes, set the fixed version in advisories.json and drop `awaiting`.", "fix": "", "source": w["url"]}]
+
+
 def body(c):
     return "\n\n".join(x for x in (
         c["why"], c["detail"], f'Vendor fix / required action: {c["fix"]}' if c["fix"] else "",
@@ -182,6 +208,16 @@ def main(argv):
         print(f"skip CISA KEV: {e}", file=sys.stderr)
         kev = []
     cands = zero_day_candidates(zsince, known) + kev + feed_candidates(known)
+    try:
+        cands += electron_candidates(get(ELECTRON_RELEASES), ADVISORIES["electron"]["supported"])
+    except Exception as e:
+        print(f"skip Electron releases: {e}", file=sys.stderr)
+    for adv in ADVISORIES["versions"]:
+        if adv.get("awaiting"):
+            try:
+                cands += awaiting_candidates(get_text(adv["awaiting"]["url"]), adv)
+            except Exception as e:
+                print(f"skip {adv['name']} notes: {e}", file=sys.stderr)
     seen = set()
     for c in cands:
         if c["cve"] in seen:

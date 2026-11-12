@@ -79,7 +79,7 @@ def advisory_pages():
     from secinspect import ADVISORIES
     e = html.escape
     kinds = [("versions", "App"), ("distro", "Linux server package"), ("packages", "Library or package")]
-    advs = [(a, kind) for key, kind in kinds for a in ADVISORIES[key]] + [(ADVISORIES["chromium_cache"], "Agent browser")]
+    advs = [(a, kind) for key, kind in kinds for a in ADVISORIES[key]] + [(ADVISORIES["electron"], "Desktop apps"), (ADVISORIES["chromium_cache"], "Agent browser")]
     slugs = [slug(a["name"]) for a, _ in advs]
     assert len(set(slugs)) == len(slugs), "two advisories share a page name"
     nvd = lambda c: f'<a href="https://nvd.nist.gov/vuln/detail/{e(c)}">{e(c)}</a>'
@@ -100,6 +100,8 @@ def advisory_pages():
             cells = "".join(f"<tr><td>{e(rel_name(rel))}</td><td>{'' if isinstance(v, str) else e(pkg)}</td><td><code>{e(nofix(v if isinstance(v, str) else fx))}</code></td></tr>"
                             for rel, v in a["fixed"].items() for pkg, fx in ([("", v)] if isinstance(v, str) else v.items()))
             rows.append(("Fixed packages", f"<div class=\"tw\"><table><tr><th>Release</th><th>Package</th><th>Fixed in</th></tr>{cells}</table></div>"))
+        if a.get("supported"):
+            rows.append(("Still patched", f"Electron {min(a['supported'])} to {max(a['supported'])}; an app on an older Electron is flagged"))
         if a.get("bad"):
             rows.append(("Bad versions", code(a["bad"]) + (f"; safe: <code>{e(a['safe'])}</code>" if a.get("safe") else "")))
         if a.get("bad_range"):
@@ -109,7 +111,7 @@ def advisory_pages():
         if a.get("status") == "REVIEW":
             rows.append(("Status", "REVIEW, not AFFECTED: a person needs to look"))
         where = ([f"<code>{e(a['binary'])} {e(a['flag'])}</code>"] if a.get("binary") else []) + \
-                [f"<code>{e(p)}</code>" for p in a.get("globs", []) + a.get("version_files", []) + ([a["version_file"]] if a.get("version_file") else []) + a.get("present_paths", []) + a.get("dirs", [])] + \
+                [f"<code>{e(p)}</code>" for p in a.get("globs", []) + a.get("version_files", []) + ([a["version_file"]] if a.get("version_file") else []) + a.get("present_paths", []) + a.get("dirs", []) + a.get("mac", []) + a.get("linux", [])] + \
                 [f"{e(fam)} package <code>{e(p)}</code>" for fam in ("deb", "rpm", "brew") for p in a.get(f"{fam}_packages", [])] + \
                 ([f"{e(a.get('ecosystem', 'pypi'))} package <code>{e(a['package'])}</code> in environments and lock files"] if a.get("package") else [])
         if where:
@@ -137,6 +139,8 @@ def advisory_pages():
 
     def description(a):
         """Under 160 characters: the CVE and the fixed version, which are what people search for."""
+        if a.get("supported"):  # Electron: no single CVE, the question is the Electron version
+            return f"Check which apps on your machine run an Electron that no longer gets Chrome's security fixes (only {min(a['supported'])} to {max(a['supported'])} do). Nothing to install."
         cves = a.get("cves", [])
         what = f"{cves[0]}{f' and {len(cves) - 1} more' if len(cves) > 1 else ''}" if cves else f"the bad release {', '.join(a.get('bad', []))}".rstrip()
         fixed = a.get("upstream_fixed") or (a["fixed"] if isinstance(a.get("fixed"), list) else None)

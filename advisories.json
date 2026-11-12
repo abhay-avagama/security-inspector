@@ -1,5 +1,5 @@
 {
-  "release": {"script_sha256": "847aaa3700490c68cda3c8782c1bcd623ab27f0ff36ad74139da80fbe2bafaec", "released": "2026-11-10T12:29:25Z"},
+  "release": {"script_sha256": "1c46e77c8d4655866fcec56705d612fc3b52945b3ebb3cab950b47371ed547c6", "released": "2026-11-12T18:42:51Z"},
   "versions": [
     {
       "name": "PHP",
@@ -283,6 +283,64 @@
       ],
       "checked": "2026-11-12T12:00:00Z",
       "feed": "chrome"
+    },
+    {
+      "name": "Microsoft Edge",
+      "about": "CVE-2026-125350, the Chrome XML use-after-free exploited in the wild, is also in Edge; on 11 Nov 2026 Microsoft fixed it on Android (157.0.4341.53) and said a desktop fix is coming",
+      "source": "https://learn.microsoft.com/en-us/deployedge/microsoft-edge-relnotes-security",
+      "cves": [
+        "CVE-2026-125350"
+      ],
+      "binary": "microsoft-edge",
+      "flag": "--version",
+      "globs": [
+        "/Applications/Microsoft Edge.app/Contents/MacOS/Microsoft Edge",
+        "/usr/bin/microsoft-edge-stable",
+        "/opt/microsoft/msedge/msedge"
+      ],
+      "affected": [
+        [
+          "0.0.0.0",
+          "157.0.4341.52",
+          "CVE-2026-125350 is exploited in the wild and Microsoft hasn't shipped the desktop fix yet: update Edge as soon as edge://settings/help offers 157.0.4341.53 or later, and use an updated Chrome for untrusted sites meanwhile"
+        ]
+      ],
+      "awaiting": {
+        "url": "https://learn.microsoft.com/en-us/deployedge/microsoft-edge-relnotes-security",
+        "regex": "Microsoft Edge for Stable \\(Version ([0-9.]+)\\)",
+        "above": "157.0.4341.52"
+      },
+      "checked": "2026-11-13T09:00:00Z"
+    },
+    {
+      "name": "Brave",
+      "about": "CVE-2026-125350, the Chrome XML use-after-free exploited in the wild: Brave took the fix (Chromium 157.0.8103.50) in Release 1.99.56 and Beta 1.100.52 on 10 Nov 2026",
+      "source": "https://github.com/brave/brave-browser/releases/tag/v1.99.56",
+      "cves": [
+        "CVE-2026-125350"
+      ],
+      "binary": "brave-browser",
+      "flag": "--version",
+      "globs": [
+        "/Applications/Brave Browser.app/Contents/MacOS/Brave Browser",
+        "/usr/bin/brave-browser-stable",
+        "/opt/brave.com/brave/brave",
+        "/snap/bin/brave"
+      ],
+      "version_regex": "\\b\\d+\\.(1\\.\\d+\\.\\d+)\\b",
+      "affected": [
+        [
+          "0.0.0",
+          "1.99.55",
+          "CVE-2026-125350 is exploited in the wild: update to 1.99.56+ (brave://settings/help) and relaunch Brave"
+        ],
+        [
+          "1.100.0",
+          "1.100.51",
+          "CVE-2026-125350 is exploited in the wild: update Brave Beta to 1.100.52+ and relaunch it"
+        ]
+      ],
+      "checked": "2026-11-13T09:00:00Z"
     },
     {
       "name": "macOS",
@@ -1083,6 +1141,31 @@
       "after_fix": "check systemctl status zammad"
     }
   ],
+  "electron": {
+    "name": "Electron apps",
+    "about": "Apps such as VS Code, Cursor, Slack, Postman and Claude carry their own copy of Chromium through Electron, which backports Chrome's security fixes only to its three newest major versions (43, 44 and 45 since 21 Oct 2026). An app built on an older Electron carries every Chrome bug fixed since, including those exploited in the wild such as CVE-2026-125350",
+    "source": "https://www.electronjs.org/docs/latest/tutorial/electron-timelines",
+    "supported": [
+      43,
+      44,
+      45
+    ],
+    "mac": [
+      "/Applications/*.app/Contents/Frameworks/Electron Framework.framework/Electron Framework",
+      "/Applications/*/*.app/Contents/Frameworks/Electron Framework.framework/Electron Framework",
+      "~/Applications/*.app/Contents/Frameworks/Electron Framework.framework/Electron Framework"
+    ],
+    "linux": [
+      "/opt/*/resources/app.asar",
+      "/opt/*/*/resources/app.asar",
+      "/usr/lib/*/resources/app.asar",
+      "/usr/share/*/resources/app.asar",
+      "/snap/*/current/*/resources/app.asar",
+      "/snap/*/current/usr/share/*/resources/app.asar",
+      "~/.local/share/*/resources/app.asar"
+    ],
+    "checked": "2026-11-13T09:00:00Z"
+  },
   "chromium_cache": {
     "name": "Puppeteer / Playwright Chromium",
     "about": "Browsers that Puppeteer and Playwright download never update themselves, and Playwright starts Chromium with the sandbox off unless told otherwise. Puppeteer 25.16.0 (Chromium 156.0.8078.47) still ships a build older than 157.0.8103.50; Playwright 1.65.0 ships 158.0.8127.18 but still turns the sandbox off. CVE-2026-87491 and CVE-2026-85046: V8 bugs exploited in the wild (CISA KEV), fixed in 153.0.8010.36; on macOS also CVE-2026-106378, a GPU sandbox escape fixed in 155.0.8059.39; and four critical bugs fixed on 27 Oct 2026 in 156.0.8078.73 (CVE-2026-118306 escapes the sandbox, CVE-2026-118331/118348/118344 run code inside it); and 196 bugs fixed in 157.0.8103.38 (stable on Linux 3 Nov, macOS 5 Nov 2026), 33 of them critical, several running code outside the sandbox (e.g. CVE-2026-121035, CVE-2026-121086, CVE-2026-121189); and CVE-2026-125350, a use-after-free in XML exploited in the wild, fixed on 9 Nov 2026 in 157.0.8103.50",

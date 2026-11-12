@@ -12,6 +12,8 @@
   <url><loc>https://amiaffected.now/advisories/wordpress/</loc></url>
   <url><loc>https://amiaffected.now/advisories/nextcloud-collabora-code/</loc></url>
   <url><loc>https://amiaffected.now/advisories/google-chrome-chromium/</loc></url>
+  <url><loc>https://amiaffected.now/advisories/microsoft-edge/</loc></url>
+  <url><loc>https://amiaffected.now/advisories/brave/</loc></url>
   <url><loc>https://amiaffected.now/advisories/macos/</loc></url>
   <url><loc>https://amiaffected.now/advisories/firefox/</loc></url>
   <url><loc>https://amiaffected.now/advisories/wordpress-acf-extended-pro/</loc></url>
@@ -38,5 +40,6 @@
   <url><loc>https://amiaffected.now/advisories/python-jose/</loc></url>
   <url><loc>https://amiaffected.now/advisories/fastify-http-proxy/</loc></url>
   <url><loc>https://amiaffected.now/advisories/pgadmin-4-pip/</loc></url>
+  <url><loc>https://amiaffected.now/advisories/electron-apps/</loc></url>
   <url><loc>https://amiaffected.now/advisories/puppeteer-playwright-chromium/</loc></url>
 </urlset>
