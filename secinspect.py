@@ -31,6 +31,7 @@ import os
 import platform
 import plistlib
 import re
+import shlex
 import shutil
 import subprocess
 import sys
@@ -1438,6 +1439,111 @@ def check_stores():
 
 # --- Output -------------------------------------------------------------------------------------
 
+# --- End of life: a branch that gets no more fixes will miss the next bug too, CVE or not -----------
+
+EOL = ADVISORIES["eol"]
+OS_NAMES = {"ubuntu": "Ubuntu", "debian": "Debian", "rhel": "Red Hat Enterprise Linux", "almalinux": "AlmaLinux", "rocky": "Rocky Linux"}
+
+
+def os_row(os_text):
+    """This Linux release as a row, so apply_eol judges it like any other version."""
+    d = dict(re.findall(r'^(\w+)="?([^"\n]*)"?$', os_text or "", re.M))
+    name = OS_NAMES.get(d.get("ID"))
+    return [(name, "/etc/os-release", d["VERSION_ID"], "OK", "")] if name and d.get("VERSION_ID") else []
+
+
+def apply_eol(rows, today=None):
+    """OK on an ended branch becomes REVIEW; an ending branch (90 days) gets a note. Dates come from endoflife.date."""
+    today = today or datetime.date.today().isoformat()
+    soon = (datetime.date.fromisoformat(today) + datetime.timedelta(days=90)).isoformat()
+    by_item = {i: p for p in EOL["products"] for i in p["items"]}
+    out = []
+    for item, where, v, status, note in rows:
+        p, n = by_item.get(item), nums(str(v))
+        cyc = next((c for c in p["cycles"] if n and nums(c) == n[:len(nums(c))]), None) if p else None
+        end = p["cycles"][cyc] if cyc else False
+        if end is True or (end and end <= today):
+            gone = f"{item} {cyc} reached end of life{'' if end is True else ' on ' + end}: no more security fixes, move to {p['newest']}"
+            if status in ("OK", "UNKNOWN"):
+                status, note = "REVIEW", gone
+            elif "end-of-life" not in note:
+                note = f"{note}; {gone}" if note else gone
+        elif end and end <= soon:
+            note = (note + "; " if note else "") + f"{item} {cyc} gets security fixes until {end}, plan the move to {p['newest']}"
+        out.append((item, where, v, status, note))
+    return out
+
+
+# --- Settings that blunt bugs nobody has found yet ------------------------------------------------
+# Read-only: each is a command any user can run, and nothing is changed.
+
+LISTENING = "Listening on the network"
+MAC_SETTINGS = [  # (item, command, text when on, why it matters, how to turn it on)
+    ("Setting: FileVault", ("fdesetup", "status"), "FileVault is On", "a lost or stolen Mac gives up its files",
+     "System Settings > Privacy & Security > FileVault > Turn On"),
+    ("Setting: Gatekeeper", ("spctl", "--status"), "assessments enabled", "apps that aren't signed and notarized open without a warning",
+     "sudo spctl --global-enable"),
+    ("Setting: System Integrity Protection", ("csrutil", "status"), "status: enabled", "malware running as root can change system files",
+     "restart into Recovery (hold the power button), open Terminal, run: csrutil enable"),
+    ("Setting: macOS firewall", ("/usr/libexec/ApplicationFirewall/socketfilterfw", "--getglobalstate"), "is enabled",
+     "anything listening on a port is reachable from the Wi-Fi you're on", "System Settings > Network > Firewall > on"),
+]
+SETTING_FIX = {item: (f"Turn on {item.split(': ')[1]}", how) for item, _, _, _, how in MAC_SETTINGS}
+SETTING_FIX["Setting: automatic security updates"] = (
+    "Turn on automatic security updates",
+    "System Settings > General > Software Update > Automatic Updates > Install Security Responses and system files")
+SETTING_FIX[LISTENING] = ("Check what's reachable from your network",
+                          "quit what you don't need, bind dev servers to 127.0.0.1, and turn on the macOS firewall")
+APT_AUTO = ("sudo apt install unattended-upgrades && sudo dpkg-reconfigure -plow unattended-upgrades")
+DNF_AUTO = ("sudo dnf install dnf-automatic && sudo systemctl enable --now dnf-automatic-install.timer")
+
+
+def listening(lsof_out, path_of):
+    """One REVIEW row per program taking connections from other machines; Apple's own daemons are left out."""
+    ports, pid = {}, None
+    for line in lsof_out.splitlines():
+        if line.startswith("p"):
+            pid = line[1:]
+        elif line.startswith("n") and pid:
+            host, port = line[1:].rsplit(":", 1)
+            if not (host.startswith("127.") or host in ("[::1]", "localhost")):
+                ports.setdefault(pid, set()).add(f"{host}:{port}")
+    rows = []
+    for pid, addrs in sorted(ports.items()):
+        path = path_of(pid) or f"pid {pid}"
+        if not path.startswith(("/System/", "/usr/libexec/", "/usr/sbin/")):
+            rows.append((LISTENING, path, ", ".join(sorted(addrs)), "REVIEW",
+                         "takes connections from other machines on your network; check you meant that"))
+    return rows
+
+
+def check_settings(read=run):
+    rows = []
+    if sys.platform == "darwin":
+        for item, cmd, on_text, why, _ in MAC_SETTINGS:
+            out = read(*cmd)
+            if out.strip():  # missing tool (older macOS, a container): no row rather than a guess
+                on = on_text in out
+                rows.append((item, " ".join(cmd), "on" if on else "off", "OK" if on else "REVIEW", "" if on else f"off: {why}"))
+        su = read("defaults", "read", "/Library/Preferences/com.apple.SoftwareUpdate")
+        off = re.search(r"\b(CriticalUpdateInstall|ConfigDataInstall) = 0;", su)  # absent means the default, which is on
+        rows.append(("Setting: automatic security updates", "/Library/Preferences/com.apple.SoftwareUpdate", "off" if off else "on",
+                     "REVIEW" if off else "OK", "off: security fixes wait until someone installs them by hand" if off else ""))
+        rows += listening(read("lsof", "-nP", "-iTCP", "-sTCP:LISTEN", "-F", "pn"),
+                          lambda pid: read("ps", "-p", pid, "-o", "comm=").strip())
+    elif shutil.which("apt-get"):
+        conf = "".join(open(f, errors="replace").read() for f in glob.glob("/etc/apt/apt.conf.d/*") if os.path.isfile(f))
+        on = bool(shutil.which("unattended-upgrade")) and re.search(r'Unattended-Upgrade\s+"1"', conf)
+        rows.append(("Setting: automatic security updates", "unattended-upgrades", "on" if on else "off", "OK" if on else "REVIEW",
+                     "" if on else "off: security fixes wait until someone runs apt"))
+    elif shutil.which("dnf"):
+        on = any(read("systemctl", "is-enabled", t).strip() == "enabled"
+                 for t in ("dnf-automatic.timer", "dnf-automatic-install.timer", "dnf5-automatic.timer"))
+        rows.append(("Setting: automatic security updates", "dnf-automatic", "on" if on else "off", "OK" if on else "REVIEW",
+                     "" if on else "off: security fixes wait until someone runs dnf"))
+    return rows
+
+
 STATUSES = ("AFFECTED", "REVIEW", "UNKNOWN", "OK", "NOT FOUND")
 
 
@@ -1535,6 +1641,12 @@ def fix_for(item, where, note=""):
             return ("Put a passphrase on SSH private keys", "ssh-keygen -p -f <key>   # macOS: then ssh-add --apple-use-keychain <key>")
         return ("Keep agents away from .env files",
                 'add "permissions": {"deny": ["Read(./.env*)"]} to the project\'s .claude/settings.json, or keep secrets in a secret manager')
+    if item == "Setting: automatic security updates" and where in ("unattended-upgrades", "dnf-automatic"):
+        return ("Turn on automatic security updates", APT_AUTO if where == "unattended-upgrades" else DNF_AUTO)
+    if item in SETTING_FIX:
+        return SETTING_FIX[item]
+    if item in OS_NAMES.values():
+        return (f"Move to a supported {item} release", "plan the upgrade (Ubuntu: sudo do-release-upgrade), or buy the vendor's extended support")
     if item == "Docker":
         return ("Rebuild the affected Docker image", "remove the image, rebuild from a patched base, rotate any keys it held")
     plan = next((a["plan"] for a in ADVISORIES["versions"] + PACKAGES + ADVISORIES.get("iocs", []) if a["name"] == item and "plan" in a), None)
@@ -1750,8 +1862,15 @@ def watch_message(new, fixed, first, rows):
     return "\n".join(lines)
 
 
-def notify(message, url=None, mail=None):
+def notify(message, url=None, mail=None, desktop=False):
     """Sends only to what the user named on the command line."""
+    if desktop:  # a banner on this machine; the text goes in as arguments, so nothing in it is run
+        title, body = "Am I affected?", message.splitlines()[0]
+        if sys.platform == "darwin":
+            subprocess.run(["osascript", "-e", "on run argv", "-e", "display notification (item 2 of argv) with title (item 1 of argv)",
+                            "-e", "end run", title, body], capture_output=True)
+        elif shutil.which("notify-send"):
+            subprocess.run(["notify-send", title, body], capture_output=True)
     if url:
         body = json.dumps({"text": message, "content": message[:1900]}).encode()  # Slack/Teams read text, Discord content
         try:
@@ -2177,6 +2296,23 @@ def installed_copy_ok(d=HERE):
     return f"{', '.join(bad)} in {d} doesn't match its signature: run --update, or --install again" if bad else None
 
 
+LAUNCH_LABEL = "now.amiaffected.watch"
+
+
+def launch_agent(d, py, agents=os.path.join(HOME, "Library", "LaunchAgents")):
+    """Writes the macOS LaunchAgent (launchd is cron's Mac equivalent, and runs missed jobs after sleep). Not started:
+    --install prints the command, as it does the cron line."""
+    q = shlex.quote
+    cmd = (f"{q(sys.executable)} {q(py)} --update; "
+           f"{q(sys.executable)} {q(py)} --watch {q(os.path.join(d, 'watch.json'))} --desktop")
+    os.makedirs(agents, exist_ok=True)
+    path = os.path.join(agents, LAUNCH_LABEL + ".plist")
+    with open(path, "wb") as fh:
+        plistlib.dump({"Label": LAUNCH_LABEL, "ProgramArguments": ["/bin/sh", "-c", cmd], "StartInterval": 6 * 3600,
+                       "RunAtLoad": True, "StandardErrorPath": os.path.join(d, "watch.log")}, fh)
+    return path
+
+
 def install_agent(d, log, key=None):
     key = key or SIGNING_KEY
     if not key:
@@ -2197,9 +2333,16 @@ def install_agent(d, log, key=None):
     rc = update_agent(d, log)
     if rc == 0:
         py = os.path.join(d, "secinspect.py")
-        print(f"\nInstalled. Run it with:  python3 {py}\nApply fixes:            python3 {py} --fix\n"
-              f"For cron (every 6 hours; a refused update keeps the last signed copy and says why):\n"
-              f"  0 */6 * * * python3 {py} --update; python3 {py} --watch {os.path.join(d, 'watch.json')}", file=sys.stderr)
+        print(f"\nInstalled. Run it with:  python3 {py}\nApply fixes:            python3 {py} --fix", file=sys.stderr)
+        if sys.platform == "darwin" and not is_root():
+            plist = launch_agent(d, py)
+            print(f"To check every 6 hours and show a notification when something changes (a refused update keeps the last "
+                  f"signed copy and says why):\n  launchctl bootstrap gui/{os.getuid()} {plist}\nTo stop:  launchctl bootout "
+                  f"gui/{os.getuid()} {plist}\nGive {sys.executable} Full Disk Access (System Settings > Privacy & Security) "
+                  "or it can't read Documents, Desktop or Downloads in the background.", file=sys.stderr)
+        else:
+            print(f"For cron (every 6 hours; a refused update keeps the last signed copy and says why):\n"
+                  f"  0 */6 * * * python3 {py} --update; python3 {py} --watch {os.path.join(d, 'watch.json')}", file=sys.stderr)
     return rc
 
 
@@ -2212,6 +2355,7 @@ def main(argv):
                     help="for cron: compare with the last run recorded in STATE_FILE and report only what changed")
     ap.add_argument("--notify", metavar="URL", help="with --watch: post changes to this webhook (Slack, Discord, Teams or any JSON endpoint)")
     ap.add_argument("--mail", metavar="ADDRESS", help="with --watch: email changes through this machine's sendmail")
+    ap.add_argument("--desktop", action="store_true", help="with --watch: show changes as a notification on this machine")
     ap.add_argument("--files-only", action="store_true",
                     help="only check files in the folders given (lockfiles, MCP configs, skills, .env, CA bundles), not this "
                          "machine's programs; for CI, where the runner's own Chrome or Node aren't yours to fix")
@@ -2267,6 +2411,11 @@ def main(argv):
         rows += check_chromium_cache() + check_electron() + scan_files(roots) + check_docker(args.docker) + check_stores()
         rows += check_mcp(rows) + check_iocs() + check_skills(extra=FOUND_SKILL_DIRS) + check_hooks()
         rows += check_osv() if args.osv else []
+        try:
+            rows += os_row(open("/etc/os-release").read())
+        except OSError:
+            pass
+        rows = apply_eol(rows) + check_settings()
     if args.skills_baseline:
         home = os.path.join(roots[0], ".no-home") if args.files_only else HOME
         rows += check_skill_changes(skill_dirs(home=home, extra=FOUND_SKILL_DIRS), os.path.expanduser(args.skills_baseline))
@@ -2275,7 +2424,7 @@ def main(argv):
         if new or fixed or first:
             message = watch_message(new, fixed, first, rows)
             print(message)
-            notify(message, args.notify, args.mail)
+            notify(message, args.notify, args.mail, args.desktop)
         return 1 if any(r[3] == "AFFECTED" for r in rows) else 0
     widths = [max(len(str(r[i])) for r in rows) for i in range(4)]
     for r in rows:

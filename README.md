@@ -57,6 +57,9 @@ version-feed technologies, so they aren't tracked this way — refresh them from
 | **curl** CVE-2026-92392 | `curl --version` for curl you installed yourself (Homebrew, `/usr/local`), since macOS and distros patch their own. 8.12.0 to 8.22.0 can use freed memory during an HTTP/2 upload to a malicious server; fixed in 8.23.0 (and 8.20.2, 8.16.2, 8.14.3). |
 | **Java** October 2026 patch update, and the eMudhra fixes CVE-2026-91403 / 114820 | `java -version` for every JDK in `/Library/Java`, `~/Library/Java`, SDKMAN, Homebrew and `/usr/lib/jvm`. Flagged below 27.0.1 / 25.0.5 / 21.0.13 / 17.0.21 / 11.0.33 / 8u511; other lines are end-of-life. The later eMudhra fix is numbered per vendor (Oracle .0.3, Corretto .0.10/.0.11), so the check stops at the shared October versions and says to get it. |
 | **Docker Desktop** CVE-2026-98432 | The version in `Docker.app`'s Info.plist (macOS). A 9.8-rated bug in the TCP code of the kernel inside Docker Desktop's VM, fixed in 4.98.0. |
+| **End of life** (any CVE, including the next one) | Python, Node.js, PHP, PostgreSQL, GitLab and macOS found above, plus the Linux release in `/etc/os-release` (Ubuntu, Debian, RHEL, AlmaLinux, Rocky). A branch past its end-of-life date is flagged for review even when no CVE applies yet, because it won't get the fix for the next one; a branch ending within 90 days gets a note. Dates come from [endoflife.date](https://endoflife.date), kept in `advisories.json` so they're signed with everything else and nothing is fetched at run time. |
+| **Mac settings** | `fdesetup status` (FileVault), `spctl --status` (Gatekeeper), `csrutil status` (SIP), the application firewall, and the Software Update keys for security responses and system files. Each one that is off is flagged for review with how to turn it on. Also every program listening on a port other machines can reach (`lsof`), leaving out Apple's own. In `--watch`, a new one shows up as NEW. |
+| **Linux automatic updates** | `unattended-upgrades` on Debian and Ubuntu, `dnf-automatic` on the RHEL family: flagged for review when security updates wait for someone to install them. |
 | **Node.js** Nov 11 2026 release (15 CVEs, incl. HTTPS memory leaks of TLS private keys and HTTP/2 crashes) | Every `node` on PATH, nvm, Volta, fnm and Homebrew. Fixed in 26.13.1 / 24.22.3 / 22.23.5; end-of-life lines are always affected. |
 | **BIND 9** CVE-2026-94300 | `named -v` against ISC's affected ranges. |
 | **GitLab** CVE-2026-110264 + 11 more | Self-managed Omnibus version file. GitLab.com and Dedicated are already patched. |
@@ -107,9 +110,9 @@ configuration findings, not CVEs, so they're REVIEW, never AFFECTED, and don't c
 | **SSH keys without a passphrase** | Every private key in `~/.ssh`, read for its encryption header only. |
 | **`.env` files an agent can read** | `.env*` files (not `.example` / `.sample` / `.template`) in folders with `CLAUDE.md`, `AGENTS.md`, `GEMINI.md`, `.mcp.json` or a `.claude` / `.cursor` / `.codex` / `.gemini` folder, unless a Claude Code `permissions.deny` rule covers `.env`. Only the path is reported. |
 
-## Watch a server
+## Watch a server, or your Mac
 
-Run it daily from cron and hear about it only when something changes: a new affected package, a new
+Run it every few hours and hear about it only when something changes and hear about it only when something changes: a new affected package, a new
 kernel bug, or a fix that landed. A quiet day prints and sends nothing.
 
 ```sh
@@ -123,6 +126,12 @@ sudo crontab -e
 `--mail ADDRESS` sends through the server's own `sendmail`. The first run reports everything it found;
 after that only NEW and FIXED lines. These two flags are the only way findings leave the machine, and
 only to the place you name.
+
+On a Mac, `--install` (without sudo) also writes a LaunchAgent, `~/Library/LaunchAgents/now.amiaffected.watch.plist`,
+that takes the signed update and runs `--watch --desktop` every 6 hours; `--desktop` shows the change as a
+notification (`notify-send` on Linux desktops). It isn't started for you: `--install` prints the
+`launchctl bootstrap` line to start it and the `bootout` line to stop it. Give Python Full Disk Access in
+System Settings > Privacy & Security, or a background run can't read Documents, Desktop or Downloads.
 
 When the fix for an affected package reaches the machine's own package sources (your distro's, or a
 vendor repository you added), watch mode says so once: `PATCH  nginx -> nginx 1.24.0-2ubuntu7.19: run
@@ -324,6 +333,7 @@ security releases, Mozilla advisories). Zero-days often reach KEV days later, so
 ## Not covered (yet)
 
 - Chrome's own root store (Chrome updates itself; check `chrome://version`)
+- Settings on Windows, and programs listening on Linux servers (servers listen by design)
 - The OpenSSH client (its latest fixes have no CVEs) and the OpenSSL command line (it doesn't say which library your apps load)
 - Opera, Vivaldi and Arc (their own version numbers don't say which Chromium fixes they carry), and Electron apps on Windows
 - Perl `Mozilla::CA`, Go binaries with embedded roots

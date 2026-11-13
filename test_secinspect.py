@@ -270,6 +270,16 @@ def test_zero_day():
     d = w.kev_digest(kev, date(2026, 11, 13), set())
     assert d[0]["cve"] == "KEV week of 2026-11-02" and "CVE-2026-1" in d[0]["detail"] and "CVE-2026-2" not in d[0]["detail"] and "CVE-2026-3" not in d[0]["detail"]
     assert w.kev_digest(kev, date(2026, 11, 13), {"CVE-2026-1"}) == []
+    api = [{"cycle": "27", "eol": False}, {"cycle": "26", "eol": "2026-12-01", "lts": True}, {"cycle": "25", "eol": "2026-01-01"},
+           {"cycle": "24", "eol": "2030-01-01", "lts": True}, {"cycle": "1", "eol": "2010-01-01"}]
+    cycles, newest = w.eol_cycles(api)
+    assert newest == "24" if date.today().isoformat() > "2026-12-01" else newest == "26"  # newest LTS still supported
+    assert "1" not in cycles and cycles["27"] is False
+    p = {"items": ["Node.js"], "slug": "nodejs", "cycles": dict(cycles)}
+    assert w.eol_candidates(p, api) == []
+    p["cycles"]["26"] = "2026-11-01"
+    assert w.eol_candidates(p, api)[0]["cve"] == "EOL Node.js 26"
+    assert all(set(p) >= {"items", "slug", "cycles", "newest"} for p in ADVISORIES["eol"]["products"])
 
 
 def test_macos_firefox():
@@ -312,6 +322,52 @@ def test_electron_edge_brave():
     assert status("Microsoft Edge", (157, 0, 4341, 42)) == "AFFECTED" and status("Microsoft Edge", (157, 0, 4341, 53)) == "OK"
     assert status("Brave", (1, 98, 63)) == "AFFECTED" and status("Brave", (1, 99, 56)) == "OK"
     assert status("Brave", (1, 100, 51)) == "AFFECTED" and status("Brave", (1, 101, 47)) == "OK"
+
+
+def test_eol_settings():
+    import secinspect as si
+    rows = si.apply_eol([("Python", "a", "3.10.1", "OK", ""), ("Python", "b", "3.9.6", "AFFECTED", "end-of-life branch, no fix coming"),
+                         ("Python", "c", "3.11.6", "AFFECTED", "upgrade to 3.11.18+"), ("Python", "d", "?", "UNKNOWN", "x"),
+                         ("PostgreSQL client (psql, pg_dump)", "e", "14.24", "OK", ""), ("GitLab", "f", "19.3.6", "OK", ""),
+                         ("macOS", "g", "10.15.7", "OK", ""), ("Brave", "h", "1.98.63", "AFFECTED", "")], today="2026-11-13")
+    got = {r[1]: (r[3], r[4]) for r in rows}
+    assert got["a"][0] == "REVIEW" and "end of life on 2026-10-01" in got["a"][1] and "3.15" in got["a"][1], got["a"]
+    assert got["b"] == ("AFFECTED", "end-of-life branch, no fix coming")  # by_branch already said so
+    assert got["c"] == ("AFFECTED", "upgrade to 3.11.18+")  # 3.11 runs to 2027-10
+    assert got["d"] == ("UNKNOWN", "x") and got["h"] == ("AFFECTED", "")
+    assert got["e"][0] == "REVIEW" and "PostgreSQL client (psql, pg_dump) 14 " in got["e"][1]
+    assert got["f"][0] == "OK" and "until 2026-11-19" in got["f"][1]
+    assert got["g"][0] == "REVIEW" and "macOS 10.15 " in got["g"][1]  # two-part cycle on a one-part product
+    assert si.os_row('ID=ubuntu\nVERSION_ID="25.10"\n') == [("Ubuntu", "/etc/os-release", "25.10", "OK", "")]
+    assert si.os_row('ID=arch\n') == []
+    assert si.apply_eol(si.os_row('ID=ubuntu\nVERSION_ID="25.10"\n'), today="2026-11-13")[0][3] == "REVIEW"
+    assert "do-release-upgrade" in fix_for("Ubuntu", "/etc/os-release")[1]
+
+    lsof = "p10\nn*:5000\np20\nn127.0.0.1:5432\nn[::1]:5432\np30\nn*:2527\nn127.0.0.1:8799\np40\nn192.168.1.5:22\n"
+    paths = {"10": "/System/Library/CoreServices/ControlCenter.app/Contents/MacOS/ControlCenter", "20": "/opt/pg/postgres",
+             "30": "/opt/homebrew/bin/python3", "40": ""}
+    got = si.listening(lsof, paths.get)
+    assert [(r[1], r[2]) for r in got] == [("/opt/homebrew/bin/python3", "*:2527"), ("pid 40", "192.168.1.5:22")], got
+    if sys.platform == "darwin":
+        out = {"fdesetup status": "FileVault is Off.", "spctl --status": "assessments enabled",
+               "csrutil status": "", "defaults read /Library/Preferences/com.apple.SoftwareUpdate": "    CriticalUpdateInstall = 0;"}
+        got = {r[0]: r[3] for r in si.check_settings(lambda *c: out.get(" ".join(c), ""))}
+        assert got == {"Setting: FileVault": "REVIEW", "Setting: Gatekeeper": "OK",
+                       "Setting: automatic security updates": "REVIEW"}, got  # no csrutil or firewall output: no row
+        assert "FileVault" in fix_for("Setting: FileVault", "fdesetup status")[1]
+    assert "unattended-upgrades" in fix_for("Setting: automatic security updates", "unattended-upgrades")[1]
+    assert "Security Responses" in fix_for("Setting: automatic security updates", "/Library/Preferences/com.apple.SoftwareUpdate")[1]
+
+
+def test_launch_agent():
+    import plistlib
+    import secinspect as si
+    with tempfile.TemporaryDirectory() as d:
+        p = si.launch_agent(f"{d}/it's here", f"{d}/it's here/secinspect.py", agents=f"{d}/LaunchAgents")
+        job = plistlib.load(open(p, "rb"))
+        assert job["Label"] == si.LAUNCH_LABEL and job["StartInterval"] == 21600
+        cmd = job["ProgramArguments"][2]
+        assert cmd.count("--update") == 1 and "--desktop" in cmd and "'\"'\"'" in cmd  # quoted for sh
 
 
 def test_osv():
@@ -896,6 +952,8 @@ if __name__ == "__main__":
     test_chrome()
     test_electron_edge_brave()
     test_osv()
+    test_eol_settings()
+    test_launch_agent()
     test_dev_tools()
     test_share_line()
     test_macos_firefox()

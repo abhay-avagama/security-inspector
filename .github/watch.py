@@ -17,7 +17,7 @@ import re
 import subprocess
 import sys
 import urllib.request
-from datetime import date, datetime, timedelta
+from datetime import date, datetime, timedelta, timezone
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from secinspect import ADVISORIES, FEED_URL, new_cves, nums  # noqa: E402
@@ -192,6 +192,38 @@ def awaiting_candidates(page, adv):
              "detail": "Check the notes, set the fixed version in advisories.json and drop `awaiting`.", "fix": "", "source": w["url"]}]
 
 
+EOL_API = "https://endoflife.date/api/{}.json"
+
+
+def eol_cycles(api):
+    """endoflife.date's list -> ({cycle: end date, True (ended, no date) or False (supported)}, cycle to move to).
+    The move-to is the newest supported cycle, LTS only when the product has LTS releases (Ubuntu, Node)."""
+    cycles = {c["cycle"]: c["eol"] for c in api if not isinstance(c["eol"], str) or c["eol"] >= "2018"}  # older ones: nobody's left
+    alive = [c for c in api if c["eol"] is False or (c["eol"] is not True and c["eol"] > date.today().isoformat())]
+    lts = [c for c in alive if c.get("lts")] if any(c.get("lts") for c in api) else alive
+    return cycles, (lts or alive or api)[0]["cycle"]
+
+
+def eol_block(eol):
+    """The eol section, one product per line, in the hand-kept layout of advisories.json."""
+    top = {k: v for k, v in eol.items() if k != "products"}
+    lines = ",\n".join("      " + json.dumps(p, ensure_ascii=False) for p in eol["products"])
+    return json.dumps(top, ensure_ascii=False)[:-1] + ',\n    "products": [\n' + lines + "\n    ]\n  }"
+
+
+def eol_candidates(product, api):
+    """A changed or new end-of-life date upstream: refresh advisories.json with --refresh-eol, then sign."""
+    cycles, _ = eol_cycles(api)
+    changed = sorted(c for c in cycles if product["cycles"].get(c, "missing") != cycles[c])
+    if not changed:
+        return []
+    name = product["items"][0]
+    return [{"cve": f"EOL {name} {changed[0]}", "title": f"end-of-life dates changed for {name}: {', '.join(changed[:6])}",
+             "why": "endoflife.date lists a new cycle or a moved date, so the end-of-life check is out of date.",
+             "detail": "Run `python3 .github/watch.py --refresh-eol`, check the diff, run the tests and changelog.py, then sign.",
+             "fix": "", "source": EOL_API.format(product["slug"])}]
+
+
 def body(c):
     return "\n\n".join(x for x in (
         c["why"], c["detail"], f'Vendor fix / required action: {c["fix"]}' if c["fix"] else "",
@@ -212,7 +244,19 @@ def main(argv):
     ap = argparse.ArgumentParser()
     ap.add_argument("--dry-run", action="store_true", help="print candidates, don't open issues")
     ap.add_argument("--days", type=int, default=14, help="how far back to look in CISA KEV")
+    ap.add_argument("--refresh-eol", action="store_true", help="rewrite advisories.json's end-of-life dates from endoflife.date")
     args = ap.parse_args(argv)
+    if args.refresh_eol:
+        path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "advisories.json")
+        text = open(path).read()
+        eol = json.loads(text)["eol"]
+        for p in eol["products"]:
+            p["cycles"], p["newest"] = eol_cycles(get(EOL_API.format(p["slug"])))
+        eol["checked"] = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+        head = text[:text.index('\n  "eol": ')]  # ponytail: eol stays the last key, so only its block is rewritten
+        with open(path, "w") as fh:
+            fh.write(head + '\n  "eol": ' + eol_block(eol) + "\n}\n")
+        return
     known = known_cves()
     since = (date.today() - timedelta(days=args.days)).isoformat()
     zsince = (date.today() - timedelta(days=3)).isoformat()  # vendor notes are same-day; KEV can lag weeks
@@ -227,6 +271,11 @@ def main(argv):
         cands += electron_candidates(get(ELECTRON_RELEASES), ADVISORIES["electron"]["supported"])
     except Exception as e:
         print(f"skip Electron releases: {e}", file=sys.stderr)
+    for p in ADVISORIES["eol"]["products"]:
+        try:
+            cands += eol_candidates(p, get(EOL_API.format(p["slug"])))
+        except Exception as e:
+            print(f"skip {p['slug']} end-of-life dates: {e}", file=sys.stderr)
     for adv in ADVISORIES["versions"]:
         if adv.get("awaiting"):
             try:
