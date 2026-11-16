@@ -1,5 +1,5 @@
 {
-  "release": {"script_sha256": "a41efabdee735bb7f58ddc76d7cf220911e272ffdc8806b2b7252faa766cc941", "released": "2026-11-16T08:38:33Z"},
+  "release": {"script_sha256": "ee3cdbc45e38044e7b33790877b013e8ef1ea9d7b5201ed975ded370643f6d79", "released": "2026-11-16T11:05:05Z"},
   "versions": [
     {
       "name": "PHP",

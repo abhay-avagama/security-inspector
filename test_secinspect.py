@@ -364,6 +364,17 @@ def test_eol_settings():
              "30": "/opt/homebrew/bin/python3", "40": ""}
     got = si.listening(lsof, paths.get)
     assert [(r[1], r[2]) for r in got] == [("/opt/homebrew/bin/python3", "*:2527"), ("pid 40", "192.168.1.5:22")], got
+    ss = ('LISTEN 0 4096 0.0.0.0:22 0.0.0.0:* users:(("sshd",pid=812,fd=3))\n'
+          'LISTEN 0 4096 127.0.0.53%lo:53 0.0.0.0:* users:(("systemd-resolve",pid=500,fd=14))\n'
+          'LISTEN 0 4096 0.0.0.0:6379 0.0.0.0:* users:(("docker-proxy",pid=900,fd=4))\n'
+          'LISTEN 0 4096 [::]:6379 [::]:* users:(("docker-proxy",pid=900,fd=4))\n'
+          'LISTEN 0 511 *:80 *:* users:(("nginx",pid=700,fd=6))\n'
+          'LISTEN 0 200 0.0.0.0:5432 0.0.0.0:*\n'
+          'LISTEN 0 128 [::1]:631 [::]:*\n')
+    got = si.ss_listening(ss, {"812": "/usr/sbin/sshd", "900": "/usr/bin/docker-proxy"}.get)
+    assert [(r[1], r[2]) for r in got] == [
+        ("a program run by another user (run as root to see which)", "0.0.0.0:5432"),
+        ("nginx", "*:80"), ("/usr/bin/docker-proxy", "0.0.0.0:6379, [::]:6379")], got
     if sys.platform == "darwin":
         out = {"fdesetup status": "FileVault is Off.", "spctl --status": "assessments enabled",
                "csrutil status": "", "defaults read /Library/Preferences/com.apple.SoftwareUpdate": "    CriticalUpdateInstall = 0;"}

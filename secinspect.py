@@ -1493,25 +1493,56 @@ SETTING_FIX["Setting: automatic security updates"] = (
     "Turn on automatic security updates",
     "System Settings > General > Software Update > Automatic Updates > Install Security Responses and system files")
 SETTING_FIX[LISTENING] = ("Check what's reachable from your network",
-                          "quit what you don't need, bind dev servers to 127.0.0.1, and turn on the macOS firewall")
+                          "quit what you don't need, bind dev servers to 127.0.0.1, and turn on a firewall "
+                          "(Mac: System Settings > Network > Firewall; Linux: ufw or firewalld)")
 APT_AUTO = ("sudo apt install unattended-upgrades && sudo dpkg-reconfigure -plow unattended-upgrades")
 DNF_AUTO = ("sudo dnf install dnf-automatic && sudo systemctl enable --now dnf-automatic-install.timer")
 
 
-def listening(lsof_out, path_of):
+def local(addr):
+    host = addr.rsplit(":", 1)[0]
+    return host.startswith(("127.", "[::1]", "[::ffff:127.")) or host == "localhost"
+
+
+def listening(lsof_out, path_of, skip=lambda path: path.startswith(("/System/", "/usr/libexec/", "/usr/sbin/"))):
     """One REVIEW row per program taking connections from other machines; Apple's own daemons are left out."""
     ports, pid = {}, None
     for line in lsof_out.splitlines():
         if line.startswith("p"):
             pid = line[1:]
-        elif line.startswith("n") and pid:
-            host, port = line[1:].rsplit(":", 1)
-            if not (host.startswith("127.") or host in ("[::1]", "localhost")):
-                ports.setdefault(pid, set()).add(f"{host}:{port}")
+        elif line.startswith("n") and pid and not local(line[1:]):
+            ports.setdefault(pid, set()).add(line[1:])
+    return listen_rows(ports, path_of, skip)
+
+
+def proc_exe(pid):
+    try:
+        return os.readlink(f"/proc/{pid}/exe")
+    except OSError:  # another user's process, without root
+        return ""
+
+
+def ss_listening(ss_out, exe=proc_exe):
+    """Linux: `ss -Hltnp`. Without root, other users' programs have no pid; they still get a row.
+    sshd is left out: a server without it is the odd one."""
+    ports, names = {}, {}
+    for line in ss_out.splitlines():
+        f = line.split()
+        if len(f) < 4 or local(f[3]):
+            continue
+        m = re.search(r'\("([^"]+)",pid=(\d+)', line)
+        pid = m.group(2) if m else ""
+        names[pid] = m.group(1) if m else "a program run by another user (run as root to see which)"
+        ports.setdefault(pid, set()).add(f[3])
+    path_of = lambda pid: (pid and exe(pid)) or names[pid]
+    return listen_rows(ports, path_of, lambda path: os.path.basename(path) == "sshd")
+
+
+def listen_rows(ports, path_of, skip):
     rows = []
     for pid, addrs in sorted(ports.items()):
         path = path_of(pid) or f"pid {pid}"
-        if not path.startswith(("/System/", "/usr/libexec/", "/usr/sbin/")):
+        if not skip(path):
             rows.append((LISTENING, path, ", ".join(sorted(addrs)), "REVIEW",
                          "takes connections from other machines on your network; check you meant that"))
     return rows
@@ -1531,7 +1562,10 @@ def check_settings(read=run):
                      "REVIEW" if off else "OK", "off: security fixes wait until someone installs them by hand" if off else ""))
         rows += listening(read("lsof", "-nP", "-iTCP", "-sTCP:LISTEN", "-F", "pn"),
                           lambda pid: read("ps", "-p", pid, "-o", "comm=").strip())
-    elif shutil.which("apt-get"):
+        return rows
+    if sys.platform.startswith("linux"):
+        rows += ss_listening(read("ss", "-Hltnp"))
+    if shutil.which("apt-get"):
         conf = "".join(open(f, errors="replace").read() for f in glob.glob("/etc/apt/apt.conf.d/*") if os.path.isfile(f))
         on = bool(shutil.which("unattended-upgrade")) and re.search(r'Unattended-Upgrade\s+"1"', conf)
         rows.append(("Setting: automatic security updates", "unattended-upgrades", "on" if on else "off", "OK" if on else "REVIEW",

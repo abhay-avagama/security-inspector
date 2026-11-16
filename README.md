@@ -61,6 +61,7 @@ version-feed technologies, so they aren't tracked this way — refresh them from
 | **End of life** (any CVE, including the next one) | Python, Node.js, PHP, PostgreSQL, GitLab and macOS found above, plus the Linux release in `/etc/os-release` (Ubuntu, Debian, RHEL, AlmaLinux, Rocky). A branch past its end-of-life date is flagged for review even when no CVE applies yet, because it won't get the fix for the next one; a branch ending within 90 days gets a note. Dates come from [endoflife.date](https://endoflife.date), kept in `advisories.json` so they're signed with everything else and nothing is fetched at run time. |
 | **Mac settings** | `fdesetup status` (FileVault), `spctl --status` (Gatekeeper), `csrutil status` (SIP), the application firewall, and the Software Update keys for security responses and system files. Each one that is off is flagged for review with how to turn it on. Also every program listening on a port other machines can reach (`lsof`), leaving out Apple's own. In `--watch`, a new one shows up as NEW. |
 | **Linux automatic updates** | `unattended-upgrades` on Debian and Ubuntu, `dnf-automatic` on the RHEL family: flagged for review when security updates wait for someone to install them. |
+| **Listening on a Linux server** | Every program taking connections from other machines (`ss -ltnp`), sshd left out. A database or a Docker-published port on `0.0.0.0` is the usual surprise. Run as root to see which program owns each port; without it, other users' ports show as "a program run by another user". In `--watch`, a new one shows up as NEW. |
 | **Node.js** Nov 11 2026 release (15 CVEs, incl. HTTPS memory leaks of TLS private keys and HTTP/2 crashes) | Every `node` on PATH, nvm, Volta, fnm and Homebrew. Fixed in 26.13.1 / 24.22.3 / 22.23.5; end-of-life lines are always affected. |
 | **BIND 9** CVE-2026-94300 | `named -v` against ISC's affected ranges. |
 | **GitLab** CVE-2026-110264 + 11 more | Self-managed Omnibus version file. GitLab.com and Dedicated are already patched. |
@@ -335,7 +336,7 @@ security releases, Mozilla advisories). Zero-days often reach KEV days later, so
 ## Not covered (yet)
 
 - Chrome's own root store (Chrome updates itself; check `chrome://version`)
-- Settings on Windows, and programs listening on Linux servers (servers listen by design)
+- Settings on Windows
 - The OpenSSH client (its latest fixes have no CVEs) and the OpenSSL command line (it doesn't say which library your apps load)
 - Opera, Vivaldi and Arc (their own version numbers don't say which Chromium fixes they carry), and Electron apps on Windows
 - Perl `Mozilla::CA`, Go binaries with embedded roots
