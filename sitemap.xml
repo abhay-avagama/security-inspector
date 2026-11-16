@@ -6,6 +6,7 @@
   <url><loc>https://amiaffected.now/watchlist/</loc></url>
   <url><loc>https://amiaffected.now/advisories/</loc></url>
   <url><loc>https://amiaffected.now/advisories/php/</loc></url>
+  <url><loc>https://amiaffected.now/advisories/frankenphp/</loc></url>
   <url><loc>https://amiaffected.now/advisories/node-js/</loc></url>
   <url><loc>https://amiaffected.now/advisories/python/</loc></url>
   <url><loc>https://amiaffected.now/advisories/git/</loc></url>
@@ -43,6 +44,7 @@
   <url><loc>https://amiaffected.now/advisories/zammad/</loc></url>
   <url><loc>https://amiaffected.now/advisories/litellm/</loc></url>
   <url><loc>https://amiaffected.now/advisories/python-jose/</loc></url>
+  <url><loc>https://amiaffected.now/advisories/gpustack/</loc></url>
   <url><loc>https://amiaffected.now/advisories/fastify-http-proxy/</loc></url>
   <url><loc>https://amiaffected.now/advisories/pgadmin-4-pip/</loc></url>
   <url><loc>https://amiaffected.now/advisories/electron-apps/</loc></url>

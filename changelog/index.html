@@ -36,6 +36,10 @@ h2[id]{scroll-margin-top:4.5rem}
 <main>
 <h1>Changelog</h1>
 <p>What the tool checks, and when each check went live. New exploited bugs usually land within a day of disclosure. Follow along with the <a href="/changelog.xml">RSS feed</a>.</p>
+<h2 id="2026-11-16">16 November 2026</h2>
+<ul class="log">
+<li><b>Chrome&#x27;s 11 Nov fixes, PostgreSQL&#x27;s November release, FrankenPHP and GPUStack</b>. Microsoft&#x27;s notes now say desktop Edge got the fix for the exploited Chrome bug in 157.0.4341.46 on 9 Nov, so Edge from that build on is no longer flagged for it. Chrome 157.0.8103.78 (11 Nov) fixes 83 more bugs, none known exploited, and is now the minimum, with Edge 157.0.4341.57 and Brave 1.99.57 for the same fixes. PostgreSQL 18.7, 17.12, 16.16, 15.20 and 14.25 fix 53 CVEs, most of them code execution by a user who can create objects, and 14.25 is the last release of 14. New: FrankenPHP below 1.13.5, and GPUStack below 2.3.1, whose admin bypass is exploited. <a class="muted" href="https://github.com/abhay-avagama/security-inspector/commit/7669cb5">7669cb5</a></li>
+</ul>
 <h2 id="2026-11-13">13 November 2026</h2>
 <ul class="log">
 <li><b>End of life, Mac settings, and watching a Mac</b>. A version past its end of life is now flagged even when no CVE applies yet, because it won&#x27;t get the fix for the next one: Python, Node.js, PHP, PostgreSQL, GitLab, macOS and the Linux release itself, with dates from endoflife.date. Branches ending within 90 days get a note. On a Mac the tool also checks FileVault, Gatekeeper, System Integrity Protection, the firewall and automatic security updates, and lists programs that take connections from other machines on your network; on Linux, whether security updates install themselves. --install on a Mac now sets up a LaunchAgent that checks every 6 hours and shows a notification when something changes. <a class="muted" href="https://github.com/abhay-avagama/security-inspector/commit/275a21a">275a21a</a></li>
