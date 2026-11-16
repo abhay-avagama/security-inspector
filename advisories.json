@@ -779,7 +779,7 @@
     },
     {
       "name": "PostgreSQL server",
-      "about": "Nov 2026 release (12 Nov): 53 CVEs, most of them code execution as the database's OS user by anyone who can create objects (plperl, pltcl, dblink, type confusion, tsvector overflows), plus an unauthenticated restart. Also fixes the Aug 2026 batch. 14.25 is PostgreSQL 14's last release",
+      "about": "Nov 2026 release (12 Nov): 53 CVEs, most of them code execution as the database's OS user by anyone who can create objects (plperl, pltcl, dblink, type confusion, tsvector overflows), plus an unauthenticated restart. Also fixes the Aug 2026 batch. 14.25 is PostgreSQL 14's last release. A public write-up (13 Nov) shows CVE-2026-6460 crashing 18.6 and leaking memory addresses; no attacks reported",
       "source": "https://www.postgresql.org/support/security/",
       "cves": [
         "CVE-2026-16239",
@@ -878,11 +878,11 @@
         "14.25"
       ],
       "branch_width": 1,
-      "after_fix": "restart PostgreSQL",
+      "after_fix": "restart PostgreSQL (and reindex pg_trgm GiST and bpchar B-tree indexes, and take a new full backup if you use incremental ones)",
       "feed": "postgresql",
       "checked": "2026-11-16T09:00:00Z",
       "plan": [
-        "Update PostgreSQL to 18.6 / 17.11 / 16.15 / 15.19 / 14.24 and restart it",
+        "Update PostgreSQL to 18.7 / 17.12 / 16.16 / 15.20 / 14.25 and restart it",
         "sudo apt update && sudo apt upgrade   # dnf: sudo dnf upgrade 'postgresql*'   Homebrew: brew upgrade postgresql@<major>; then restart the server"
       ]
     },

@@ -26,7 +26,7 @@ from datetime import date, datetime, timedelta, timezone
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 ADVISORIES_JSON = os.path.join(ROOT, "advisories.json")
 sys.path.insert(0, ROOT)
-from secinspect import ADVISORIES, FEED_URL, new_cves, nums  # noqa: E402
+from secinspect import ADVISORIES, FEED_URL, _dt, new_cves, nums  # noqa: E402
 
 KEV_URL = "https://www.cisa.gov/sites/default/files/feeds/known_exploited_vulnerabilities.json"
 # ponytail: keyword match on vendor/product; widen this list when a miss shows up
@@ -168,6 +168,16 @@ def feed_candidates(known):
             out.append({"cve": fresh[0], "key": f'"{adv["name"]}" "since {adv["checked"][:10]}"', "title": f'{adv["name"]}: {len(fresh)} new CVE(s) since {adv["checked"][:10]}',
                         "why": f'Listed on cve.now for {adv["name"]} after {adv["checked"][:10]}.',
                         "detail": "\n".join(f"- https://nvd.nist.gov/vuln/detail/{c}" for c in fresh), "fix": "",
+                        "source": f'https://cve.now/feed?tech={adv["feed"]}'})
+        # cve.now re-lists a CVE as "<id>#<time>" when it changes; for one we already check, that's news like a public exploit
+        upd = [it for it in items if "#" in it.get("id", "") and it["id"].split("#")[0] in known
+               and _dt(it.get("date_modified", "1970-01-01")) > _dt(adv["checked"])]
+        if upd:
+            out.append({"cve": upd[0]["id"].split("#")[0], "key": f'"{adv["name"]}" "updates since {adv["checked"][:10]}"',
+                        "title": f'{adv["name"]}: {len(upd)} update(s) to CVEs we check, since {adv["checked"][:10]}',
+                        "why": "A CVE we already check changed on cve.now (public exploit, KEV listing, rescore). "
+                               "Decide whether the note or the urgency should change; close it if not.",
+                        "detail": "\n".join(f'- {it.get("title", it["id"])}' for it in upd), "fix": "",
                         "source": f'https://cve.now/feed?tech={adv["feed"]}'})
     return out
 

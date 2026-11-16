@@ -2,6 +2,7 @@ import io
 import hashlib
 import json
 import os
+import re
 import shutil
 import subprocess
 import sys
@@ -72,6 +73,9 @@ def test_overrides(monkeypatch=None):
 
 
 def test_fix_plan():
+    for adv in ADVISORIES["versions"]:  # a fix title naming versions must name the current fixed ones, not last release's
+        named = re.findall(r"\b\d+\.\d+(?:\.\d+)*\b", adv.get("plan", [""])[0])
+        assert not adv.get("fixed") or set(named) <= set(adv["fixed"]), (adv["name"], named)
     rows = [
         ("Node.js", "/Users/x/.nvm/versions/node/v18/bin/node", "18.0.0", "AFFECTED", "eol"),
         ("Node.js", "/Users/y/.nvm/versions/node/v20/bin/node", "20.0.0", "AFFECTED", "eol"),
@@ -270,6 +274,19 @@ def test_zero_day():
     d = w.kev_digest(kev, date(2026, 11, 13), set())
     assert d[0]["cve"] == "KEV week of 2026-11-02" and "CVE-2026-1" in d[0]["detail"] and "CVE-2026-2" not in d[0]["detail"] and "CVE-2026-3" not in d[0]["detail"]
     assert w.kev_digest(kev, date(2026, 11, 13), {"CVE-2026-1"}) == []
+    feed = {"items": [  # the 13 Nov public exploit for a CVE we already checked, which the queue missed
+        {"id": "CVE-2026-6460#2026-11-13T07:56:34Z", "date_modified": "2026-11-13T07:56:34Z", "title": "CVE-2026-6460: ... (Update: proof of concept on GitHub published)"},
+        {"id": "CVE-2026-6460", "date_modified": "2026-11-12T14:00:00Z", "title": "CVE-2026-6460: ..."}]}
+    get, versions = w.get, w.ADVISORIES["versions"]
+    try:
+        w.get = lambda url: feed
+        w.ADVISORIES["versions"] = [{"name": "PostgreSQL server", "feed": "postgresql", "checked": "2026-11-12T15:00:00Z"}]
+        c = w.feed_candidates({"CVE-2026-6460"})
+        assert [x["key"] for x in c] == ['"PostgreSQL server" "updates since 2026-11-12"'] and "proof of concept" in c[0]["detail"], c
+        w.ADVISORIES["versions"][0]["checked"] = "2026-11-14T00:00:00Z"
+        assert w.feed_candidates({"CVE-2026-6460"}) == []
+    finally:
+        w.get, w.ADVISORIES["versions"] = get, versions
     api = [{"cycle": "27", "eol": False}, {"cycle": "26", "eol": "2026-12-01", "lts": True}, {"cycle": "25", "eol": "2026-01-01"},
            {"cycle": "24", "eol": "2030-01-01", "lts": True}, {"cycle": "1", "eol": "2010-01-01"}]
     cycles, newest = w.eol_cycles(api)
