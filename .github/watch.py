@@ -27,7 +27,7 @@ KEV_URL = "https://www.cisa.gov/sites/default/files/feeds/known_exploited_vulner
 WATCH = ("chrom", "linux", "kernel", "nginx", "apache", "php", "node", "python", "openssl", "openssh", "sudo",
          "glibc", "git", "docker", "kubernetes", "redis", "postgres", "mysql", "mariadb", "mongodb", "wordpress",
          "nextcloud", "jenkins", "grafana", "elastic", "rails", "django", "spring", "log4j", "curl", "bind",
-         "exim", "postfix", "dovecot", "roundcube", "plex", "zammad", "litellm", "npm", "pypi", "mcp", "ollama")
+         "exim", "postfix", "dovecot", "roundcube", "plex", "zammad", "litellm", "npm", "pypi", "mcp", "ollama", "gpustack")
 
 
 def known_cves():

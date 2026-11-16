@@ -1615,7 +1615,7 @@ def fix_for(item, where, note=""):
         return ("Update apps built on an unsupported Electron",
                 "update each app from its own menu or site; if it is already current, ask its maker for a build on a supported Electron, and don't open untrusted links or files in it")
     if item == "Microsoft Edge":
-        return ("Update Edge when the fix lands", "Edge menu > Settings > About Microsoft Edge (edge://settings/help), then Restart")
+        return ("Update Edge and restart it", "Edge menu > Settings > About Microsoft Edge (edge://settings/help), then Restart")
     if item == "Brave":
         return ("Update Brave and relaunch it", "Brave menu > About Brave (brave://settings/help), then Relaunch")
     if item == MCP["name"]:

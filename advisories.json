@@ -25,7 +25,37 @@
       "branch_width": 2,
       "after_fix": "restart PHP-FPM/workers",
       "feed": "php",
-      "checked": "2026-11-12T12:00:00Z"
+      "checked": "2026-11-16T09:00:00Z"
+    },
+    {
+      "name": "FrankenPHP",
+      "about": "The PHP app server built on Caddy: 1.13.5 (5 Nov 2026) fixes 17 bugs, the worst letting php_server run an uploaded non-PHP file as PHP; 1.13.4 and 1.13.2 fix 11 more (trusted-header spoofing, worker-mode use-after-free, cross-request leaks), and 1.13.2 also bundles the PHP that fixes PHP2Shell",
+      "source": "https://github.com/php/frankenphp/releases/tag/v1.13.5",
+      "cves": [
+        "CVE-2026-128014", "CVE-2026-128015", "CVE-2026-128016", "CVE-2026-128017", "CVE-2026-128018", "CVE-2026-128019", "CVE-2026-128020",
+        "CVE-2026-128021", "CVE-2026-128022", "CVE-2026-128023", "CVE-2026-128024", "CVE-2026-128025", "CVE-2026-128026", "CVE-2026-128027"
+      ],
+      "binary": "frankenphp",
+      "flag": "version",
+      "version_regex": "FrankenPHP v?(\\d+\\.\\d+\\.\\d+)",
+      "globs": [
+        "/usr/local/bin/frankenphp",
+        "/usr/bin/frankenphp",
+        "~/.local/bin/frankenphp",
+        "~/bin/frankenphp"
+      ],
+      "affected": [
+        [
+          "0",
+          "1.13.4",
+          "update to 1.13.5+, and pull or rebuild FrankenPHP Docker images: old tags weren't rebuilt when PHP, Go and Alpine were fixed"
+        ]
+      ],
+      "plan": [
+        "Update FrankenPHP",
+        "brew upgrade frankenphp   # static binary: download 1.13.5+ from github.com/php/frankenphp/releases; Docker: docker pull dunglas/frankenphp and rebuild"
+      ],
+      "checked": "2026-11-16T09:00:00Z"
     },
     {
       "name": "Node.js",
@@ -459,14 +489,19 @@
           "0.0.0.0",
           "157.0.8103.49",
           "CVE-2026-125350 is exploited in the wild: update to 157.0.8103.50+ and relaunch the browser"
+        ],
+        [
+          "157.0.8103.50",
+          "157.0.8103.77",
+          "83 security fixes on 11 Nov 2026 (V8 and Skia code execution among them, none known exploited): update to 157.0.8103.78+ and relaunch the browser"
         ]
       ],
-      "checked": "2026-11-12T12:00:00Z",
+      "checked": "2026-11-16T09:00:00Z",
       "feed": "chrome"
     },
     {
       "name": "Microsoft Edge",
-      "about": "CVE-2026-125350, the Chrome XML use-after-free exploited in the wild, is also in Edge; on 11 Nov 2026 Microsoft fixed it on Android (157.0.4341.53) and said a desktop fix is coming",
+      "about": "CVE-2026-125350, the Chrome XML use-after-free exploited in the wild, is also in Edge; Microsoft's notes now say it was fixed on desktop in 157.0.4341.46 (9 Nov 2026) and on Android in 157.0.4341.53",
       "source": "https://learn.microsoft.com/en-us/deployedge/microsoft-edge-relnotes-security",
       "cves": [
         "CVE-2026-125350"
@@ -481,16 +516,16 @@
       "affected": [
         [
           "0.0.0.0",
-          "157.0.4341.52",
-          "CVE-2026-125350 is exploited in the wild and Microsoft hasn't shipped the desktop fix yet: update Edge as soon as edge://settings/help offers 157.0.4341.53 or later, and use an updated Chrome for untrusted sites meanwhile"
+          "157.0.4341.45",
+          "CVE-2026-125350 is exploited in the wild: update Edge to 157.0.4341.46 or later (edge://settings/help)"
+        ],
+        [
+          "157.0.4341.46",
+          "157.0.4341.56",
+          "Chrome's 11 Nov 2026 security fixes reached Edge in 157.0.4341.57: update (edge://settings/help)"
         ]
       ],
-      "awaiting": {
-        "url": "https://learn.microsoft.com/en-us/deployedge/microsoft-edge-relnotes-security",
-        "regex": "Microsoft Edge for Stable \\(Version ([0-9.]+)\\)",
-        "above": "157.0.4341.52"
-      },
-      "checked": "2026-11-13T09:00:00Z"
+      "checked": "2026-11-16T09:00:00Z"
     },
     {
       "name": "Brave",
@@ -518,6 +553,11 @@
           "1.100.0",
           "1.100.51",
           "CVE-2026-125350 is exploited in the wild: update Brave Beta to 1.100.52+ and relaunch it"
+        ],
+        [
+          "1.99.56",
+          "1.99.56",
+          "Chrome's 11 Nov 2026 security fixes (83, none known exploited) are in 1.99.57: update (brave://settings/help) and relaunch Brave"
         ]
       ],
       "checked": "2026-11-13T09:00:00Z"
@@ -739,7 +779,7 @@
     },
     {
       "name": "PostgreSQL server",
-      "about": "Aug 2026 release: 24 server and extension CVEs, a dozen of them code execution by a logged-in user (to_char, regexp, plperl, cursor CLOSE, pg_stat_statements and more)",
+      "about": "Nov 2026 release (12 Nov): 53 CVEs, most of them code execution as the database's OS user by anyone who can create objects (plperl, pltcl, dblink, type confusion, tsvector overflows), plus an unauthenticated restart. Also fixes the Aug 2026 batch. 14.25 is PostgreSQL 14's last release",
       "source": "https://www.postgresql.org/support/security/",
       "cves": [
         "CVE-2026-16239",
@@ -765,7 +805,60 @@
         "CVE-2026-14673",
         "CVE-2026-14666",
         "CVE-2026-6470",
-        "CVE-2026-6469"
+        "CVE-2026-6469",
+        "CVE-2026-6460",
+        "CVE-2026-6464",
+        "CVE-2026-6467",
+        "CVE-2026-14661",
+        "CVE-2026-16237",
+        "CVE-2026-16240",
+        "CVE-2026-18447",
+        "CVE-2026-116303",
+        "CVE-2026-116304",
+        "CVE-2026-116306",
+        "CVE-2026-116307",
+        "CVE-2026-116308",
+        "CVE-2026-116309",
+        "CVE-2026-116310",
+        "CVE-2026-116311",
+        "CVE-2026-116312",
+        "CVE-2026-116313",
+        "CVE-2026-116314",
+        "CVE-2026-116315",
+        "CVE-2026-116316",
+        "CVE-2026-116317",
+        "CVE-2026-116318",
+        "CVE-2026-116319",
+        "CVE-2026-116320",
+        "CVE-2026-116321",
+        "CVE-2026-116322",
+        "CVE-2026-116323",
+        "CVE-2026-116325",
+        "CVE-2026-116326",
+        "CVE-2026-116327",
+        "CVE-2026-116328",
+        "CVE-2026-116329",
+        "CVE-2026-116330",
+        "CVE-2026-116331",
+        "CVE-2026-116332",
+        "CVE-2026-116333",
+        "CVE-2026-116335",
+        "CVE-2026-116336",
+        "CVE-2026-120139",
+        "CVE-2026-120141",
+        "CVE-2026-120142",
+        "CVE-2026-120143",
+        "CVE-2026-120144",
+        "CVE-2026-120145",
+        "CVE-2026-120146",
+        "CVE-2026-120147",
+        "CVE-2026-120148",
+        "CVE-2026-120149",
+        "CVE-2026-120150",
+        "CVE-2026-120151",
+        "CVE-2026-120152",
+        "CVE-2026-120153",
+        "CVE-2026-120154"
       ],
       "binary": "postgres",
       "flag": "--version",
@@ -778,16 +871,16 @@
         "/Applications/Postgres.app/Contents/Versions/*/bin/postgres"
       ],
       "fixed": [
-        "18.6",
-        "17.11",
-        "16.15",
-        "15.19",
-        "14.24"
+        "18.7",
+        "17.12",
+        "16.16",
+        "15.20",
+        "14.25"
       ],
       "branch_width": 1,
       "after_fix": "restart PostgreSQL",
       "feed": "postgresql",
-      "checked": "2026-11-03T12:00:00Z",
+      "checked": "2026-11-16T09:00:00Z",
       "plan": [
         "Update PostgreSQL to 18.6 / 17.11 / 16.15 / 15.19 / 14.24 and restart it",
         "sudo apt update && sudo apt upgrade   # dnf: sudo dnf upgrade 'postgresql*'   Homebrew: brew upgrade postgresql@<major>; then restart the server"
@@ -795,13 +888,19 @@
     },
     {
       "name": "PostgreSQL client (psql, pg_dump)",
-      "about": "Aug 2026 release: pg_dump heap overflow and psql \\unrestrict let a malicious server run code on the client (CVE-2026-19385, CVE-2026-18408), and two more",
+      "about": "Nov 2026 release: pg_dump and reindexdb SQL injection, pg_restore and tar-format restores running a malicious server's code, vacuumdb running a database owner's SQL as you, plus the Aug 2026 pg_dump and psql fixes",
       "source": "https://www.postgresql.org/support/security/",
       "cves": [
         "CVE-2026-19385",
         "CVE-2026-18408",
         "CVE-2026-6464",
-        "CVE-2026-16241"
+        "CVE-2026-16241",
+        "CVE-2026-116313",
+        "CVE-2026-116314",
+        "CVE-2026-116318",
+        "CVE-2026-116325",
+        "CVE-2026-116330",
+        "CVE-2026-16240"
       ],
       "binary": "psql",
       "flag": "--version",
@@ -815,11 +914,11 @@
         "/Applications/Postgres.app/Contents/Versions/*/bin/psql"
       ],
       "fixed": [
-        "18.6",
-        "17.11",
-        "16.15",
-        "15.19",
-        "14.24"
+        "18.7",
+        "17.12",
+        "16.16",
+        "15.20",
+        "14.25"
       ],
       "branch_width": 1,
       "plan": [
@@ -930,6 +1029,28 @@
       "plan": [
         "Move off python-jose, or make sure HMAC keys can't be empty",
         "pip uninstall python-jose && pip install pyjwt   # then port jwt.decode calls; or reject empty keys before decoding"
+      ]
+    },
+    {
+      "name": "GPUStack",
+      "package": "gpustack",
+      "ecosystem": "pypi",
+      "about": "CVE-2026-102895 (CISA KEV, exploited): before 2.2.0 a request that looks local, through a reverse proxy or an X-GPUStack-Real-IP header, is treated as the admin, and admin can run code; 2.2.2 fixes a SAML login bypass (CVE-2026-102894) and 2.3.0 / 2.3.1 fix 14 more authorization bugs",
+      "source": "https://github.com/gpustack/gpustack/security/advisories/GHSA-gj9m-f8ph-pmhr",
+      "cves": [
+        "CVE-2026-102895",
+        "CVE-2026-102894",
+        "CVE-2026-103002"
+      ],
+      "bad_range": [
+        "0",
+        "2.3.0"
+      ],
+      "cleanup": "upgrade to 2.3.1+, then rotate admin API keys, worker tokens and the cloud and Hugging Face credentials it held",
+      "lock_note": "pins gpustack below 2.3.1, which has an exploited admin bypass: upgrade to 2.3.1+",
+      "plan": [
+        "Upgrade GPUStack and rotate its keys",
+        "pip install -U 'gpustack>=2.3.1'   # Docker: pull gpustack/gpustack:v2.3.1; then rotate API keys, worker tokens and cloud credentials"
       ]
     },
     {

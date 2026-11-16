@@ -257,7 +257,7 @@ def test_zero_day():
     rel = [{"version": "45.3.1"}, {"version": "46.0.0-beta.3"}, {"version": "44.11.2"}]
     assert w.electron_candidates(rel, [43, 44, 45]) == []  # a beta doesn't count
     assert w.electron_candidates(rel + [{"version": "46.0.0"}], [43, 44, 45])[0]["cve"] == "Electron 46"
-    edge = next(a for a in ADVISORIES["versions"] if a["name"] == "Microsoft Edge")
+    edge = {"name": "Microsoft Edge", "awaiting": {"url": "", "regex": r"Microsoft Edge for Stable \(Version ([0-9.]+)\)", "above": "157.0.4341.42"}}
     notes = ("Microsoft Edge for Android (Version 157.0.4341.53) ... Microsoft Edge for Stable (Version 157.0.4341.42) "
              "... Microsoft Edge for Stable (Version 156.0.4314.58)")
     assert w.awaiting_candidates(notes, edge) == []  # Android alone isn't the desktop fix
@@ -319,8 +319,9 @@ def test_electron_edge_brave():
                        "slack": ("Electron 46.0.0, Chromium 160.0.1.1", "UNKNOWN")}, got
         assert check_electron({**ELECTRON, "mac": [], "linux": []})[0][3] == "NOT FOUND"
     assert "supported Electron" in fix_for(ELECTRON["name"], "/Applications/Old.app")[1]
-    assert status("Microsoft Edge", (157, 0, 4341, 42)) == "AFFECTED" and status("Microsoft Edge", (157, 0, 4341, 53)) == "OK"
-    assert status("Brave", (1, 98, 63)) == "AFFECTED" and status("Brave", (1, 99, 56)) == "OK"
+    assert status("Microsoft Edge", (157, 0, 4341, 42)) == "AFFECTED" and status("Microsoft Edge", (157, 0, 4341, 46)) == "AFFECTED" and status("Microsoft Edge", (157, 0, 4341, 57)) == "OK"
+    assert status("FrankenPHP", (1, 13, 4)) == "AFFECTED" and status("FrankenPHP", (1, 13, 5)) == "OK"
+    assert status("Brave", (1, 98, 63)) == "AFFECTED" and status("Brave", (1, 99, 56)) == "AFFECTED" and status("Brave", (1, 99, 57)) == "OK"
     assert status("Brave", (1, 100, 51)) == "AFFECTED" and status("Brave", (1, 101, 47)) == "OK"
 
 
@@ -454,7 +455,8 @@ def test_chrome():
     assert status("Google Chrome / Chromium", (155, 0, 8059, 39)) == "AFFECTED"  # Oct 27 critical fixes
     assert status("Google Chrome / Chromium", (156, 0, 8078, 81)) == "AFFECTED"  # Nov 3 critical fixes
     assert status("Google Chrome / Chromium", (157, 0, 8103, 38)) == "AFFECTED"  # CVE-2026-125350, exploited
-    assert status("Google Chrome / Chromium", (157, 0, 8103, 50)) == "OK"
+    assert status("Google Chrome / Chromium", (157, 0, 8103, 50)) == "AFFECTED"  # 11 Nov fixes
+    assert status("Google Chrome / Chromium", (157, 0, 8103, 78)) == "OK"
     assert version_status(CHROMIUM, (157, 0, 8103, 49))[0] == "AFFECTED"
     assert version_status(CHROMIUM, (142, 0, 7444, 175))[0] == "AFFECTED"
     assert version_status(CHROMIUM, (156, 0, 8078, 47))[0] == "AFFECTED"  # Puppeteer 25.16.0's build
@@ -484,6 +486,8 @@ def test_queue_nov3():
     # python-jose: dist-info uses an underscore; every release through 3.5.0 is affected
     assert rows("/v/site-packages/python_jose-3.3.0.dist-info/METADATA", b"") == [("python-jose", "3.3.0", "REVIEW")]
     assert rows("/p/requirements.txt", b"python-jose[cryptography]==3.5.0\n") == [("python-jose", "3.5.0", "REVIEW")]
+    assert rows("/v/site-packages/gpustack-2.2.3.dist-info/METADATA", b"") == [("GPUStack", "2.2.3", "AFFECTED")]
+    assert rows("/v/site-packages/gpustack-2.3.1.dist-info/METADATA", b"") == [("GPUStack", "2.3.1", "OK")]
     assert rows("/p/requirements.txt", b"pyjwt==2.9.0\n") == []
     # @fastify/http-proxy in each lockfile format; 11.6.6 is fixed, ^ranges in specs are ignored
     lock = b'{"packages": {"": {"dependencies": {"@fastify/http-proxy": "^11.0.0"}},' \
@@ -511,9 +515,9 @@ def test_queue_nov3():
 
 def test_postgres():
     assert status("PostgreSQL server", (16, 10)) == "AFFECTED"
-    assert status("PostgreSQL server", (16, 15)) == "OK"
+    assert status("PostgreSQL server", (16, 15)) == "AFFECTED" and status("PostgreSQL server", (16, 16)) == "OK"
     assert status("PostgreSQL server", (13, 22)) == "AFFECTED"  # end-of-life
-    assert status("PostgreSQL client (psql, pg_dump)", (18, 6)) == "OK"
+    assert status("PostgreSQL client (psql, pg_dump)", (18, 6)) == "AFFECTED" and status("PostgreSQL client (psql, pg_dump)", (18, 7)) == "OK"
     assert version_status(ADV["pgAdmin 4"], (9, 18))[0] == "REVIEW"
     with tempfile.TemporaryDirectory() as d:
         exe = os.path.join(d, "postgres")
@@ -909,9 +913,9 @@ def test_fix():
         assert updates[0]["after"] == {"nginx": "1.24.0-2ubuntu7.19", "nginx-core": "1.24.0-2ubuntu7.19"}
         why = {m[0]: m[2] for m in manual}
         assert why["Linux kernel (exploited)"].startswith("kernel updates need a reboot")
-        assert why["PostgreSQL server"].startswith("no fixed build"), why  # PGDG only has 16.14 so far: 16.15 fixes it
+        assert why["PostgreSQL server"].startswith("no fixed build"), why  # PGDG only has 16.14 so far: 16.16 fixes it
         assert why["Node.js"].startswith("not installed through")
-        newest["postgresql-16"] = "16.15-1.pgdg24.04+1"
+        newest["postgresql-16"] = "16.16-1.pgdg24.04+1"
         assert len(si.patch_plan(rows, "apt", "ubuntu:24.04")[0]) == 2
         assert si.upgrade_cmd("brew", ["node"]) == ["brew", "upgrade", "node"]
         si.package_manager = lambda: "apt"

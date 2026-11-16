@@ -56,10 +56,10 @@ sudo python3 /opt/amiaffected/secinspect.py --fix                     # then app
 
 <h2 id="checks">What it checks</h2>
 <table>
-<tr><td>Chrome / Chromium</td><td>CVE-2026-87491 and CVE-2026-85046, V8 bugs on CISA KEV, fixed in 153.0.8010.36; on macOS also <a href="https://pwn.ai/blog/chrome-escape">CVE-2026-106378</a>, the GPU sandbox escape fixed in 155.0.8059.39; the four critical bugs fixed on 27 Oct in 156.0.8078.73 (CVE-2026-118306, 118331, 118348, 118344); the 3 Nov release, 157.0.8103.38, which fixes 33 more critical bugs; and CVE-2026-125350, an XML bug exploited in the wild, fixed on 9 Nov in 157.0.8103.50</td></tr>
+<tr><td>Chrome / Chromium</td><td>CVE-2026-87491 and CVE-2026-85046, V8 bugs on CISA KEV, fixed in 153.0.8010.36; on macOS also <a href="https://pwn.ai/blog/chrome-escape">CVE-2026-106378</a>, the GPU sandbox escape fixed in 155.0.8059.39; the four critical bugs fixed on 27 Oct in 156.0.8078.73 (CVE-2026-118306, 118331, 118348, 118344); the 3 Nov release, 157.0.8103.38, which fixes 33 more critical bugs; CVE-2026-125350, an XML bug exploited in the wild, fixed on 9 Nov in 157.0.8103.50; and 83 more fixed on 11 Nov in 157.0.8103.78</td></tr>
 <tr><td>macOS</td><td><a href="https://support.apple.com/en-us/149228">CVE-2026-86950</a>, a CoreGraphics bug Apple says was exploited in targeted attacks, fixed in Tahoe 26.7.1 and Sequoia 15.8.1; Sonoma and older get no more fixes</td></tr>
 <tr><td>Firefox</td><td>Releases before 159.0.1, ESR 153.6 and ESR 115.44, which fix 168 high-impact bugs between them; Firefox only updates itself when it runs</td></tr>
-<tr><td>Edge, Brave</td><td>CVE-2026-125350, the Chrome bug exploited on 9 Nov, is in both. Brave has the fix (1.99.56); Microsoft hasn't shipped it for desktop Edge yet, so Edge is flagged until it does</td></tr>
+<tr><td>Edge, Brave</td><td>CVE-2026-125350, the Chrome bug exploited on 9 Nov, is in both: fixed in Brave 1.99.56 and Edge 157.0.4341.46. The 11 Nov Chrome fixes need Brave 1.99.57 and Edge 157.0.4341.57</td></tr>
 <tr><td>Electron apps</td><td>VS Code, Cursor, Slack, Postman and other apps that carry their own Chromium. Only Electron 43 to 45 still get Chrome's security fixes, so apps built on older ones are flagged</td></tr>
 <tr><td>Puppeteer / Playwright</td><td>The Chromium builds they download into their caches, which never update themselves. The latest Puppeteer (25.16.0) still ships a build without the October and November fixes, and Playwright turns Chrome's sandbox off by default. If your agent browses the web, point it at your installed Chrome with <code>channel: 'chrome'</code> and <code>chromiumSandbox: true</code></td></tr>
 <tr><td>MCP servers</td><td>Configs for Claude, Cursor, VS Code, Windsurf, Gemini and Codex that still run the archived Puppeteer MCP server (remote code execution, no fix coming) or other archived reference servers</td></tr>
@@ -68,6 +68,7 @@ sudo python3 /opt/amiaffected/secinspect.py --fix                     # then app
 <tr><td>Git</td><td>CVE-2026-111760: cloning a malicious repository with submodules can run its code. Fixed in 2.56.1 and back to 2.50.2, including Apple's and Homebrew's Git</td></tr>
 <tr><td>curl</td><td>CVE-2026-92392 (rated high), an HTTP/2 upload bug in 8.12.0 to 8.22.0, for curl you installed yourself</td></tr>
 <tr><td>Java</td><td>The October 2026 patch update and the eMudhra fixes (CVE-2026-91403, 114820, rated 9.1): every JDK in the usual places, below 27.0.1 / 25.0.5 / 21.0.13 / 17.0.21 / 11.0.33 / 8u511</td></tr>
+<tr><td>FrankenPHP</td><td>1.13.5 fixes 17 bugs, the worst letting <code>php_server</code> run an uploaded file as PHP; 1.13.4 and 1.13.2 fixed 11 more</td></tr>
 <tr><td>Docker Desktop</td><td>CVE-2026-98432 (rated 9.8) in the kernel inside its VM, fixed in 4.98.0</td></tr>
 <tr><td>End of life</td><td>Python, Node.js, PHP, PostgreSQL, GitLab, macOS, Ubuntu, Debian, RHEL, Alma and Rocky on a branch that gets no more security fixes, CVE or not. Branches ending within 90 days get a note. Dates from <a href="https://endoflife.date">endoflife.date</a></td></tr>
 <tr><td>Mac settings</td><td>FileVault, Gatekeeper, System Integrity Protection, the firewall and automatic security updates, plus programs taking connections from other machines on your network. On Linux, whether security updates install themselves</td></tr>
@@ -76,9 +77,10 @@ sudo python3 /opt/amiaffected/secinspect.py --fix                     # then app
 <tr><td>GitLab</td><td>CVE-2026-110264 and 11 more on self-managed Omnibus</td></tr>
 <tr><td>LiteLLM</td><td>The 1.107.0 backdoor: installed copies, lockfiles, malware files and bad Docker image digests</td></tr>
 <tr><td>python-jose</td><td>CVE-2026-120459: accepts empty HMAC keys, every release through 3.5.0, no fix yet. Installed copies and lockfiles</td></tr>
+<tr><td>GPUStack</td><td>CVE-2026-102895, exploited: requests that look local get admin rights before 2.2.0. Installed copies and lockfiles below 2.3.1, which also fixes a SAML login bypass</td></tr>
 <tr><td>@fastify/http-proxy</td><td>CVE-2026-120213: prefix escape in 9.0.0 to 11.6.5, read from package-lock, pnpm, yarn and bun lockfiles</td></tr>
 <tr><td>FreeRDP</td><td>CVE-2026-121392: certificate check bypass, fixed in 3.32.2</td></tr>
-<tr><td>PostgreSQL</td><td>The Aug 2026 release (24 server CVEs, a dozen of them code execution, plus pg_dump and psql client bugs): fixed in 18.6 / 17.11 / 16.15 / 15.19 / 14.24. Homebrew, Postgres.app, Debian/Ubuntu and PGDG installs</td></tr>
+<tr><td>PostgreSQL</td><td>The 12 Nov 2026 release (53 CVEs, most of them code execution by a user who can create objects, plus pg_dump, pg_restore and vacuumdb client bugs): fixed in 18.7 / 17.12 / 16.16 / 15.20 / 14.25, the last release of 14. Homebrew, Postgres.app, Debian/Ubuntu and PGDG installs</td></tr>
 <tr><td>psqlODBC, pgAdmin 4</td><td>The 2 Nov psqlODBC batch (fixed in 18.00.0006) and the 30 Oct pgAdmin CVEs, whose fixes aren't released yet</td></tr>
 <tr><td>eMudhra CA</td><td>Whether each trust store (OpenSSL, certifi, Keychain, Java, Firefox, Windows) would accept the cracked intermediates</td></tr>
 </table>
