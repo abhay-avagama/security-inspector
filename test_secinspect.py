@@ -276,9 +276,24 @@ def test_zero_day():
     assert newest == "24" if date.today().isoformat() > "2026-12-01" else newest == "26"  # newest LTS still supported
     assert "1" not in cycles and cycles["27"] is False
     p = {"items": ["Node.js"], "slug": "nodejs", "cycles": dict(cycles)}
-    assert w.eol_candidates(p, api) == []
+    assert w.eol_candidates([p], {"nodejs": api}) == []
     p["cycles"]["26"] = "2026-11-01"
-    assert w.eol_candidates(p, api)[0]["cve"] == "EOL Node.js 26"
+    c = w.eol_candidates([p], {"nodejs": api})
+    assert c[0]["cve"].startswith("EOL ") and "Node.js 26" in c[0]["title"] and c[0]["cve"] == w.eol_candidates([p], {"nodejs": api})[0]["cve"]  # same key
+    with tempfile.TemporaryDirectory() as d:
+        shutil.copy(os.path.join(w.ROOT, "advisories.json"), d)
+        w.refresh_eol({"nodejs": api}, path=os.path.join(d, "advisories.json"))
+        after = json.load(open(os.path.join(d, "advisories.json")))
+        node = next(x for x in after["eol"]["products"] if x["slug"] == "nodejs")
+        assert node["cycles"] == cycles and after["versions"] == ADVISORIES["versions"]  # only the eol block changed
+        for f in ("README.md", "index.html"):
+            open(os.path.join(d, f), "w").write("Only Electron 43 to 45 still get fixes")
+        open(os.path.join(d, "advisories.json"), "w").write(json.dumps({"electron": {"about": "(43, 44 and 45 since 21 Oct 2026)",
+                                                                                     "supported": [43, 44, 45]}}, indent=2))
+        w.bump_electron([43, 44, 45], 46, root=d)
+        e = json.load(open(os.path.join(d, "advisories.json")))["electron"]
+        assert e["supported"] == [44, 45, 46] and e["about"].startswith("(44, 45 and 46 since "), e
+        assert "Electron 44 to 46" in open(os.path.join(d, "index.html")).read()
     assert all(set(p) >= {"items", "slug", "cycles", "newest"} for p in ADVISORIES["eol"]["products"])
 
 
@@ -312,7 +327,7 @@ def test_electron_edge_brave():
         os.chmod(f"{d}/opt/slack/tiny-helper", 0o755)
         os.makedirs(f"{d}/opt/slack/resources")
         open(f"{d}/opt/slack/resources/app.asar", "w").write("")
-        rows = check_electron({**ELECTRON, "mac": [f"{d}/Applications/*.app/{fw}"], "linux": [f"{d}/opt/*/resources/app.asar"]})
+        rows = check_electron({**ELECTRON, "supported": [43, 44, 45], "mac": [f"{d}/Applications/*.app/{fw}"], "linux": [f"{d}/opt/*/resources/app.asar"]})
         got = {os.path.basename(r[1]): (r[2], r[3]) for r in rows}
         assert got == {"Old.app": ("Electron 30.1.2, Chromium 124.0.6367.243", "AFFECTED"),
                        "New.app": ("Electron 44.9.3, Chromium 152.0.7977.167", "OK"),

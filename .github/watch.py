@@ -8,9 +8,13 @@ exploited, read from Chrome Releases, Apple's security releases and Mozilla's ad
 ship, often days before KEV lists them. Those issues also get the `zero-day` label. Stateless: an open or closed issue with
 the CVE id in its title means it's already queued, so reruns never duplicate.
 
-Usage: python3 .github/watch.py [--dry-run] [--days 14]   (needs `gh` logged in unless --dry-run)
+Changes that need no judgement (end-of-life dates, a new Electron major) come as a draft PR with the edit made,
+labelled `queue`; the release is still signed by hand after merging, so nothing goes live by itself.
+
+Usage: python3 .github/watch.py [--dry-run] [--days 14] [--refresh-eol]   (needs `gh` logged in unless --dry-run)
 """
 import argparse
+import hashlib
 import json
 import os
 import re
@@ -19,7 +23,9 @@ import sys
 import urllib.request
 from datetime import date, datetime, timedelta, timezone
 
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+ADVISORIES_JSON = os.path.join(ROOT, "advisories.json")
+sys.path.insert(0, ROOT)
 from secinspect import ADVISORIES, FEED_URL, new_cves, nums  # noqa: E402
 
 KEV_URL = "https://www.cisa.gov/sites/default/files/feeds/known_exploited_vulnerabilities.json"
@@ -177,8 +183,27 @@ def electron_candidates(releases, supported):
         return []
     return [{"cve": f"Electron {newest}", "title": f"Electron {newest} is out: update the supported list ({', '.join(map(str, supported))})",
              "why": f"Electron supports its newest three majors, so {newest} ending up stable moves the oldest out of support.",
-             "detail": f"Set electron.supported in advisories.json to {list(range(newest - 2, newest + 1))} and update its about text.",
-             "fix": "", "source": "https://www.electronjs.org/docs/latest/tutorial/electron-timelines"}]
+             "detail": f"The PR sets electron.supported to {list(range(newest - 2, newest + 1))} and updates the wording on the pages; check the date in the about text (the day the old major lost support).",
+             "fix": "", "source": "https://www.electronjs.org/docs/latest/tutorial/electron-timelines",
+             "apply": lambda: bump_electron(supported, newest)}]
+
+
+def bump_electron(old, newest, root=ROOT):
+    """The draft PR's change: the supported list in advisories.json and the "43 to 45" wording on the pages."""
+    new = list(range(newest - 2, newest + 1))
+    say = lambda v: f"{v[0]}, {v[1]} and {v[2]}"
+    edits = {"advisories.json": [(json.dumps(old, indent=2).replace("\n", "\n    "), json.dumps(new, indent=2).replace("\n", "\n    ")),
+                                 (f"({say(old)} since ", f"({say(new)} since ")],
+             "README.md": [(f"{old[0]} to {old[-1]}", f"{new[0]} to {new[-1]}")],
+             "index.html": [(f"{old[0]} to {old[-1]}", f"{new[0]} to {new[-1]}")]}
+    for name, pairs in edits.items():
+        path = os.path.join(root, name)
+        text = open(path).read()
+        for a, b in pairs:
+            text = text.replace(a, b)
+        if name == "advisories.json":  # the date in "(44, 45 and 46 since <date>)"
+            text = re.sub(rf"(\({re.escape(say(new))} since )[^)]*\)", rf"\g<1>{date.today():%-d %b %Y})", text)
+        open(path, "w").write(text)
 
 
 def awaiting_candidates(page, adv):
@@ -211,17 +236,41 @@ def eol_block(eol):
     return json.dumps(top, ensure_ascii=False)[:-1] + ',\n    "products": [\n' + lines + "\n    ]\n  }"
 
 
-def eol_candidates(product, api):
-    """A changed or new end-of-life date upstream: refresh advisories.json with --refresh-eol, then sign."""
-    cycles, _ = eol_cycles(api)
-    changed = sorted(c for c in cycles if product["cycles"].get(c, "missing") != cycles[c])
+def eol_candidates(products, apis):
+    """Changed or new end-of-life dates upstream, all products in one candidate. apis: {slug: endoflife.date list}.
+    The key hashes the changes, so the same changes never open a second PR and new ones open a new one."""
+    changed = {p["items"][0]: sorted(c for c, end in eol_cycles(apis[p["slug"]])[0].items() if p["cycles"].get(c, "missing") != end)
+               for p in products if p["slug"] in apis}
+    changed = {k: v for k, v in changed.items() if v}
     if not changed:
         return []
-    name = product["items"][0]
-    return [{"cve": f"EOL {name} {changed[0]}", "title": f"end-of-life dates changed for {name}: {', '.join(changed[:6])}",
+    key = hashlib.sha256(json.dumps(changed, sort_keys=True).encode()).hexdigest()[:8]
+    return [{"cve": f"EOL {key}", "title": "end-of-life dates changed: " + "; ".join(f"{k} {', '.join(v[:4])}" for k, v in changed.items()),
              "why": "endoflife.date lists a new cycle or a moved date, so the end-of-life check is out of date.",
-             "detail": "Run `python3 .github/watch.py --refresh-eol`, check the diff, run the tests and changelog.py, then sign.",
-             "fix": "", "source": EOL_API.format(product["slug"])}]
+             "detail": "The PR runs `python3 .github/watch.py --refresh-eol`. Check the dates in the diff.",
+             "fix": "", "source": "https://endoflife.date", "apply": lambda: refresh_eol(apis)}]
+
+
+def refresh_eol(apis, path=ADVISORIES_JSON):
+    """Rewrites only the eol block of advisories.json (it stays the last key) from endoflife.date."""
+    text = open(path).read()
+    eol = json.loads(text)["eol"]
+    for p in eol["products"]:
+        if p["slug"] in apis:
+            p["cycles"], p["newest"] = eol_cycles(apis[p["slug"]])
+    eol["checked"] = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+    with open(path, "w") as fh:
+        fh.write(text[:text.index('\n  "eol": ')] + '\n  "eol": ' + eol_block(eol) + "\n}\n")
+
+
+def eol_apis():
+    apis = {}
+    for p in ADVISORIES["eol"]["products"]:
+        try:
+            apis[p["slug"]] = get(EOL_API.format(p["slug"]))
+        except Exception as e:
+            print(f"skip {p['slug']} end-of-life dates: {e}", file=sys.stderr)
+    return apis
 
 
 def body(c):
@@ -232,6 +281,38 @@ def body(c):
         "software), add an entry to advisories.json, a test in test_secinspect.py, and a row on the page and "
         "README. Close as `wontfix` if it doesn't fit the tool. Either way, move the tech's `checked` date in "
         "advisories.json to today, or later CVEs for it won't be queued.") if x)
+
+
+def git(*args):
+    return subprocess.run(["git", "-C", ROOT, *args], capture_output=True, text=True, check=True).stdout
+
+
+def open_pr(c):
+    """A draft PR with the change made, for the cases that need no judgement. The release stays unsigned until the
+    maintainer reviews, merges, pulls and signs, so nothing here can go live by itself."""
+    branch = "watch/" + re.sub(r"[^a-z0-9]+", "-", c["cve"].lower()).strip("-")
+    start = git("rev-parse", "--abbrev-ref", "HEAD").strip()
+    git("checkout", "-B", branch)
+    try:
+        c["apply"]()
+        subprocess.run([sys.executable, os.path.join(ROOT, "changelog.py")], cwd=ROOT, capture_output=True, check=True)
+        t = subprocess.run([sys.executable, os.path.join(ROOT, "test_secinspect.py")], cwd=ROOT, capture_output=True, text=True)
+        tests = "Tests pass." if t.returncode == 0 else "Tests FAIL, fix before merging:\n\n```\n" + (t.stdout + t.stderr)[-2500:] + "\n```"
+        git("add", "-A")
+        git("commit", "-m", f'{c["cve"]}: {c["title"]}')
+        git("push", "-f", "origin", branch)
+        subprocess.run(["gh", "pr", "create", "--draft", "--label", "queue", "--head", branch, "--title", f'{c["cve"]}: {c["title"]}',
+                        "--body", "\n\n".join((c["why"], c["detail"], f'Source: {c["source"]}', tests,
+                                                "To ship: review the diff, add a changelog.json entry if users should hear about it, "
+                                                "merge, pull, then `sh .github/sign-release.sh`."))], check=True)
+    finally:
+        git("checkout", "-f", start)
+
+
+def proposed(key):
+    out = subprocess.run(["gh", "pr", "list", "--state", "all", "--search", f"{key} in:title", "--json", "number"],
+                         capture_output=True, text=True, check=True).stdout
+    return bool(json.loads(out))
 
 
 def queued(key):
@@ -247,16 +328,7 @@ def main(argv):
     ap.add_argument("--refresh-eol", action="store_true", help="rewrite advisories.json's end-of-life dates from endoflife.date")
     args = ap.parse_args(argv)
     if args.refresh_eol:
-        path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "advisories.json")
-        text = open(path).read()
-        eol = json.loads(text)["eol"]
-        for p in eol["products"]:
-            p["cycles"], p["newest"] = eol_cycles(get(EOL_API.format(p["slug"])))
-        eol["checked"] = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
-        head = text[:text.index('\n  "eol": ')]  # ponytail: eol stays the last key, so only its block is rewritten
-        with open(path, "w") as fh:
-            fh.write(head + '\n  "eol": ' + eol_block(eol) + "\n}\n")
-        return
+        return refresh_eol(eol_apis())
     known = known_cves()
     since = (date.today() - timedelta(days=args.days)).isoformat()
     zsince = (date.today() - timedelta(days=3)).isoformat()  # vendor notes are same-day; KEV can lag weeks
@@ -271,11 +343,7 @@ def main(argv):
         cands += electron_candidates(get(ELECTRON_RELEASES), ADVISORIES["electron"]["supported"])
     except Exception as e:
         print(f"skip Electron releases: {e}", file=sys.stderr)
-    for p in ADVISORIES["eol"]["products"]:
-        try:
-            cands += eol_candidates(p, get(EOL_API.format(p["slug"])))
-        except Exception as e:
-            print(f"skip {p['slug']} end-of-life dates: {e}", file=sys.stderr)
+    cands += eol_candidates(ADVISORIES["eol"]["products"], eol_apis())
     for adv in ADVISORIES["versions"]:
         if adv.get("awaiting"):
             try:
@@ -288,7 +356,10 @@ def main(argv):
             continue
         seen.add(c["cve"])
         if args.dry_run:
-            print(f'{c["cve"]}  {c["title"]}')
+            print(f'{c["cve"]}  {c["title"]}' + ("  (draft PR)" if c.get("apply") else ""))
+        elif c.get("apply"):
+            if not proposed(c["cve"]):
+                open_pr(c)
         elif not queued(c.get("key", c["cve"])):
             labels = ["--label", "zero-day"] if c.get("zero_day") else []
             subprocess.run(["gh", "issue", "create", "--label", "queue", *labels, "--title", f'{c["cve"]}: {c["title"]}',

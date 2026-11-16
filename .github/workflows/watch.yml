@@ -4,8 +4,9 @@ on:
     - cron: "30 */6 * * *"  # every 6 hours
   workflow_dispatch:
 permissions:
-  contents: read
+  contents: write        # push watch/* branches for draft PRs; main is only changed by a signed push
   issues: write
+  pull-requests: write
 jobs:
   watch:
     runs-on: ubuntu-latest
@@ -16,7 +17,10 @@ jobs:
           gh label create zero-day --color b60205 --description "Vendor says it's exploited: add first" --force
         env:
           GH_TOKEN: ${{ github.token }}
-      - run: python3 .github/watch.py
+      - run: |
+          git config user.name "amiaffected-watch"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          python3 .github/watch.py
         env:
           GH_TOKEN: ${{ github.token }}
       - name: The live release is signed by the release key
