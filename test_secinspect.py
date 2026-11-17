@@ -415,6 +415,31 @@ def test_eol_settings():
              "30": "/opt/homebrew/bin/python3", "40": ""}
     got = si.listening(lsof, paths.get)
     assert [(r[1], r[2]) for r in got] == [("/opt/homebrew/bin/python3", "*:2527"), ("pid 40", "192.168.1.5:22")], got
+    with tempfile.TemporaryDirectory() as d:  # Linux hardening: sshd config as sshd reads it, ufw's own switch, Docker past it
+        os.makedirs(f"{d}/conf.d")
+        open(f"{d}/conf.d/50-cloud-init.conf", "w").write("PasswordAuthentication yes\n")  # cloud images ship this
+        open(f"{d}/sshd_config", "w").write(f"Include {d}/conf.d/*.conf\n# PermitRootLogin yes\nPasswordAuthentication no\n"
+                                            "Match User backup\n  PermitRootLogin yes\n")
+        open(f"{d}/ufw.conf", "w").write("ENABLED=yes\n")
+        docker = "redis\t0.0.0.0:6379->6379/tcp, [::]:6379->6379/tcp\nweb\t127.0.0.1:8080->80/tcp\n"
+        fake = lambda *c: docker if c[0] == "docker" else ("systemd 255" if c[1:] == ("--version",) else "")
+        got = {r[0]: r for r in si.linux_hardening(fake, f"{d}/sshd_config", f"{d}/ufw.conf")}
+        assert got["Setting: Linux firewall"][2:4] == ("on", "OK")
+        assert got["Setting: Docker ports past the firewall"][2] == "redis:6379", got  # 127.0.0.1 is fine
+        assert got["Setting: SSH password login"][3] == "REVIEW"  # the Include came first, so it wins
+        assert "Setting: SSH root login" not in got  # only inside Match
+        open(f"{d}/ufw.conf", "w").write("ENABLED=no\n")
+        open(f"{d}/conf.d/50-cloud-init.conf", "w").write("PermitRootLogin yes\n")
+        os.chmod(f"{d}/conf.d/50-cloud-init.conf", 0o644)
+        got = {r[0]: r for r in si.linux_hardening(lambda *c: "systemd 255" if c[1:] == ("--version",) else "", f"{d}/sshd_config", f"{d}/ufw.conf")}
+        assert got["Setting: Linux firewall"][3] == "REVIEW" and "Setting: Docker ports past the firewall" not in got
+        assert got["Setting: SSH password login"][3] == "OK" and got["Setting: SSH root login"][4] == "root can log in over SSH"
+        if os.geteuid():
+            os.chmod(f"{d}/conf.d/50-cloud-init.conf", 0)
+            got = {r[0]: r for r in si.linux_hardening(lambda *c: "systemd 255" if c[1:] == ("--version",) else "", f"{d}/sshd_config", f"{d}/ufw.conf")}
+            assert "run as root" in got["Setting: SSH password login"][4], got
+        for item in ("Setting: Linux firewall", "Setting: SSH password login", "Setting: SSH root login", "Setting: Docker ports past the firewall"):
+            assert fix_for(item, "x"), item
     ss = ('LISTEN 0 4096 0.0.0.0:22 0.0.0.0:* users:(("sshd",pid=812,fd=3))\n'
           'LISTEN 0 4096 127.0.0.53%lo:53 0.0.0.0:* users:(("systemd-resolve",pid=500,fd=14))\n'
           'LISTEN 0 4096 0.0.0.0:6379 0.0.0.0:* users:(("docker-proxy",pid=900,fd=4))\n'

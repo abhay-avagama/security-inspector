@@ -1548,6 +1548,78 @@ def listen_rows(ports, path_of, skip):
     return rows
 
 
+RELOAD_SSH = "then: sudo systemctl reload ssh || sudo systemctl reload sshd"
+SETTING_FIX["Setting: Linux firewall"] = (
+    "Turn on a firewall", "sudo ufw allow OpenSSH && sudo ufw enable   # RHEL family: sudo systemctl enable --now firewalld")
+SETTING_FIX["Setting: SSH password login"] = (
+    "Turn off SSH password login", "check you can log in with a key first, then set PasswordAuthentication no in "
+    "/etc/ssh/sshd_config and any file in /etc/ssh/sshd_config.d that sets it; " + RELOAD_SSH)
+SETTING_FIX["Setting: SSH root login"] = (
+    "Stop root logging in over SSH", "set PermitRootLogin prohibit-password in /etc/ssh/sshd_config; " + RELOAD_SSH)
+SETTING_FIX["Setting: Docker ports past the firewall"] = (
+    "Keep Docker's ports behind the firewall", "publish them as 127.0.0.1:PORT:PORT (docker run -p, compose ports:), "
+    "or add DROP rules to the DOCKER-USER iptables chain")
+
+
+def sshd_settings(path="/etc/ssh/sshd_config"):
+    """({keyword: value}, files we couldn't read) as sshd sees them for a normal login: the first value wins,
+    Include is read in place, and reading stops at the first Match block."""
+    seen, unread = {}, []
+
+    def walk(p):
+        try:
+            lines = open(p, errors="replace").read().splitlines()
+        except OSError:
+            unread.append(p)
+            return False
+        for line in lines:
+            f = line.split("#", 1)[0].split(None, 1)
+            if len(f) < 2:
+                continue
+            k, v = f[0].lower(), f[1].strip()
+            if k == "match":
+                return True
+            if k == "include":
+                for pat in v.split():
+                    if any(walk(q) for q in sorted(glob.glob(pat if pat.startswith("/") else "/etc/ssh/" + pat))):
+                        return True
+            else:
+                seen.setdefault(k, v.split()[0].lower())
+        return False
+    walk(path)
+    return seen, unread
+
+
+def linux_hardening(read=run, sshd_config="/etc/ssh/sshd_config", ufw_conf="/etc/ufw/ufw.conf"):
+    rows = []
+    try:  # ufw.service reports active even when ufw is disabled; its own conf says
+        ufw = bool(re.search(r"^ENABLED=yes", open(ufw_conf).read(), re.M))
+    except OSError:
+        ufw = False
+    on = ["ufw"] * ufw + [u for u in ("firewalld", "nftables") if read("systemctl", "is-active", u).strip() == "active"]
+    if ufw or read("systemctl", "--version").strip():  # no systemd (a container): no row rather than a guess
+        rows.append(("Setting: Linux firewall", ", ".join(on) or "ufw, firewalld, nftables", "on" if on else "off", "OK" if on else "REVIEW",
+                     "" if on else "off: every listening port is reachable unless your provider's firewall (security group) blocks it"))
+    published = []
+    for line in read("docker", "ps", "--format", "{{.Names}}\t{{.Ports}}").splitlines():
+        name, _, ports = line.partition("\t")
+        published += [f"{name}:{p}" for p in dict.fromkeys(re.findall(r"(?:0\.0\.0\.0|\[::\]|:::?):(\d+)->", ports))]
+    if on and published:
+        rows.append(("Setting: Docker ports past the firewall", "docker ps", ", ".join(published), "REVIEW",
+                     "Docker writes its own iptables rules, so the firewall doesn't block these published ports"))
+    if os.path.exists(sshd_config):
+        conf, unread = sshd_settings(sshd_config)
+        caveat = f" (couldn't read {', '.join(unread)}: run as root to be sure)" if unread else ""
+        pw = conf.get("passwordauthentication", "yes") == "yes"  # sshd's default is yes
+        rows.append(("Setting: SSH password login", sshd_config, "on" if pw else "off", "REVIEW" if pw else "OK",
+                     ("on: bots try passwords against every server all day" if pw else "") + caveat))
+        root = conf.get("permitrootlogin", "prohibit-password") == "yes"
+        if root:
+            rows.append(("Setting: SSH root login", sshd_config, "yes", "REVIEW",
+                         "root can log in over SSH" + (", with a password too" if pw else "") + caveat))
+    return rows
+
+
 def check_settings(read=run):
     rows = []
     if sys.platform == "darwin":
@@ -1565,6 +1637,7 @@ def check_settings(read=run):
         return rows
     if sys.platform.startswith("linux"):
         rows += ss_listening(read("ss", "-Hltnp"))
+        rows += linux_hardening(read)
     if shutil.which("apt-get"):
         conf = "".join(open(f, errors="replace").read() for f in glob.glob("/etc/apt/apt.conf.d/*") if os.path.isfile(f))
         on = bool(shutil.which("unattended-upgrade")) and re.search(r'Unattended-Upgrade\s+"1"', conf)
