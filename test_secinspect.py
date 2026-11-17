@@ -76,6 +76,9 @@ def test_fix_plan():
     for adv in ADVISORIES["versions"]:  # a fix title naming versions must name the current fixed ones, not last release's
         named = re.findall(r"\b\d+\.\d+(?:\.\d+)*\b", adv.get("plan", [""])[0])
         assert not adv.get("fixed") or set(named) <= set(adv["fixed"]), (adv["name"], named)
+        for r in adv.get("affected") or []:  # "update to X+" must not land in another affected range (Brave 1.99.56, Chrome .50)
+            for t in re.findall(r"(\d+(?:\.\d+)+)\+", r[2] if len(r) > 2 else ""):
+                assert not [x for x in adv["affected"] if nums(x[0]) <= nums(t) <= nums(x[1])], (adv["name"], r[:2], t)
     rows = [
         ("Node.js", "/Users/x/.nvm/versions/node/v18/bin/node", "18.0.0", "AFFECTED", "eol"),
         ("Node.js", "/Users/y/.nvm/versions/node/v20/bin/node", "20.0.0", "AFFECTED", "eol"),

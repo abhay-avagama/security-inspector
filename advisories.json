@@ -467,28 +467,28 @@
         [
           "0.0.0.0",
           "153.0.8010.35",
-          "update to 157.0.8103.50+ (fixes the exploited V8 bugs and the Oct 27 and Nov 3 critical ones) and relaunch the browser"
+          "update to 157.0.8103.78+ (fixes the exploited V8 bugs and the Oct 27 and Nov 3 critical ones) and relaunch the browser"
         ],
         [
           "153.0.8010.36",
           "155.0.8059.38",
-          "macOS sandbox escape CVE-2026-106378: update to 157.0.8103.50+ and relaunch the browser",
+          "macOS sandbox escape CVE-2026-106378: update to 157.0.8103.78+ and relaunch the browser",
           "darwin"
         ],
         [
           "0.0.0.0",
           "156.0.8078.72",
-          "four critical bugs fixed on 27 Oct 2026: update to 157.0.8103.50+ and relaunch the browser"
+          "four critical bugs fixed on 27 Oct 2026: update to 157.0.8103.78+ and relaunch the browser"
         ],
         [
           "0.0.0.0",
           "157.0.8103.37",
-          "33 critical bugs fixed on 3 Nov 2026: update to 157.0.8103.50+ and relaunch the browser"
+          "33 critical bugs fixed on 3 Nov 2026: update to 157.0.8103.78+ and relaunch the browser"
         ],
         [
           "0.0.0.0",
           "157.0.8103.49",
-          "CVE-2026-125350 is exploited in the wild: update to 157.0.8103.50+ and relaunch the browser"
+          "CVE-2026-125350 is exploited in the wild: update to 157.0.8103.78+ and relaunch the browser"
         ],
         [
           "157.0.8103.50",
@@ -547,7 +547,7 @@
         [
           "0.0.0",
           "1.99.55",
-          "CVE-2026-125350 is exploited in the wild: update to 1.99.56+ (brave://settings/help) and relaunch Brave"
+          "CVE-2026-125350 is exploited in the wild: update to 1.99.57+ (brave://settings/help) and relaunch Brave"
         ],
         [
           "1.100.0",
