@@ -50,6 +50,8 @@ def test_ca():
     assert "ca-certificates" in fix_hint("/opt/homebrew/etc/ca-certificates/cert.pem")
     assert "certifi" in fix_hint("/x/site-packages/certifi/cacert.pem")
     assert "botocore" in fix_hint("/x/site-packages/botocore/cacert.pem")
+    assert "apt" in fix_hint("/usr/lib/python3/dist-packages/botocore/cacert.pem")  # not ca-certificates, not pip
+    assert "apt" in fix_for("eMudhra CA", "1 app CA bundles, e.g. /usr/lib/python3/dist-packages/certifi/cacert.pem", "")[1]
     accepted = chain_accepts(pem(ROOTS[AAA]))
     if accepted is not None:  # needs openssl
         assert accepted == list(INTERMEDIATES), accepted

@@ -1067,6 +1067,8 @@ def chain_accepts(bundle):
 
 def fix_hint(path):
     p = path.lower()
+    if p.startswith("/usr/lib/python3/dist-packages/"):  # Debian/Ubuntu: apt owns these, pip refuses (PEP 668)
+        return f"apt owns it (python3-{p.split('dist-packages/')[1].split('/')[0]}): sudo apt upgrade once the distro drops the root"
     if "/certifi/" in p:  # not "ca-certificates"
         return "pip install -U certifi once a release drops it"
     if "site-packages" in p:  # e.g. botocore ships its own bundle
@@ -1678,6 +1680,8 @@ def fix_for(item, where, note=""):
             return ("Update Firefox / Thunderbird (they carry their own roots)", "update Firefox/Thunderbird to the latest version")
         if "cacerts" in w or "/java/" in w or "jvm" in w:
             return ("Update the Java trust store", "update the JDK, or: keytool -delete -alias <cracked alias> -keystore <cacerts>")
+        if "/usr/lib/python3/dist-packages/" in w:
+            return ("Update the distro's Python packages that ship their own CA bundle", "sudo apt update && sudo apt upgrade   # once the distro drops the root")
         if "certifi" in w:  # before site-packages and /vendor/: pip ships certifi under pip/_vendor/certifi
             return ("Update certifi in affected virtualenvs (after a fixed release ships)", "pip install -U certifi   # run in each affected venv")
         if "/vendor/" in w:  # composer convention; note /vendor/ not _vendor/ (python)
