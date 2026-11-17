@@ -23,7 +23,20 @@ jobs:
           python3 .github/watch.py
         env:
           GH_TOKEN: ${{ github.token }}
+      - name: The one-liner works from a datacenter IP (Cloudflare's Bot Fight Mode once 403'd every server)
+        if: always()
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          code=$(curl -s -o /dev/null -w "%{http_code}" https://amiaffected.now/run)  # plain curl, default User-Agent, like a user
+          [ "$code" = 200 ] && exit 0
+          t="curl | sh one-liner blocked from servers"
+          if [ "$(gh issue list --state open --search "\"$t\" in:title" --json number -q length)" = 0 ]; then
+            gh issue create --title "$t" --body "Plain \`curl https://amiaffected.now/run\` from a GitHub runner got HTTP $code (checked $(date -u +%FT%TZ)). Servers in datacenters can't run the check. If the response has \`cf-mitigated: challenge\`, look at Cloudflare: Security → Bots → Bot Fight Mode, Security Level, and WAF custom rules."
+          fi
+          exit 1
       - name: The live release is signed by the release key
+        if: always()
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
