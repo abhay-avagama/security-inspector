@@ -282,7 +282,13 @@ def test_zero_day():
         w.get = lambda url: feed
         w.ADVISORIES["versions"] = [{"name": "PostgreSQL server", "feed": "postgresql", "checked": "2026-11-12T15:00:00Z"}]
         c = w.feed_candidates({"CVE-2026-6460"})
-        assert [x["key"] for x in c] == ['"PostgreSQL server" "updates since 2026-11-12"'] and "proof of concept" in c[0]["detail"], c
+        assert [x["key"] for x in c] == ['"PostgreSQL server" "CVEs we check" "since 2026-11-12"'] and "proof of concept" in c[0]["detail"], c
+        feed["items"].append({"id": "CVE-2026-116322", "date_modified": "2026-11-13T00:00:00Z", "title": "CVE-2026-116322: ..."})
+        new, upd = sorted(w.feed_candidates({"CVE-2026-6460"}), key=lambda x: "CVEs we check" in x["key"])
+        has = lambda key, title: all(p.lower() in title.lower() for p in re.findall(r'"([^"]+)"', key))
+        # the issue search matches every quoted phrase in the title: each key must find its own issue and not the other's
+        assert has(new["key"], new["title"]) and has(upd["key"], upd["title"]), (new, upd)
+        assert not has(new["key"], upd["title"]) and not has(upd["key"], new["title"]), (new, upd)
         w.ADVISORIES["versions"][0]["checked"] = "2026-11-14T00:00:00Z"
         assert w.feed_candidates({"CVE-2026-6460"}) == []
     finally:

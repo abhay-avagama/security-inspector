@@ -164,8 +164,9 @@ def feed_candidates(known):
             continue
         fresh = new_cves(items, adv["checked"], known)
         if fresh:  # one issue per tech: Chrome alone lists a dozen CVEs per release
-            # ponytail: the lead CVE shifts as the feed reorders, so dedupe on tech + checked date instead
-            out.append({"cve": fresh[0], "key": f'"{adv["name"]}" "since {adv["checked"][:10]}"', "title": f'{adv["name"]}: {len(fresh)} new CVE(s) since {adv["checked"][:10]}',
+            # ponytail: the lead CVE shifts as the feed reorders, so dedupe on tech + checked date instead;
+            # each key must match only its own title ("new CVE" vs "CVEs we check") or one kind hides the other
+            out.append({"cve": fresh[0], "key": f'"{adv["name"]}" "new CVE" "since {adv["checked"][:10]}"', "title": f'{adv["name"]}: {len(fresh)} new CVE(s) since {adv["checked"][:10]}',
                         "why": f'Listed on cve.now for {adv["name"]} after {adv["checked"][:10]}.',
                         "detail": "\n".join(f"- https://nvd.nist.gov/vuln/detail/{c}" for c in fresh), "fix": "",
                         "source": f'https://cve.now/feed?tech={adv["feed"]}'})
@@ -173,7 +174,7 @@ def feed_candidates(known):
         upd = [it for it in items if "#" in it.get("id", "") and it["id"].split("#")[0] in known
                and _dt(it.get("date_modified", "1970-01-01")) > _dt(adv["checked"])]
         if upd:
-            out.append({"cve": upd[0]["id"].split("#")[0], "key": f'"{adv["name"]}" "updates since {adv["checked"][:10]}"',
+            out.append({"cve": upd[0]["id"].split("#")[0], "key": f'"{adv["name"]}" "CVEs we check" "since {adv["checked"][:10]}"',
                         "title": f'{adv["name"]}: {len(upd)} update(s) to CVEs we check, since {adv["checked"][:10]}',
                         "why": "A CVE we already check changed on cve.now (public exploit, KEV listing, rescore). "
                                "Decide whether the note or the urgency should change; close it if not.",
