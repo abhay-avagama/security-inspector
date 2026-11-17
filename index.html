@@ -74,7 +74,7 @@ sudo python3 /opt/amiaffected/secinspect.py --fix                     # then app
 <tr><td>Mac settings</td><td>FileVault, Gatekeeper, System Integrity Protection, the firewall and automatic security updates, plus programs taking connections from other machines on your network. On Linux, whether security updates install themselves, and every program other machines can reach (sshd left out)</td></tr>
 <tr><td>Node.js</td><td>The Nov 11 2026 release (15 CVEs, incl. HTTPS servers leaking TLS private keys) across PATH, nvm, Volta, fnm and Homebrew</td></tr>
 <tr><td>BIND 9</td><td>CVE-2026-94300 against ISC's affected ranges</td></tr>
-<tr><td>GitLab</td><td>CVE-2026-110264 and 11 more on self-managed Omnibus</td></tr>
+<tr><td>GitLab</td><td>The 16 Nov release (37 CVEs), the critical bundled-git overflow CVE-2026-105437 and CVE-2026-110264 on self-managed Omnibus: 19.5.6, 19.4.8 or 19.3.9 needed</td></tr>
 <tr><td>LiteLLM</td><td>The 1.107.0 backdoor: installed copies, lockfiles, malware files and bad Docker image digests</td></tr>
 <tr><td>python-jose</td><td>CVE-2026-120459: accepts empty HMAC keys, every release through 3.5.0, no fix yet. Installed copies and lockfiles</td></tr>
 <tr><td>GPUStack</td><td>CVE-2026-102895, exploited: requests that look local get admin rights before 2.2.0. Installed copies and lockfiles below 2.3.1, which also fixes a SAML login bypass</td></tr>

@@ -35,8 +35,9 @@ def test_versions():
     assert status("Node.js", (24, 22, 3)) == "OK"
     assert status("Node.js", (26, 13, 1)) == "OK"
     assert status("Node.js", (22, 23, 4)) == "AFFECTED"
-    assert status("GitLab", (18, 11, 13)) == "OK"
-    assert status("GitLab", (18, 5, 0)) == "AFFECTED"
+    assert status("GitLab", (19, 5, 6)) == "OK" and status("GitLab", (19, 3, 9)) == "OK"
+    assert status("GitLab", (19, 5, 5)) == "AFFECTED" and status("GitLab", (19, 4, 7)) == "AFFECTED"  # 16 Nov release
+    assert status("GitLab", (19, 2, 9)) == "AFFECTED" and status("GitLab", (18, 11, 13)) == "AFFECTED"  # no fix for the git overflow
     assert status("BIND", (9, 18, 50)) == "AFFECTED"
     assert status("BIND", (9, 20, 30)) == "OK"
     assert status("BIND", (9, 21, 26)) == "AFFECTED"
@@ -283,17 +284,22 @@ def test_zero_day():
     get, versions = w.get, w.ADVISORIES["versions"]
     try:
         w.get = lambda url: feed
-        w.ADVISORIES["versions"] = [{"name": "PostgreSQL server", "feed": "postgresql", "checked": "2026-11-12T15:00:00Z"}]
-        c = w.feed_candidates({"CVE-2026-6460"})
+        w.ADVISORIES["versions"] = [{"name": "PostgreSQL server", "feed": "postgresql", "checked": "2026-11-12T15:00:00Z", "cves": ["CVE-2026-6460"]}]
+        c = w.feed_candidates()
         assert [x["key"] for x in c] == ['"PostgreSQL server" "CVEs we check" "since 2026-11-12"'] and "proof of concept" in c[0]["detail"], c
         feed["items"].append({"id": "CVE-2026-116322", "date_modified": "2026-11-13T00:00:00Z", "title": "CVE-2026-116322: ..."})
-        new, upd = sorted(w.feed_candidates({"CVE-2026-6460"}), key=lambda x: "CVEs we check" in x["key"])
+        new, upd = sorted(w.feed_candidates(), key=lambda x: "CVEs we check" in x["key"])
         has = lambda key, title: all(p.lower() in title.lower() for p in re.findall(r'"([^"]+)"', key))
         # the issue search matches every quoted phrase in the title: each key must find its own issue and not the other's
         assert has(new["key"], new["title"]) and has(upd["key"], upd["title"]), (new, upd)
         assert not has(new["key"], upd["title"]) and not has(upd["key"], new["title"]), (new, upd)
         w.ADVISORIES["versions"][0]["checked"] = "2026-11-14T00:00:00Z"
-        assert w.feed_candidates({"CVE-2026-6460"}) == []
+        assert w.feed_candidates() == []
+        # a CVE we list under another product (GitLab's bundled-git CVE-2026-105437, listed under Git) is still new here
+        feed["items"] = [{"id": "CVE-2026-105437", "date_modified": "2026-11-10T12:00:00Z", "title": "CVE-2026-105437: GitLab ..."}]
+        w.ADVISORIES["versions"] = [{"name": "GitLab", "feed": "gitlab", "checked": "2026-10-23T12:00:00Z", "cves": []},
+                                    {"name": "Git", "cves": ["CVE-2026-105437"]}]
+        assert [x["cve"] for x in w.feed_candidates()] == ["CVE-2026-105437"]
     finally:
         w.get, w.ADVISORIES["versions"] = get, versions
     api = [{"cycle": "27", "eol": False}, {"cycle": "26", "eol": "2026-12-01", "lts": True}, {"cycle": "25", "eol": "2026-01-01"},

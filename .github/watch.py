@@ -152,7 +152,7 @@ def kev_digest(kev, today, known):
              "detail": "\n".join(f'- {v["cveID"]} {v["vendorProject"]} {v["product"]}: {v["vulnerabilityName"]}' for v in week),
              "fix": "", "source": "https://www.cisa.gov/known-exploited-vulnerabilities-catalog"}]
 
-def feed_candidates(known):
+def feed_candidates():
     out = []
     for adv in ADVISORIES["versions"]:
         if not adv.get("feed") or not adv.get("checked"):
@@ -162,7 +162,10 @@ def feed_candidates(known):
         except Exception as e:  # one feed down shouldn't stop the rest
             print(f"skip {adv['name']} feed: {e}", file=sys.stderr)
             continue
-        fresh = new_cves(items, adv["checked"], known)
+        own = {w for w in json.dumps(adv).replace('"', " ").split() if w.startswith("CVE-")}
+        # ponytail: judged against this product's own CVEs, not every CVE we list: GitLab's fix for a git CVE we
+        # already had under Git (CVE-2026-105437) is still news for GitLab. Same rule as the scanner's stale check.
+        fresh = new_cves(items, adv["checked"], own)
         if fresh:  # one issue per tech: Chrome alone lists a dozen CVEs per release
             # ponytail: the lead CVE shifts as the feed reorders, so dedupe on tech + checked date instead;
             # each key must match only its own title ("new CVE" vs "CVEs we check") or one kind hides the other
@@ -171,7 +174,7 @@ def feed_candidates(known):
                         "detail": "\n".join(f"- https://nvd.nist.gov/vuln/detail/{c}" for c in fresh), "fix": "",
                         "source": f'https://cve.now/feed?tech={adv["feed"]}'})
         # cve.now re-lists a CVE as "<id>#<time>" when it changes; for one we already check, that's news like a public exploit
-        upd = [it for it in items if "#" in it.get("id", "") and it["id"].split("#")[0] in known
+        upd = [it for it in items if "#" in it.get("id", "") and it["id"].split("#")[0] in own
                and _dt(it.get("date_modified", "1970-01-01")) > _dt(adv["checked"])]
         if upd:
             out.append({"cve": upd[0]["id"].split("#")[0], "key": f'"{adv["name"]}" "CVEs we check" "since {adv["checked"][:10]}"',
@@ -349,7 +352,7 @@ def main(argv):
     except Exception as e:  # don't let CISA being down stop the zero-day and feed checks (or the signature step after)
         print(f"skip CISA KEV: {e}", file=sys.stderr)
         kev = []
-    cands = zero_day_candidates(zsince, known) + kev + feed_candidates(known)
+    cands = zero_day_candidates(zsince, known) + kev + feed_candidates()
     try:
         cands += electron_candidates(get(ELECTRON_RELEASES), ADVISORIES["electron"]["supported"])
     except Exception as e:
