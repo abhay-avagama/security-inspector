@@ -300,6 +300,25 @@ def test_zero_day():
         w.ADVISORIES["versions"] = [{"name": "GitLab", "feed": "gitlab", "checked": "2026-10-23T12:00:00Z", "cves": []},
                                     {"name": "Git", "cves": ["CVE-2026-105437"]}]
         assert [x["cve"] for x in w.feed_candidates()] == ["CVE-2026-105437"]
+        # vendor feeds: GitLab's Atom and Node's RSS, as they look today
+        atom = ('<feed xmlns="http://www.w3.org/2005/Atom"><entry><title>GitLab Critical Patch Release: 19.5.4, 19.4.6, 19.3.8</title>'
+                '<link href="https://docs.gitlab.com/x/"/><updated>2026-11-10T00:00:00Z</updated></entry>'
+                '<entry><title>GitLab 19.6 released</title><updated>2026-11-19T00:00:00Z</updated></entry></feed>')
+        rss = ('<rss><channel><item><title>Wednesday, November 11, 2026 Security Releases</title><link>https://nodejs.org/n</link>'
+               '<pubDate>Wed, 11 Nov 2026 00:00:00 GMT</pubDate></item></channel></rss>')
+        v = w.vendor_candidates("GitLab", atom, "2026-10-23T12:00:00Z", w.VENDOR_FEEDS["GitLab"][1])
+        assert len(v) == 1 and "Critical Patch Release" in v[0]["detail"] and "19.6" not in v[0]["detail"], v
+        assert w.vendor_candidates("GitLab", atom, "2026-11-10T06:00:00Z", w.VENDOR_FEEDS["GitLab"][1]) == []
+        assert w.vendor_candidates("Node.js", rss, "2026-11-01T00:00:00Z", w.VENDOR_FEEDS["Node.js"][1])[0]["cve"] == "Release 2026-11-11"
+        for k in (new, upd):  # no other kind of issue may satisfy the vendor key, or the reverse
+            assert not has(v[0]["key"], k["title"]) and not has(k["key"], v[0]["title"]), (k, v)
+        assert has(v[0]["key"], v[0]["title"])
+        roadmap = "<h2>Upcoming minor releases</h2><li>February 11th, 2027</li><h2>Next major release</h2> planned for November 19, 2026"
+        ev = w.scheduled(date(2027, 1, 1), roadmap)
+        assert (date(2027, 2, 11), "PostgreSQL minor release", w.PG_ROADMAP) in ev and not [e for e in ev if e[0] == date(2026, 11, 19)]
+        assert {d for d, what, _ in ev if "Oracle" in what and d.year == 2027} == {date(2027, 1, 19), date(2027, 4, 20), date(2027, 7, 20), date(2027, 10, 19)}
+        due = w.scheduled_candidates(ev, date(2027, 2, 9))
+        assert [c["key"] for c in due] == ['"Due 2027-02-11" "PostgreSQL minor release"'] and w.scheduled_candidates(ev, date(2027, 2, 8)) == []
     finally:
         w.get, w.ADVISORIES["versions"] = get, versions
     api = [{"cycle": "27", "eol": False}, {"cycle": "26", "eol": "2026-12-01", "lts": True}, {"cycle": "25", "eol": "2026-01-01"},

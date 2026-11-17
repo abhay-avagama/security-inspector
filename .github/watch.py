@@ -3,7 +3,8 @@
 and opens one GitHub issue per CVE labelled `queue`, so adding them is a list to work through.
 
 Sources: CISA KEV (exploited in the wild), filtered to software people run on laptops and servers,
-the cve.now feed for each tech the tool already tracks, and zero-days: bugs the vendor itself says are
+the cve.now feed for each tech the tool already tracks, the vendors' own release feeds (GitLab, PostgreSQL,
+Node.js, PHP), releases scheduled in advance (PostgreSQL, Oracle's Java CPU; issue opens 2 days ahead), and zero-days: bugs the vendor itself says are
 exploited, read from Chrome Releases, Apple's security releases and Mozilla's advisories on the day they
 ship, often days before KEV lists them. Those issues also get the `zero-day` label. Stateless: an open or closed issue with
 the CVE id in its title means it's already queued, so reruns never duplicate.
@@ -20,6 +21,7 @@ import os
 import re
 import subprocess
 import sys
+import urllib.parse
 import urllib.request
 from datetime import date, datetime, timedelta, timezone
 
@@ -184,6 +186,72 @@ def feed_candidates():
                         "detail": "\n".join(f'- {it.get("title", it["id"])}' for it in upd), "fix": "",
                         "source": f'https://cve.now/feed?tech={adv["feed"]}'})
     return out
+
+
+# Vendors' own release feeds: the release is out hours to a day before its CVEs reach cve.now, and some (GitLab's
+# bundled-git fix) never show up there under the product at all. name -> (feed, title pattern for a release).
+VENDOR_FEEDS = {
+    "GitLab": ("https://about.gitlab.com/security-releases.xml", r"Patch Release"),
+    "PostgreSQL server": ("https://www.postgresql.org/news.rss", r"^PostgreSQL [\d., ]+(and [\w .]+)?Released"),
+    "Node.js": ("https://nodejs.org/en/feed/vulnerability.xml", r"Security Releases"),
+    "PHP": ("https://www.php.net/releases/feed.php", r"^PHP [\d.]+ released"),
+}
+ATOM = "{http://www.w3.org/2005/Atom}"
+
+
+def feed_entries(xml):
+    """[(when, title, link)] from an RSS or Atom feed, times as naive UTC."""
+    import email.utils
+    import xml.etree.ElementTree as ET
+    out = []
+    for it in ET.fromstring(xml).iter():
+        if it.tag not in ("item", ATOM + "entry"):
+            continue
+        when = it.findtext("pubDate") or it.findtext(ATOM + "updated") or it.findtext(ATOM + "published") or ""
+        try:
+            t = email.utils.parsedate_to_datetime(when) if "," in when else datetime.fromisoformat(when.replace("Z", "+00:00"))
+        except (TypeError, ValueError):
+            continue
+        link = it.findtext("link") or (it.find(ATOM + "link").get("href", "") if it.find(ATOM + "link") is not None else "")
+        title = " ".join((it.findtext("title") or it.findtext(ATOM + "title") or "").split())
+        out.append((t.astimezone(timezone.utc).replace(tzinfo=None) if t.tzinfo else t, title, link))
+    return out
+
+
+def vendor_candidates(name, xml, checked, pattern):
+    fresh = [(t, title, link) for t, title, link in feed_entries(xml) if t > _dt(checked) and re.search(pattern, title)]
+    if not fresh:
+        return []
+    return [{"cve": f"Release {max(fresh)[0]:%Y-%m-%d}", "key": f'"{name}" "vendor release" "since {checked[:10]}"',
+             "title": f"{name}: {len(fresh)} vendor release(s) since {checked[:10]}",
+             "why": f"{name} published this after we last checked it; its CVEs often reach cve.now a day later, or never.",
+             "detail": "\n".join(f"- {t:%Y-%m-%d} {title}: {urllib.parse.urljoin(VENDOR_FEEDS[name][0], link)}"
+                                  for t, title, link in sorted(fresh)), "fix": "",
+             "source": VENDOR_FEEDS[name][0]}]
+
+
+PG_ROADMAP = "https://www.postgresql.org/developer/roadmap/"
+ORACLE_CPU = "https://www.oracle.com/security-alerts/"
+MONTHS = "January February March April May June July August September October November December".split()
+
+
+def scheduled(today, roadmap_html):
+    """[(day, what, url)]: security releases dated in advance, so the check can be ready the day they ship."""
+    text = re.sub(r"<[^>]+>", " ", roadmap_html)
+    text = text[text.find("Upcoming minor releases"):text.find("Next major release")]
+    out = [(date(int(y), MONTHS.index(m) + 1, int(d)), "PostgreSQL minor release", PG_ROADMAP)
+           for m, d, y in re.findall(rf"({'|'.join(MONTHS)}) (\d+)(?:st|nd|rd|th)?, (\d{{4}})", text)]
+    for y in (today.year, today.year + 1):  # Oracle: third Tuesday of Jan, Apr, Jul, Oct (matches its published 2027 dates)
+        for m in (1, 4, 7, 10):
+            out.append((date(y, m, 15) + timedelta(days=(1 - date(y, m, 15).weekday()) % 7), "Oracle Critical Patch Update (Java)", ORACLE_CPU))
+    return out
+
+
+def scheduled_candidates(events, today, ahead=2):
+    return [{"cve": f"Due {d}", "key": f'"Due {d}" "{what}"', "title": what,
+             "why": f"{what} is scheduled for {d}. Read the notes the day they're out and update the check that day; "
+                    "close this once it's live, or if the release has no security fixes.",
+             "detail": "", "fix": "", "source": url} for d, what, url in events if 0 <= (d - today).days <= ahead]
 
 
 ELECTRON_RELEASES = "https://releases.electronjs.org/releases.json"
@@ -358,6 +426,16 @@ def main(argv):
     except Exception as e:
         print(f"skip Electron releases: {e}", file=sys.stderr)
     cands += eol_candidates(ADVISORIES["eol"]["products"], eol_apis())
+    checked = {a["name"]: a.get("checked") for a in ADVISORIES["versions"]}
+    for name, (url, pattern) in VENDOR_FEEDS.items():
+        try:
+            cands += vendor_candidates(name, get_text(url), checked[name], pattern)
+        except Exception as e:  # one vendor down shouldn't stop the rest
+            print(f"skip {name} releases: {e}", file=sys.stderr)
+    try:
+        cands += scheduled_candidates(scheduled(date.today(), get_text(PG_ROADMAP)), date.today())
+    except Exception as e:
+        print(f"skip schedules: {e}", file=sys.stderr)
     for adv in ADVISORIES["versions"]:
         if adv.get("awaiting"):
             try:
@@ -366,9 +444,10 @@ def main(argv):
                 print(f"skip {adv['name']} notes: {e}", file=sys.stderr)
     seen = set()
     for c in cands:
-        if c["cve"] in seen:
+        k = c.get("key", c["cve"])  # two candidates can share a lead CVE or a date; the key is what's unique
+        if k in seen:
             continue
-        seen.add(c["cve"])
+        seen.add(k)
         if args.dry_run:
             print(f'{c["cve"]}  {c["title"]}' + ("  (draft PR)" if c.get("apply") else ""))
         elif c.get("apply"):
