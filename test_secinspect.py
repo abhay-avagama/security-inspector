@@ -200,6 +200,12 @@ def test_distro():
     # no distro fix yet: say so, but a fixed vendor build is still OK
     assert "no fixed" in distro_status(DIST["nginx"], "debian:12", "1.22.1-9+deb12u10", "", lt)[1]
     assert st("nginx", "el:9", "1:1.31.7-1.el9.ngx") == "OK"
+    # MySQL: Ubuntu backports into 8.0.46; Oracle's own 8.0 builds are end of life; 8.4 needs 8.4.13
+    assert st("MySQL", "ubuntu:24.04", "8.0.46-0ubuntu0.24.04.4") == "AFFECTED"
+    assert st("MySQL", "ubuntu:24.04", "8.0.46-0ubuntu0.24.04.5") == "OK"
+    # ponytail: Oracle's own 8.0.46 (8.0.46-1ubuntu24.04) sorts above Ubuntu's patched build and reads OK; Oracle ships no 8.0 fixes
+    assert st("MySQL", "ubuntu:24.04", "8.4.12-1ubuntu24.04") == "AFFECTED" and st("MySQL", "ubuntu:24.04", "8.4.13-1ubuntu24.04") == "OK"
+    assert st("MySQL", "ubuntu:24.04", "26.7.1-1ubuntu24.04") == "AFFECTED"  # innovation release past its window
     # vendor-only software
     assert st("MongoDB", None, "8.0.31") == "AFFECTED" and st("MongoDB", "ubuntu:24.04", "8.0.32") == "OK"
     assert st("Plex Media Server", "debian:12", "1.42.9.1000-abc") == "AFFECTED"
@@ -523,6 +529,9 @@ def test_osv():
 def test_dev_tools():
     assert status("Python", (3, 13, 17)) == "AFFECTED" and status("Python", (3, 13, 18)) == "OK" and status("Python", (3, 15, 2)) == "OK"
     assert status("Python", (3, 10, 22)) == "AFFECTED"  # end-of-life
+    assert status("Ruby", (3, 4, 12)) == "AFFECTED" and status("Ruby", (3, 4, 13)) == "OK" and status("Ruby", (4, 0, 10)) == "OK"
+    assert status("Ruby", (3, 2, 11)) == "AFFECTED"  # end-of-life, no fix
+    assert ver("ruby 3.4.13 (2026-11-18 revision abc123) +PRISM [arm64-darwin25]") == (3, 4, 13)
     assert status("Git", (2, 56, 0)) == "AFFECTED" and status("Git", (2, 56, 1)) == "OK" and status("Git", (2, 50, 2)) == "OK"
     assert status("Git", (2, 49, 1)) == "AFFECTED"  # no fix below 2.50
     assert status("curl", (8, 22, 0)) == "AFFECTED" and status("curl", (8, 23, 0)) == "OK" and status("curl", (8, 11, 1)) == "OK"
@@ -600,6 +609,15 @@ def test_queue_nov3():
     assert rows("/v/site-packages/litellm-1.83.11.dist-info/METADATA", b"") == [("LiteLLM", "1.83.11", "OK"), ("LiteLLM proxy", "1.83.11", "OK")]
     assert rows("/v/site-packages/litellm-1.81.7.dist-info/METADATA", b"")[1][2] == "OK"
     assert rows("/p/requirements.txt", b"litellm[proxy]==1.83.10\n") == [("LiteLLM proxy", "1.83.10", "AFFECTED")]
+    # Rails: Gemfile.lock specs (4 spaces), not dependency lines (6) or actionpack-xml; installed gemspecs
+    lock = b"GEM\n  specs:\n    actionpack (8.0.5.1)\n      rack (>= 2.2.4)\n    actionpack-xml_parser (2.0.1)\n    nokogiri (1.18.9-arm64-darwin)\n"
+    assert rows("/app/Gemfile.lock", lock) == [("Ruby on Rails", "8.0.5.1", "AFFECTED")]
+    assert rows("/app/Gemfile.lock", lock.replace(b"8.0.5.1", b"8.0.5.2")) == []
+    assert ("RubyGems", "nokogiri", "1.18.9") in __import__("secinspect").lock_packages("/app/Gemfile.lock", lock)
+    gem = "/u/.gem/ruby/3.4.0/specifications/actionpack-{}.gemspec"
+    assert rows(gem.format("8.1.4.0"), b"") == [("Ruby on Rails", "8.1.4.0", "AFFECTED")]
+    assert rows(gem.format("8.1.4.1"), b"") == [("Ruby on Rails", "8.1.4.1", "OK")]
+    assert rows(gem.format("7.2.4"), b"") == [("Ruby on Rails", "7.2.4", "AFFECTED")]  # end of life
     # @fastify/http-proxy in each lockfile format; 11.6.6 is fixed, ^ranges in specs are ignored
     lock = b'{"packages": {"": {"dependencies": {"@fastify/http-proxy": "^11.0.0"}},' \
            b' "node_modules/@fastify/http-proxy": {"version": "11.6.5", "resolved": "x"}}}'

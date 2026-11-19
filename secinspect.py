@@ -1110,7 +1110,7 @@ def bundle_summary(bundles):
 # --- File checks, shared by the folder walk and Docker layers -----------------------------------
 
 LOCKFILE = re.compile(r"(requirements.*\.txt|pyproject\.toml|uv\.lock|poetry\.lock|Pipfile\.lock"
-                      r"|package-lock\.json|pnpm-lock\.yaml|yarn\.lock|bun\.lock|Cargo\.lock|go\.sum)$")
+                      r"|package-lock\.json|pnpm-lock\.yaml|yarn\.lock|bun\.lock|Cargo\.lock|go\.sum|Gemfile\.lock)$")
 FOUND_LOCKFILES = set()  # ponytail: filled by the file walk, read again only with --osv
 FOUND_DIST_INFO = set()  # (site-packages folder, name, version) of installed Python packages
 SKIP = {"node_modules", ".git", ".Trash"}
@@ -1118,8 +1118,8 @@ MAX_READ = 50_000_000  # cap per-file reads (disk and tar members) so an untrust
 
 
 def pkg_bad(pkg, v):
-    lo, hi = pkg.get("bad_range", (None, None))
-    return v in pkg.get("bad", ()) or bool(lo and nums(lo) <= nums(v) <= nums(hi))
+    ranges = pkg.get("bad_ranges", [pkg["bad_range"]] if "bad_range" in pkg else [])  # inclusive [lo, hi] pairs
+    return v in pkg.get("bad", ()) or any(nums(lo) <= nums(v) <= nums(hi) for lo, hi in ranges)
 
 
 def npm_versions(pat, data):
@@ -1153,6 +1153,10 @@ def inspect_file(path, read):
         if m and base in ("METADATA", "PKG-INFO"):
             bad = pkg_bad(pkg, m[1])
             rows.append((name, os.path.dirname(path), m[1], status if bad else "OK", pkg["cleanup"] if bad else ""))
+        if pkg.get("ecosystem") == "rubygems" and parent == "specifications" and base.startswith(pkg["package"] + "-") \
+                and (m := re.fullmatch(rf"{re.escape(pkg['package'])}-(\d[\w.]*?)(?:-[a-z][\w-]*)?\.gemspec", base)):
+            bad = pkg_bad(pkg, m[1])  # installed gem: <gem dir>/specifications/actionpack-8.0.5.1.gemspec
+            rows.append((name, os.path.dirname(os.path.dirname(path)), m[1], status if bad else "OK", pkg["cleanup"] if bad else ""))
         if "site-packages" in path and base in pkg.get("malware_files", ()):
             rows.append((name, path, "malware file", "AFFECTED", pkg["cleanup"]))
         # Python only auto-runs it from the top of site-packages; Homebrew ships a legit one there
@@ -1160,11 +1164,16 @@ def inspect_file(path, read):
             rows.append((name, path, "possible malware", "REVIEW", f"{name} malware drops this; check it if you didn't add it"))
         if not LOCKFILE.search(base):
             continue
-        if pkg.get("ecosystem") == "npm":
+        if pkg.get("ecosystem") == "rubygems":
+            if base == "Gemfile.lock":
+                for _, n, v in sorted(lock_packages(path, data())):
+                    if n == pkg["package"] and pkg_bad(pkg, v):
+                        rows.append((name, path, v, status, lock_note))
+        elif pkg.get("ecosystem") == "npm":
             for v in sorted(npm_versions(pat.encode(), data())):
                 if pkg_bad(pkg, v.decode()):
                     rows.append((name, path, v.decode(), status, lock_note))
-        elif "bad_range" in pkg:  # ponytail: proximity regex, first version after the name; fine for pins
+        elif "bad_range" in pkg or "bad_ranges" in pkg:  # ponytail: proximity regex, first version after the name; fine for pins
             for v in sorted({x.decode() for x in re.findall(rf"{pat}\W.{{0,80}}?(\d+\.\d+\.\d+)".encode(), data(), re.S | re.I)}):
                 if pkg_bad(pkg, v):
                     rows.append((name, path, v, status, lock_note))
@@ -1248,6 +1257,8 @@ def lock_packages(path, data):
         out = {("npm", n, v) for n, v in re.findall(r"(?m)^\s+'?/?(@?[^@\s'/][^@\s']*)@(\d[^\s:'(]*)(?:\([^\n]*\))?'?:", text)}
     elif base == "yarn.lock":
         out = {("npm", n, v) for n, v in re.findall(r'(?m)^"?(@?[^@\s",]+)@[^\n]*:\n\s+version:? "?([^"\s]+)', text)}
+    elif base == "Gemfile.lock":  # specs are indented 4 spaces, their dependencies 6; a platform suffix isn't the version
+        out = {("RubyGems", n, v) for n, v in re.findall(r"(?m)^    ([A-Za-z0-9][\w.-]*) \((\d[\w.]*?)(?:-[a-z][\w-]*)?\)$", text)}
     elif base == "bun.lock":
         out = {("npm", n, v) for n, v in re.findall(r'\[\s*"(@?[^"@]+)@(\d[^"]*)"', text)}
     return out
@@ -2503,11 +2514,13 @@ def main(argv):
         print(f"fix: {problem}", file=sys.stderr)
         AuditLog(log_path).write("fix_refused", reason=problem.splitlines()[0])
         return 1
-    roots = args.dirs or [HOME, "/usr/local/lib", "/opt/homebrew/lib", *glob.glob("/usr/lib/python3*")]
+    roots = args.dirs or [HOME, "/usr/local/lib", "/opt/homebrew/lib", *glob.glob("/usr/lib/python3*"),
+                          *glob.glob("/var/lib/gems"), *glob.glob("/usr/share/rubygems-integration"),  # Debian's gems
+                          *glob.glob("/var/www"), *glob.glob("/srv")]  # where server apps and their lockfiles live
     if not args.watch:  # cron mails anything printed, so a quiet day must print nothing
         print(f"Scanning {', '.join(roots)} for Python envs, lockfiles and CA bundles, give it a minute...", file=sys.stderr)
     if not (args.watch or args.no_update_check or os.environ.get("SECINSPECT_NO_UPDATE_CHECK")):
-        for line in check_feed_updates(ADVISORIES["versions"]):
+        for line in check_feed_updates(ADVISORIES["versions"] + ADVISORIES["distro"] + ADVISORIES["packages"]):
             print("update: " + line, file=sys.stderr)
     if not OPENSSL:
         print("openssl not found: CA bundles are judged by which roots they hold, not by a chain test", file=sys.stderr)

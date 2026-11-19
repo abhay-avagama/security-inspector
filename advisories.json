@@ -1,5 +1,5 @@
 {
-  "release": {"script_sha256": "0590d991837862dabbbe4a9b10cd6f6640cdd3a831b6b86603d50a788d1d78a0", "released": "2026-11-17T11:01:17Z"},
+  "release": {"script_sha256": "46e6600b569ea67661efb97fba347b26502a9451bfc59f62d6d6c27820dd57ac", "released": "2026-11-19T10:42:11Z"},
   "versions": [
     {
       "name": "PHP",
@@ -148,6 +148,43 @@
       ],
       "branch_width": 2,
       "checked": "2026-11-13T09:00:00Z"
+    },
+    {
+      "name": "Ruby",
+      "about": "18 Nov 2026: seven heap overflow, double free and out-of-bounds bugs in Regexp and String case conversion, with proofs of code execution for most (GHSA ids only, CVEs requested), fixed in 4.0.10 / 3.4.13 / 3.3.14; also the 23 Oct Onigmo regexp-compilation bugs GitLab found (CVE-2026-97229 is on CISA KEV under GitLab), fixed in 4.0.9 / 3.4.12 / 3.3.13, which only hit apps that build a Regexp from user input. 3.2 is end of life and gets neither",
+      "source": "https://www.ruby-lang.org/en/news/2026/11/18/multiple-vulnerabilities-in-regexp-and-string/",
+      "cves": [
+        "CVE-2026-97229",
+        "CVE-2026-89078",
+        "CVE-2026-93577",
+        "CVE-2026-110264"
+      ],
+      "binary": "ruby",
+      "flag": "--version",
+      "globs": [
+        "~/.rbenv/versions/*/bin/ruby",
+        "~/.rubies/*/bin/ruby",
+        "~/.rvm/rubies/*/bin/ruby",
+        "~/.asdf/installs/ruby/*/bin/ruby",
+        "~/.local/share/mise/installs/ruby/*/bin/ruby",
+        "/opt/homebrew/opt/ruby*/bin/ruby",
+        "/usr/local/opt/ruby*/bin/ruby",
+        "/opt/rubies/*/bin/ruby"
+      ],
+      "skip_prefixes": [
+        "/usr/bin/",
+        "/bin/",
+        "/System/"
+      ],
+      "version_regex": "ruby (\\d+\\.\\d+\\.\\d+)",
+      "fixed": [
+        "4.0.10",
+        "3.4.13",
+        "3.3.14"
+      ],
+      "branch_width": 2,
+      "after_fix": "and restart the apps that run on it",
+      "checked": "2026-11-19T09:00:00Z"
     },
     {
       "name": "Git",
@@ -1077,6 +1114,38 @@
       ]
     },
     {
+      "name": "Ruby on Rails",
+      "package": "actionpack",
+      "ecosystem": "rubygems",
+      "about": "4 Nov 2026: 21 advisories fixed in 8.1.4.1 and 8.0.5.2, among them CVE-2026-126082 (Active Storage image analysis writes and reads files, 9.8, with mini_magick and the default Debian/Ubuntu ImageMagick policy) and CVE-2026-126186 (Active Storage video previews and analysis read files and can run code); none known exploited. 7.2 and older are end of life with no fix, and 8.0's support ended on 7 Nov. Every Rails gem shares one version, so this checks actionpack",
+      "source": "https://rubyonrails.org/2026/11/4/Rails-8.0.5.2-and-8.1.4.1-have-been-released",
+      "cves": [
+        "CVE-2026-126082",
+        "CVE-2026-126186",
+        "CVE-2026-126081",
+        "CVE-2026-126083",
+        "CVE-2026-66066"
+      ],
+      "bad_ranges": [
+        [
+          "0",
+          "8.0.5.1"
+        ],
+        [
+          "8.1.0",
+          "8.1.4.0"
+        ]
+      ],
+      "cleanup": "upgrade Rails to 8.1.4.1+ (8.0.5.2 fixes 8.0, whose support has ended; 7.2 and older get no fix), then restart the app; until then remove the Active Storage video/audio previewers and analyzers if you take uploads",
+      "lock_note": "pins Rails below 8.0.5.2 / 8.1.4.1, with 21 fixes from 4 Nov 2026 including Active Storage file read/write: bundle update rails",
+      "plan": [
+        "Upgrade Rails to 8.1.4.1 and restart the app",
+        "bundle update rails   # Gemfile: gem \"rails\", \"~> 8.1.4\" (7.2 and older: move to 8.1; 8.0.5.2 is the last 8.0 fix)"
+      ],
+      "feed": "rails",
+      "checked": "2026-11-19T09:00:00Z"
+    },
+    {
       "name": "python-jose",
       "package": "python-jose",
       "ecosystem": "pypi",
@@ -1404,6 +1473,60 @@
       },
       "after_fix": "restart mariadb",
       "mitigation": "limit database accounts to trusted apps, or use MariaDB's own repo (10.6.28 / 10.11.19 / 11.4.13 / 11.8.9+)"
+    },
+    {
+      "name": "MySQL",
+      "about": "Oracle's October 2026 Critical Patch Update (20 Oct): 98 MySQL fixes, 29 of them reachable without a login, the worst through the bundled curl and OpenSSL (9.8) and Group Replication (CVE-2026-101781, 8.8); fixed in 8.4.13 and 9.7.4. Oracle's new monthly patch update on 17 Nov adds 10 more (CVE-2026-114952 in the client programs is 9.1), fixed versions not yet confirmed. MySQL 8.0 reached end of life in April 2026: Ubuntu still backports fixes into 8.0.46, Oracle's own 8.0 builds get none. None known exploited",
+      "source": "https://www.oracle.com/security-alerts/cpuoct2026.html",
+      "cves": [
+        "CVE-2026-101781",
+        "CVE-2026-101796",
+        "CVE-2026-101797",
+        "CVE-2026-101798",
+        "CVE-2026-101799",
+        "CVE-2026-101800",
+        "CVE-2026-101801",
+        "CVE-2026-101802",
+        "CVE-2026-101803",
+        "CVE-2026-114949",
+        "CVE-2026-114950",
+        "CVE-2026-114951",
+        "CVE-2026-114952",
+        "CVE-2026-114953",
+        "CVE-2026-127428"
+      ],
+      "deb_packages": [
+        "mysql-server-8.0",
+        "mysql-server-core-8.0",
+        "mysql-server-8.4",
+        "mysql-server-core-8.4",
+        "mysql-community-server",
+        "mysql-community-server-core"
+      ],
+      "rpm_packages": [
+        "mysql-server",
+        "mysql8.4-server",
+        "mysql-community-server"
+      ],
+      "brew_packages": [
+        "mysql",
+        "mysql@8.4",
+        "mysql@8.0"
+      ],
+      "upstream_fixed": [
+        "8.4.13",
+        "9.7.4",
+        "26.10.0"
+      ],
+      "branch_width": 2,
+      "fixed": {
+        "ubuntu:22.04": "8.0.46-0ubuntu0.22.04.5",
+        "ubuntu:24.04": "8.0.46-0ubuntu0.24.04.5",
+        "ubuntu:26.04": "8.4.13-0ubuntu0.26.04.2"
+      },
+      "after_fix": "restart mysqld",
+      "feed": "mysql",
+      "checked": "2026-11-19T09:00:00Z"
     },
     {
       "name": "MongoDB",

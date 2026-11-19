@@ -65,6 +65,7 @@ sudo python3 /opt/amiaffected/secinspect.py --fix                     # then app
 <tr><td>MCP servers</td><td>Configs for Claude, Cursor, VS Code, Windsurf, Gemini and Codex that still run the archived Puppeteer MCP server (remote code execution, no fix coming) or other archived reference servers</td></tr>
 <tr><td>PHP</td><td>CVE-2026-109618 / 109619 (PHP2Shell), every PHP on PATH and in Homebrew</td></tr>
 <tr><td>Python</td><td>CVE-2026-115557 (rated critical): the ssl module trusted the cracked eMudhra intermediates. Fixed in 3.15.2 / 3.14.10 / 3.13.18 / 3.12.16 / 3.11.18 for Pythons you installed (pyenv, uv, Homebrew, python.org, conda); 3.10 and older get no fixes</td></tr>
+<tr><td>Ruby</td><td>Seven Regexp and String memory bugs fixed on 18 Nov, most with proofs of code execution, and the Onigmo regexp bugs GitLab found (one on CISA KEV): rbenv, rvm, chruby, asdf, mise and Homebrew Rubies below 4.0.10 / 3.4.13 / 3.3.14. 3.2 is end of life</td></tr>
 <tr><td>Git</td><td>CVE-2026-111760: cloning a malicious repository with submodules can run its code. Fixed in 2.56.1 and back to 2.50.2, including Apple's and Homebrew's Git</td></tr>
 <tr><td>curl</td><td>CVE-2026-92392 (rated high), an HTTP/2 upload bug in 8.12.0 to 8.22.0, for curl you installed yourself</td></tr>
 <tr><td>Java</td><td>The October 2026 patch update and the eMudhra fixes (CVE-2026-91403, 114820, rated 9.1): every JDK in the usual places, below 27.0.1 / 25.0.5 / 21.0.13 / 17.0.21 / 11.0.33 / 8u511</td></tr>
@@ -77,6 +78,7 @@ sudo python3 /opt/amiaffected/secinspect.py --fix                     # then app
 <tr><td>GitLab</td><td>The 16 Nov release (37 CVEs), the critical bundled-git overflow CVE-2026-105437 and CVE-2026-110264 on self-managed Omnibus: 19.5.6, 19.4.8 or 19.3.9 needed</td></tr>
 <tr><td>LiteLLM</td><td>The 1.107.0 backdoor: installed copies, lockfiles, malware files and bad Docker image digests. And CVE-2026-40217, exploited: the proxy's guardrail tester runs code from 1.81.8 to 1.83.10, so installed copies and lockfiles below 1.83.11 are flagged</td></tr>
 <tr><td>python-jose</td><td>CVE-2026-120459: accepts empty HMAC keys, every release through 3.5.0, no fix yet. Installed copies and lockfiles</td></tr>
+<tr><td>Ruby on Rails</td><td>21 fixes from 4 Nov, among them Active Storage reading and writing files on the server (CVE-2026-126082, 9.8): Gemfile.lock pins and installed gems below 8.1.4.1 / 8.0.5.2. 7.2 and older get no fix</td></tr>
 <tr><td>GPUStack</td><td>CVE-2026-102895, exploited: requests that look local get admin rights before 2.2.0. Installed copies and lockfiles below 2.3.1, which also fixes a SAML login bypass</td></tr>
 <tr><td>@fastify/http-proxy</td><td>CVE-2026-120213: prefix escape in 9.0.0 to 11.6.5, read from package-lock, pnpm, yarn and bun lockfiles</td></tr>
 <tr><td>FreeRDP</td><td>CVE-2026-121392: certificate check bypass, fixed in 3.32.2</td></tr>
@@ -114,7 +116,7 @@ sudo python3 /opt/amiaffected/secinspect.py --fix                     # then app
 <table>
 <tr><td>Linux kernel</td><td>Four bugs on CISA KEV (CVE-2026-46300 and others) and the remote TCP bug CVE-2026-98432</td></tr>
 <tr><td>Web servers</td><td>nginx (CVE-2026-15176 and more), Apache httpd 2.4.69 fixes incl. mod_http2</td></tr>
-<tr><td>Databases</td><td>MariaDB (CVE-2026-85746 and more), MongoDB (CVE-2026-82067)</td></tr>
+<tr><td>Databases</td><td>MariaDB (CVE-2026-85746 and more), MySQL (Oracle's October 2026 patch update: 98 fixes, 29 without a login), MongoDB (CVE-2026-82067)</td></tr>
 <tr><td>Libraries</td><td>Brotli (CVE-2026-111497, CISA KEV)</td></tr>
 <tr><td>Apps</td><td>WordPress core, Nextcloud's built-in Collabora server, Plex and Zammad (all CISA KEV)</td></tr>
 <tr><td>WordPress plugins</td><td>ACF Extended PRO, s2Member, Ultra Addons for Contact Form 7 and BuddyPress XProfile Image Field (unauthenticated code execution or file deletion, Nov 2026)</td></tr>

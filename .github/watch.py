@@ -156,7 +156,7 @@ def kev_digest(kev, today, known):
 
 def feed_candidates():
     out = []
-    for adv in ADVISORIES["versions"]:
+    for adv in ADVISORIES["versions"] + ADVISORIES["distro"] + ADVISORIES["packages"]:
         if not adv.get("feed") or not adv.get("checked"):
             continue
         try:
@@ -195,6 +195,8 @@ VENDOR_FEEDS = {
     "PostgreSQL server": ("https://www.postgresql.org/news.rss", r"^PostgreSQL [\d., ]+(and [\w .]+)?Released"),
     "Node.js": ("https://nodejs.org/en/feed/vulnerability.xml", r"Security Releases"),
     "PHP": ("https://www.php.net/releases/feed.php", r"^PHP [\d.]+ released"),
+    "Ruby": ("https://www.ruby-lang.org/en/feeds/news.rss", r"CVE-|Security advisories"),  # release posts name no CVEs
+    "Ruby on Rails": ("https://discuss.rubyonrails.org/c/security-announcements/9.rss", r"\S"),  # every post is one
 }
 ATOM = "{http://www.w3.org/2005/Atom}"
 
@@ -426,7 +428,7 @@ def main(argv):
     except Exception as e:
         print(f"skip Electron releases: {e}", file=sys.stderr)
     cands += eol_candidates(ADVISORIES["eol"]["products"], eol_apis())
-    checked = {a["name"]: a.get("checked") for a in ADVISORIES["versions"]}
+    checked = {a["name"]: a.get("checked") for a in ADVISORIES["versions"] + ADVISORIES["distro"] + ADVISORIES["packages"]}
     for name, (url, pattern) in VENDOR_FEEDS.items():
         try:
             cands += vendor_candidates(name, get_text(url), checked[name], pattern)
