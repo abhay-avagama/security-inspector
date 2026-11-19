@@ -618,6 +618,23 @@ def test_queue_nov3():
     assert rows(gem.format("8.1.4.0"), b"") == [("Ruby on Rails", "8.1.4.0", "AFFECTED")]
     assert rows(gem.format("8.1.4.1"), b"") == [("Ruby on Rails", "8.1.4.1", "OK")]
     assert rows(gem.format("7.2.4"), b"") == [("Ruby on Rails", "7.2.4", "AFFECTED")]  # end of life
+    # Log4Shell / Spring4Shell: jar by name, a vendor jar by its pom.properties, a war by its bundled jars
+    import io, zipfile
+    def jar(entries):
+        b = io.BytesIO()
+        with zipfile.ZipFile(b, "w") as z:
+            for n, d in entries.items():
+                z.writestr(n, d)
+        return b.getvalue()
+    assert rows("/u/.m2/repository/org/apache/logging/log4j/log4j-core/2.14.1/log4j-core-2.14.1.jar", b"") == [("Log4Shell (Log4j)", "2.14.1", "AFFECTED")]
+    assert rows("/opt/x/lib/log4j-core-2.17.1.jar", b"") == [("Log4Shell (Log4j)", "2.17.1", "OK")]
+    assert rows("/opt/x/lib/log4j-core-2.12.4.jar", b"") == [("Log4Shell (Log4j)", "2.12.4", "OK")]  # Java 7 fix
+    pom = {"META-INF/maven/org.apache.logging.log4j/log4j-core/pom.properties": b"groupId=org.apache.logging.log4j\nartifactId=log4j-core\nversion=2.15.0\n"}
+    assert rows("/usr/share/java/log4j-core.jar", jar(pom)) == [("Log4Shell (Log4j)", "2.15.0", "AFFECTED")]
+    war = rows("/var/lib/tomcat9/webapps/shop.war", jar({"WEB-INF/lib/spring-beans-5.3.17.jar": b"", "WEB-INF/lib/log4j-core-2.17.1.jar": b""}))
+    assert war == [("Log4Shell (Log4j)", "2.17.1", "OK"), ("Spring4Shell (Spring Framework)", "5.3.17", "REVIEW")], war
+    assert rows("/srv/app.jar", jar({"BOOT-INF/lib/spring-beans-5.3.18.jar": b""})) == [("Spring4Shell (Spring Framework)", "5.3.18", "OK")]
+    assert rows("/srv/broken.jar", b"not a zip") == [] and rows("/p/yarn.lock", b"spring-beans 5.0.0") == []
     # @fastify/http-proxy in each lockfile format; 11.6.6 is fixed, ^ranges in specs are ignored
     lock = b'{"packages": {"": {"dependencies": {"@fastify/http-proxy": "^11.0.0"}},' \
            b' "node_modules/@fastify/http-proxy": {"version": "11.6.5", "resolved": "x"}}}'

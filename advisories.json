@@ -1,5 +1,5 @@
 {
-  "release": {"script_sha256": "46e6600b569ea67661efb97fba347b26502a9451bfc59f62d6d6c27820dd57ac", "released": "2026-11-19T10:42:11Z"},
+  "release": {"script_sha256": "1397179bde7737768d2e1ea4eb23f53ea369be810b4852d623873cc2be32483a", "released": "2026-11-19T11:58:36Z"},
   "versions": [
     {
       "name": "PHP",
@@ -1144,6 +1144,64 @@
       ],
       "feed": "rails",
       "checked": "2026-11-19T09:00:00Z"
+    },
+    {
+      "name": "Log4Shell (Log4j)",
+      "package": "log4j-core",
+      "ecosystem": "maven",
+      "about": "CVE-2021-44228 (Log4Shell, CISA KEV): a logged string like ${jndi:ldap://...} makes Log4j 2 load and run code from the attacker's server; CVE-2021-45046 (2.15.0's fix was incomplete, also KEV), CVE-2021-45105 and CVE-2021-44832 follow on. Fixed in 2.17.1 (Java 8+), 2.12.4 (Java 7) and 2.3.2 (Java 6). Still scanned for daily, years on, in apps that bundle an old log4j-core",
+      "source": "https://logging.apache.org/security.html",
+      "cves": [
+        "CVE-2021-44228",
+        "CVE-2021-45046",
+        "CVE-2021-45105",
+        "CVE-2021-44832"
+      ],
+      "bad_ranges": [
+        [
+          "2.0",
+          "2.3.1"
+        ],
+        [
+          "2.4",
+          "2.12.3"
+        ],
+        [
+          "2.13.0",
+          "2.17.0"
+        ]
+      ],
+      "cleanup": "update log4j-core to 2.17.1+ (2.12.4 on Java 7, 2.3.2 on Java 6) and restart the app; a jar bundled inside an app needs the app's own update. Until then: zip -q -d log4j-core-*.jar org/apache/logging/log4j/core/lookup/JndiLookup.class",
+      "plan": [
+        "Update log4j-core to 2.17.1+ and restart the apps that bundle it",
+        "mvn versions:use-dep-version -Dincludes=org.apache.logging.log4j:log4j-core -DdepVersion=2.17.1   # Gradle: bump org.apache.logging.log4j:log4j-core; vendor apps: install their patched release"
+      ]
+    },
+    {
+      "name": "Spring4Shell (Spring Framework)",
+      "package": "spring-beans",
+      "ecosystem": "maven",
+      "about": "CVE-2022-22965 (Spring4Shell, CISA KEV): data binding lets a request set Tomcat's logging properties and write a web shell, when a Spring MVC or WebFlux app runs on JDK 9+ as a WAR on Tomcat. Fixed in 5.3.18 and 5.2.20; older branches get no fix",
+      "source": "https://spring.io/security/cve-2022-22965",
+      "cves": [
+        "CVE-2022-22965"
+      ],
+      "bad_ranges": [
+        [
+          "0",
+          "5.2.19"
+        ],
+        [
+          "5.3.0",
+          "5.3.17"
+        ]
+      ],
+      "status": "REVIEW",
+      "cleanup": "update Spring Framework to 5.3.18+ (Spring Boot 2.6.6+ / 2.5.12+) and restart; it's exploitable only as a WAR on Tomcat with JDK 9+, so a Spring Boot jar with embedded Tomcat is lower risk",
+      "plan": [
+        "Update Spring Framework to 5.3.18+ (Spring Boot 2.6.6+)",
+        "set spring-framework.version to 5.3.18 (or Spring Boot to 2.6.6+) in the build, rebuild and redeploy"
+      ]
     },
     {
       "name": "python-jose",

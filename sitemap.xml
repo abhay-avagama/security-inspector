@@ -47,6 +47,8 @@
   <url><loc>https://amiaffected.now/advisories/litellm/</loc></url>
   <url><loc>https://amiaffected.now/advisories/litellm-proxy/</loc></url>
   <url><loc>https://amiaffected.now/advisories/ruby-on-rails/</loc></url>
+  <url><loc>https://amiaffected.now/advisories/log4shell-log4j/</loc></url>
+  <url><loc>https://amiaffected.now/advisories/spring4shell-spring-framework/</loc></url>
   <url><loc>https://amiaffected.now/advisories/python-jose/</loc></url>
   <url><loc>https://amiaffected.now/advisories/gpustack/</loc></url>
   <url><loc>https://amiaffected.now/advisories/fastify-http-proxy/</loc></url>

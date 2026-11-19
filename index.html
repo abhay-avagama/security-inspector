@@ -79,6 +79,7 @@ sudo python3 /opt/amiaffected/secinspect.py --fix                     # then app
 <tr><td>LiteLLM</td><td>The 1.107.0 backdoor: installed copies, lockfiles, malware files and bad Docker image digests. And CVE-2026-40217, exploited: the proxy's guardrail tester runs code from 1.81.8 to 1.83.10, so installed copies and lockfiles below 1.83.11 are flagged</td></tr>
 <tr><td>python-jose</td><td>CVE-2026-120459: accepts empty HMAC keys, every release through 3.5.0, no fix yet. Installed copies and lockfiles</td></tr>
 <tr><td>Ruby on Rails</td><td>21 fixes from 4 Nov, among them Active Storage reading and writing files on the server (CVE-2026-126082, 9.8): Gemfile.lock pins and installed gems below 8.1.4.1 / 8.0.5.2. 7.2 and older get no fix</td></tr>
+<tr><td>Log4Shell, Spring4Shell</td><td>CVE-2021-44228 and its follow-ups (log4j-core below 2.17.1 / 2.12.4 / 2.3.2) and CVE-2022-22965 (spring-beans below 5.3.18 / 5.2.20), both on CISA KEV: jar files, and the libraries bundled inside wars, ears and Spring Boot jars, in your home folder, /usr/share/java, Tomcat's webapps, /var/www, /srv and Docker images</td></tr>
 <tr><td>GPUStack</td><td>CVE-2026-102895, exploited: requests that look local get admin rights before 2.2.0. Installed copies and lockfiles below 2.3.1, which also fixes a SAML login bypass</td></tr>
 <tr><td>@fastify/http-proxy</td><td>CVE-2026-120213: prefix escape in 9.0.0 to 11.6.5, read from package-lock, pnpm, yarn and bun lockfiles</td></tr>
 <tr><td>FreeRDP</td><td>CVE-2026-121392: certificate check bypass, fixed in 3.32.2</td></tr>

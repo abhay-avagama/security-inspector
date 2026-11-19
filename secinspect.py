@@ -25,6 +25,7 @@ import getpass
 import glob
 import hashlib
 import html
+import io
 import http.client
 import json
 import os
@@ -38,6 +39,7 @@ import sys
 import tarfile
 import tempfile
 import textwrap
+import zipfile
 import time
 import urllib.request
 import xml.etree.ElementTree as ET
@@ -1114,6 +1116,8 @@ LOCKFILE = re.compile(r"(requirements.*\.txt|pyproject\.toml|uv\.lock|poetry\.lo
 FOUND_LOCKFILES = set()  # ponytail: filled by the file walk, read again only with --osv
 FOUND_DIST_INFO = set()  # (site-packages folder, name, version) of installed Python packages
 SKIP = {"node_modules", ".git", ".Trash"}
+ARCHIVES = (".jar", ".war", ".ear")
+JAR_CACHE = re.compile(r"/\.m2/repository/|/\.gradle/caches/")  # one artifact per jar, named by version: no need to open it
 MAX_READ = 50_000_000  # cap per-file reads (disk and tar members) so an untrusted file can't exhaust memory
 
 
@@ -1141,6 +1145,28 @@ def inspect_file(path, read):
 
     rows, bundles = [], []
     base, parent = os.path.basename(path), os.path.basename(os.path.dirname(path))
+    inside = []
+
+    def maven_inside():
+        """{(artifactId, version, where)} in a jar/war/ear: its own pom.properties, and bundled jars by file name
+        (WEB-INF/lib, BOOT-INF/lib). ponytail: one level deep; a jar inside a jar inside a war isn't opened."""
+        if not inside:
+            found = set()
+            try:
+                z = zipfile.ZipFile(io.BytesIO(data()))
+                for n in z.namelist():
+                    if n.startswith("META-INF/maven/") and n.endswith("/pom.properties"):
+                        props = z.read(n).decode("utf-8", "replace")
+                        a, v = re.search(r"(?m)^artifactId=(\S+)", props), re.search(r"(?m)^version=(\S+)", props)
+                        if a and v:
+                            found.add((a[1], v[1], ""))
+                    elif m := re.search(r"(?:^|/)([A-Za-z][\w.-]*?)-(\d[\w.-]*)\.jar$", n):
+                        found.add((m[1], m[2], n))
+            except (zipfile.BadZipFile, OSError, ValueError, RuntimeError, NotImplementedError):
+                pass
+            inside.append(found)
+        return inside[0]
+
     if LOCKFILE.search(base) and base != "pyproject.toml":  # pyproject.toml holds ranges, not what is installed
         FOUND_LOCKFILES.add(path)
     if base == "METADATA" and (m := re.fullmatch(r"(.+)-([^-]+)\.dist-info", parent)):
@@ -1162,7 +1188,14 @@ def inspect_file(path, read):
         # Python only auto-runs it from the top of site-packages; Homebrew ships a legit one there
         elif base in pkg.get("suspicious_files", ()) and parent == "site-packages" and b"created by Homebrew" not in data()[:200]:
             rows.append((name, path, "possible malware", "REVIEW", f"{name} malware drops this; check it if you didn't add it"))
-        if not LOCKFILE.search(base):
+        if pkg.get("ecosystem") == "maven" and base.lower().endswith(ARCHIVES):
+            art = pkg["package"]
+            m = re.fullmatch(rf"{re.escape(art)}-(\d[\w.-]*)\.jar", base)
+            hits = {(m[1], "")} if m else set() if JAR_CACHE.search(path) else {(v, at) for a, v, at in maven_inside() if a == art}
+            for v, at in sorted(hits):
+                bad = pkg_bad(pkg, v)
+                rows.append((name, path + (f"!/{at}" if at else ""), v, status if bad else "OK", pkg["cleanup"] if bad else ""))
+        if not LOCKFILE.search(base) or pkg.get("ecosystem") == "maven":  # ponytail: pom.xml / Gradle pins not read
             continue
         if pkg.get("ecosystem") == "rubygems":
             if base == "Gemfile.lock":
@@ -2516,7 +2549,8 @@ def main(argv):
         return 1
     roots = args.dirs or [HOME, "/usr/local/lib", "/opt/homebrew/lib", *glob.glob("/usr/lib/python3*"),
                           *glob.glob("/var/lib/gems"), *glob.glob("/usr/share/rubygems-integration"),  # Debian's gems
-                          *glob.glob("/var/www"), *glob.glob("/srv")]  # where server apps and their lockfiles live
+                          *glob.glob("/var/www"), *glob.glob("/srv"),  # where server apps and their lockfiles live
+                          *glob.glob("/usr/share/java"), *glob.glob("/var/lib/tomcat*"), *glob.glob("/opt/tomcat*")]  # Java libraries and webapps
     if not args.watch:  # cron mails anything printed, so a quiet day must print nothing
         print(f"Scanning {', '.join(roots)} for Python envs, lockfiles and CA bundles, give it a minute...", file=sys.stderr)
     if not (args.watch or args.no_update_check or os.environ.get("SECINSPECT_NO_UPDATE_CHECK")):
