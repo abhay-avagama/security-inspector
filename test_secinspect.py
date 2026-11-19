@@ -133,7 +133,7 @@ def fake_venv(files):
 
 def expected(rows):
     got = sorted((r[0], r[3]) for r in rows if r[3] != "NOT FOUND")
-    assert got == [("LiteLLM", "AFFECTED")] * 3 + [("LiteLLM", "OK"), ("eMudhra CA", "AFFECTED")], got
+    assert got == [("LiteLLM", "AFFECTED")] * 3 + [("LiteLLM", "OK")] + [("LiteLLM proxy", "OK")] * 2 + [("eMudhra CA", "AFFECTED")], got
 
 
 def test_scan_files():
@@ -389,7 +389,7 @@ def test_electron_edge_brave():
     assert "supported Electron" in fix_for(ELECTRON["name"], "/Applications/Old.app")[1]
     assert status("Microsoft Edge", (157, 0, 4341, 42)) == "AFFECTED" and status("Microsoft Edge", (157, 0, 4341, 46)) == "AFFECTED" and status("Microsoft Edge", (157, 0, 4341, 57)) == "OK"
     assert status("FrankenPHP", (1, 13, 4)) == "AFFECTED" and status("FrankenPHP", (1, 13, 5)) == "OK"
-    assert status("Brave", (1, 98, 63)) == "AFFECTED" and status("Brave", (1, 99, 56)) == "AFFECTED" and status("Brave", (1, 99, 57)) == "OK"
+    assert status("Brave", (1, 98, 63)) == "AFFECTED" and status("Brave", (1, 99, 56)) == "AFFECTED" and status("Brave", (1, 99, 57)) == "AFFECTED"  # Chrome 158 fixes need 1.100.58
     assert status("Brave", (1, 100, 51)) == "AFFECTED" and status("Brave", (1, 101, 47)) == "OK"
 
 
@@ -560,7 +560,9 @@ def test_chrome():
     assert status("Google Chrome / Chromium", (156, 0, 8078, 81)) == "AFFECTED"  # Nov 3 critical fixes
     assert status("Google Chrome / Chromium", (157, 0, 8103, 38)) == "AFFECTED"  # CVE-2026-125350, exploited
     assert status("Google Chrome / Chromium", (157, 0, 8103, 50)) == "AFFECTED"  # 11 Nov fixes
-    assert status("Google Chrome / Chromium", (157, 0, 8103, 78)) == "OK"
+    assert status("Google Chrome / Chromium", (157, 0, 8103, 78)) == "AFFECTED"  # Chrome 158's 204 fixes
+    assert status("Google Chrome / Chromium", (158, 0, 8127, 36)) == "OK"
+    assert status("Brave", (1, 100, 57)) == "AFFECTED" and status("Brave", (1, 100, 58)) == "OK"
     assert version_status(CHROMIUM, (157, 0, 8103, 49))[0] == "AFFECTED"
     assert version_status(CHROMIUM, (142, 0, 7444, 175))[0] == "AFFECTED"
     assert version_status(CHROMIUM, (156, 0, 8078, 47))[0] == "AFFECTED"  # Puppeteer 25.16.0's build
@@ -593,6 +595,11 @@ def test_queue_nov3():
     assert rows("/v/site-packages/gpustack-2.2.3.dist-info/METADATA", b"") == [("GPUStack", "2.2.3", "AFFECTED")]
     assert rows("/v/site-packages/gpustack-2.3.1.dist-info/METADATA", b"") == [("GPUStack", "2.3.1", "OK")]
     assert rows("/p/requirements.txt", b"pyjwt==2.9.0\n") == []
+    # LiteLLM proxy CVE-2026-40217: 1.81.8 through 1.83.10 (asks for 1.83.11+); the backdoor entry still says OK
+    assert rows("/v/site-packages/litellm-1.83.9.dist-info/METADATA", b"") == [("LiteLLM", "1.83.9", "OK"), ("LiteLLM proxy", "1.83.9", "AFFECTED")]
+    assert rows("/v/site-packages/litellm-1.83.11.dist-info/METADATA", b"") == [("LiteLLM", "1.83.11", "OK"), ("LiteLLM proxy", "1.83.11", "OK")]
+    assert rows("/v/site-packages/litellm-1.81.7.dist-info/METADATA", b"")[1][2] == "OK"
+    assert rows("/p/requirements.txt", b"litellm[proxy]==1.83.10\n") == [("LiteLLM proxy", "1.83.10", "AFFECTED")]
     # @fastify/http-proxy in each lockfile format; 11.6.6 is fixed, ^ranges in specs are ignored
     lock = b'{"packages": {"": {"dependencies": {"@fastify/http-proxy": "^11.0.0"}},' \
            b' "node_modules/@fastify/http-proxy": {"version": "11.6.5", "resolved": "x"}}}'

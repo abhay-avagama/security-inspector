@@ -473,7 +473,7 @@
     },
     {
       "name": "Google Chrome / Chromium",
-      "about": "CVE-2026-87491 and CVE-2026-85046: V8 bugs exploited in the wild (CISA KEV), fixed in 153.0.8010.36; on macOS also CVE-2026-106378, a GPU sandbox escape fixed in 155.0.8059.39; and four critical bugs fixed on 27 Oct 2026 in 156.0.8078.73 (CVE-2026-118306 escapes the sandbox, CVE-2026-118331/118348/118344 run code inside it); and 196 bugs fixed in 157.0.8103.38 (stable on Linux 3 Nov, macOS 5 Nov 2026), 33 of them critical, several running code outside the sandbox (e.g. CVE-2026-121035, CVE-2026-121086, CVE-2026-121189); and CVE-2026-125350, a use-after-free in XML exploited in the wild, fixed on 9 Nov 2026 in 157.0.8103.50",
+      "about": "CVE-2026-87491 and CVE-2026-85046: V8 bugs exploited in the wild (CISA KEV), fixed in 153.0.8010.36; on macOS also CVE-2026-106378, a GPU sandbox escape fixed in 155.0.8059.39; and four critical bugs fixed on 27 Oct 2026 in 156.0.8078.73 (CVE-2026-118306 escapes the sandbox, CVE-2026-118331/118348/118344 run code inside it); and 196 bugs fixed in 157.0.8103.38 (stable on Linux 3 Nov, macOS 5 Nov 2026), 33 of them critical, several running code outside the sandbox (e.g. CVE-2026-121035, CVE-2026-121086, CVE-2026-121189); and CVE-2026-125350, a use-after-free in XML exploited in the wild, fixed on 9 Nov 2026 in 157.0.8103.50; and Chrome 158 (17 Nov 2026, 158.0.8127.36): 204 bugs, 6 critical, CVE-2026-131031 (GPU) and CVE-2026-131054 (ANGLE) running code outside the sandbox",
       "source": "https://www.cisa.gov/known-exploited-vulnerabilities-catalog?field_cve=CVE-2026-87491",
       "cves": [
         "CVE-2026-87491",
@@ -486,7 +486,9 @@
         "CVE-2026-121035",
         "CVE-2026-121086",
         "CVE-2026-121189",
-        "CVE-2026-125350"
+        "CVE-2026-125350",
+        "CVE-2026-131031",
+        "CVE-2026-131054"
       ],
       "binary": "google-chrome",
       "flag": "--version",
@@ -501,36 +503,41 @@
         [
           "0.0.0.0",
           "153.0.8010.35",
-          "update to 157.0.8103.78+ (fixes the exploited V8 bugs and the Oct 27 and Nov 3 critical ones) and relaunch the browser"
+          "update to 158.0.8127.36+ (fixes the exploited V8 bugs and the Oct 27 and Nov 3 critical ones) and relaunch the browser"
         ],
         [
           "153.0.8010.36",
           "155.0.8059.38",
-          "macOS sandbox escape CVE-2026-106378: update to 157.0.8103.78+ and relaunch the browser",
+          "macOS sandbox escape CVE-2026-106378: update to 158.0.8127.36+ and relaunch the browser",
           "darwin"
         ],
         [
           "0.0.0.0",
           "156.0.8078.72",
-          "four critical bugs fixed on 27 Oct 2026: update to 157.0.8103.78+ and relaunch the browser"
+          "four critical bugs fixed on 27 Oct 2026: update to 158.0.8127.36+ and relaunch the browser"
         ],
         [
           "0.0.0.0",
           "157.0.8103.37",
-          "33 critical bugs fixed on 3 Nov 2026: update to 157.0.8103.78+ and relaunch the browser"
+          "33 critical bugs fixed on 3 Nov 2026: update to 158.0.8127.36+ and relaunch the browser"
         ],
         [
           "0.0.0.0",
           "157.0.8103.49",
-          "CVE-2026-125350 is exploited in the wild: update to 157.0.8103.78+ and relaunch the browser"
+          "CVE-2026-125350 is exploited in the wild: update to 158.0.8127.36+ and relaunch the browser"
         ],
         [
           "157.0.8103.50",
           "157.0.8103.77",
-          "83 security fixes on 11 Nov 2026 (V8 and Skia code execution among them, none known exploited): update to 157.0.8103.78+ and relaunch the browser"
+          "83 security fixes on 11 Nov 2026 (V8 and Skia code execution among them, none known exploited): update to 158.0.8127.36+ and relaunch the browser"
+        ],
+        [
+          "157.0.8103.78",
+          "158.0.8127.35",
+          "Chrome 158 (17 Nov 2026) fixes 204 bugs, 6 critical; CVE-2026-131031 (GPU) and CVE-2026-131054 (ANGLE) run code outside the sandbox, none known exploited: update to 158.0.8127.36+ and relaunch the browser"
         ]
       ],
-      "checked": "2026-11-17T06:00:00Z",
+      "checked": "2026-11-19T09:00:00Z",
       "feed": "chrome"
     },
     {
@@ -563,7 +570,7 @@
     },
     {
       "name": "Brave",
-      "about": "CVE-2026-125350, the Chrome XML use-after-free exploited in the wild: Brave took the fix (Chromium 157.0.8103.50) in Release 1.99.56 and Beta 1.100.52 on 10 Nov 2026",
+      "about": "CVE-2026-125350, the Chrome XML use-after-free exploited in the wild: Brave took the fix (Chromium 157.0.8103.50) in Release 1.99.56 and Beta 1.100.52 on 10 Nov 2026; Chrome 158's 204 fixes are in Release 1.100.58 (18 Nov 2026)",
       "source": "https://github.com/brave/brave-browser/releases/tag/v1.99.56",
       "cves": [
         "CVE-2026-125350"
@@ -581,20 +588,25 @@
         [
           "0.0.0",
           "1.99.55",
-          "CVE-2026-125350 is exploited in the wild: update to 1.99.57+ (brave://settings/help) and relaunch Brave"
+          "CVE-2026-125350 is exploited in the wild: update to 1.100.58+ (brave://settings/help) and relaunch Brave"
         ],
         [
           "1.100.0",
           "1.100.51",
-          "CVE-2026-125350 is exploited in the wild: update Brave Beta to 1.100.52+ and relaunch it"
+          "CVE-2026-125350 is exploited in the wild: update to 1.100.58+ (brave://settings/help) and relaunch Brave"
         ],
         [
           "1.99.56",
           "1.99.56",
-          "Chrome's 11 Nov 2026 security fixes (83, none known exploited) are in 1.99.57: update (brave://settings/help) and relaunch Brave"
+          "Chrome's 11 Nov 2026 security fixes (83, none known exploited) are in 1.99.57: update to 1.100.58+ (brave://settings/help) and relaunch Brave"
+        ],
+        [
+          "1.99.57",
+          "1.100.57",
+          "Chrome 158's 204 security fixes (17 Nov 2026, none known exploited) are in Release 1.100.58 (Chromium 158.0.8127.42): update (brave://settings/help) and relaunch Brave"
         ]
       ],
-      "checked": "2026-11-13T09:00:00Z"
+      "checked": "2026-11-19T09:00:00Z"
     },
     {
       "name": "macOS",
@@ -1043,6 +1055,26 @@
         "sha256:7b00e91cd2fe"
       ],
       "cleanup": "don't pip install first (any Python start re-runs it): delete cook.pth/cook.py/sitecustomize.py from site-packages, kill the daemon holding /tmp/remote_code_loader.lock, rebuild the env pinned to 1.106.2, rotate every credential the host could reach"
+    },
+    {
+      "name": "LiteLLM proxy",
+      "package": "litellm",
+      "ecosystem": "pypi",
+      "about": "CVE-2026-40217 (CISA KEV 18 Nov 2026, exploited since April): from 1.81.8 until 1.83.10, POST /guardrails/test_custom_code runs code in the proxy process. It needs the proxy's admin (master) key, and attackers try guessable ones like sk-1234. The advisory's range says 1.83.10 fixes it and its text says 1.83.11, so this asks for 1.83.11+",
+      "source": "https://github.com/BerriAI/litellm/security/advisories/GHSA-wxxx-gvqv-xp7p",
+      "cves": [
+        "CVE-2026-40217"
+      ],
+      "bad_range": [
+        "1.81.8",
+        "1.83.10"
+      ],
+      "cleanup": "upgrade to 1.83.11+ (until then block POST /guardrails/test_custom_code at your reverse proxy), change the master key if it was ever a default or guessable, and check the host for code you didn't put there",
+      "lock_note": "pins litellm 1.81.8-1.83.10, where the exploited guardrail tester runs code: upgrade to 1.83.11+",
+      "plan": [
+        "Upgrade the LiteLLM proxy and change its master key",
+        "pip install -U 'litellm>=1.83.11'   # Docker: pull a 1.83.11+ image; until then block POST /guardrails/test_custom_code"
+      ]
     },
     {
       "name": "python-jose",

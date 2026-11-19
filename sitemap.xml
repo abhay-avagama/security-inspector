@@ -43,6 +43,7 @@
   <url><loc>https://amiaffected.now/advisories/plex-media-server/</loc></url>
   <url><loc>https://amiaffected.now/advisories/zammad/</loc></url>
   <url><loc>https://amiaffected.now/advisories/litellm/</loc></url>
+  <url><loc>https://amiaffected.now/advisories/litellm-proxy/</loc></url>
   <url><loc>https://amiaffected.now/advisories/python-jose/</loc></url>
   <url><loc>https://amiaffected.now/advisories/gpustack/</loc></url>
   <url><loc>https://amiaffected.now/advisories/fastify-http-proxy/</loc></url>
