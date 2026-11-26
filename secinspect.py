@@ -706,8 +706,9 @@ def running_kernel(fam):
 
 def distro_status(adv, release, version, source, lt):
     """Status for one installed package. adv["fixed"][release] is the first fixed build, a
-    {source package: build} map (kernel flavours), "not-affected" or "unfixed"."""
-    fixed = adv.get("fixed", {}).get(release)
+    {source package: build} map (kernel flavours), "not-affected" or "unfixed"; release "*" covers every release
+    and Homebrew (e.g. a vendor fix nobody ships yet)."""
+    fixed = adv.get("fixed", {}).get(release) or adv.get("fixed", {}).get("*")
     if isinstance(fixed, dict):
         fixed = fixed.get(source) or fixed.get("*")
     proposed = isinstance(fixed, str) and fixed.startswith("proposed:")  # fix only in Ubuntu's testing pocket so far
@@ -724,7 +725,7 @@ def distro_status(adv, release, version, source, lt):
         if proposed:
             return "AFFECTED", f"fixed in {fixed}, so far only in {release}'s -proposed pocket: install it from there or wait for -updates{after}"
         return "AFFECTED", f"update to {fixed}+{after}"
-    unfixed = ("AFFECTED", f"no fixed {release} package yet: {adv.get('mitigation', 'watch for the update')}")
+    unfixed = (adv.get("status", "AFFECTED"), f"no fixed {release or 'upstream'} package yet: {adv.get('mitigation', 'watch for the update')}")
     if ups:  # vendor build, or the distro moved to a new upstream release
         status, note = by_branch(nums(upstream(version)), ups, adv.get("branch_width", 2))
         if status == "AFFECTED" and fixed == "unfixed":
@@ -1153,9 +1154,12 @@ def inspect_file(path, read):
         if not inside:
             found = set()
             try:
-                z = zipfile.ZipFile(io.BytesIO(data()))
+                # a file on disk is opened in place: zipfile reads only the index and pom.properties, so a war
+                # past MAX_READ (Roller's is 56 MB) is still checked
+                on_disk = getattr(read, "path", None)
+                z = zipfile.ZipFile(on_disk if on_disk else io.BytesIO(data()))
                 for n in z.namelist():
-                    if n.startswith("META-INF/maven/") and n.endswith("/pom.properties"):
+                    if n.startswith("META-INF/maven/") and n.endswith("/pom.properties") and z.getinfo(n).file_size < 100_000:
                         props = z.read(n).decode("utf-8", "replace")
                         a, v = re.search(r"(?m)^artifactId=(\S+)", props), re.search(r"(?m)^version=(\S+)", props)
                         if a and v:
@@ -1245,6 +1249,8 @@ def scan_files(roots):
                     except OSError:
                         return b""
 
+                if f.lower().endswith(ARCHIVES) and os.path.isfile(p):
+                    read.path = p
                 r, b = inspect_file(p, read)
                 rows += r
                 bundles += b

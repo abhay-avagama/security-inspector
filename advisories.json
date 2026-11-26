@@ -1,13 +1,31 @@
 {
-  "release": {"script_sha256": "1397179bde7737768d2e1ea4eb23f53ea369be810b4852d623873cc2be32483a", "released": "2026-11-19T11:58:36Z"},
+  "release": {"script_sha256": "8789581c84838eaedea2e48037a1c34d870513e865af9aac6797c2113ea5945a", "released": "2026-11-26T16:48:16Z"},
   "versions": [
     {
       "name": "PHP",
-      "about": "CVE-2026-109618, CVE-2026-109619 (PHP2Shell): unauthenticated RCE, exploited in the wild (CISA KEV)",
+      "about": "CVE-2026-109618, CVE-2026-109619 (PHP2Shell): unauthenticated RCE, exploited in the wild (CISA KEV); and the 19 Nov 2026 security releases (8.5.13, 8.4.28, 8.3.37, 8.2.36; 8.6.0 has the fixes): 17 CVEs, the worst CVE-2026-129289 (9.2), FPM request smuggling that can run attacker-chosen PHP when the web server reuses FastCGI connections, plus session and timezone use-after-frees that can run code. Public proofs of concept for several, none known exploited. 8.1 gets no fix",
       "source": "https://nvd.nist.gov/vuln/detail/cve-2026-109618",
       "cves": [
         "CVE-2026-109618",
-        "CVE-2026-109619"
+        "CVE-2026-109619",
+        "CVE-2026-129289",
+        "CVE-2026-115560",
+        "CVE-2026-126714",
+        "CVE-2026-129496",
+        "CVE-2026-129481",
+        "CVE-2026-129474",
+        "CVE-2026-129182",
+        "CVE-2026-129291",
+        "CVE-2026-127960",
+        "CVE-2026-128064",
+        "CVE-2026-128090",
+        "CVE-2026-129538",
+        "CVE-2026-129506",
+        "CVE-2026-129501",
+        "CVE-2026-15353",
+        "CVE-2026-129438",
+        "CVE-2026-129292",
+        "CVE-2026-48841"
       ],
       "binary": "php",
       "flag": "-v",
@@ -17,15 +35,16 @@
         "/usr/bin/php[0-9]*"
       ],
       "fixed": [
-        "8.5.12",
-        "8.4.27",
-        "8.3.36",
-        "8.2.35"
+        "8.6.0",
+        "8.5.13",
+        "8.4.28",
+        "8.3.37",
+        "8.2.36"
       ],
       "branch_width": 2,
       "after_fix": "restart PHP-FPM/workers",
       "feed": "php",
-      "checked": "2026-11-16T09:00:00Z"
+      "checked": "2026-11-26T09:00:00Z"
     },
     {
       "name": "FrankenPHP",
@@ -108,8 +127,7 @@
       ],
       "branch_width": 1,
       "feed": "node",
-      "checked": "2026-11-12T12:00:00Z"
-    },
+      "checked": "2026-11-26T09:00:00Z"    },
     {
       "name": "Python",
       "about": "CVE-2026-115557 (rated critical): Python's ssl module trusted the compromised eMudhra intermediates, so a certificate chained to them could impersonate any TLS server; fixed on 25 Oct 2026 with CVE-2026-114583 (tarfile extraction writing outside its folder) and Expat fixes",
@@ -360,9 +378,23 @@
     },
     {
       "name": "GitLab",
-      "about": "16 Nov 2026: 37 CVEs (two stored XSS at CVSS 8.7, a CI/CD job authorization race); 10 Nov: CVE-2026-105437, critical heap overflow in the bundled git that runs commands in Gitaly (16.2 onwards, no fix for 19.2 or older); before that CVE-2026-110264 (CVSS 10.0 regex RCE) and the exploited CVE-2026-97229 (CISA KEV, public Metasploit module)",
-      "source": "https://docs.gitlab.com/releases/patches/patch-release-gitlab-19-5-6-released/",
+      "about": "25 Nov 2026: 13 CVEs fixed in 19.6.2 / 19.5.9 / 19.4.11, all medium or low (the worst exposes session cookies through dependency proxy auth, 6.7; an unauthenticated Service Desk email bug and an SSRF in the MCP server's OAuth handler); 20 Nov: CVE-2026-132825, critical heap overflow in the bundled Ruby's string case conversion (19.6.1 / 19.5.8 / 19.4.10). Older lines only got the Ruby, Git and GPGME backports (19.3.10, 19.2.11 ... 18.11.15), not the GitLab fixes. 16 Nov 2026: 37 CVEs (two stored XSS at CVSS 8.7, a CI/CD job authorization race); 10 Nov: CVE-2026-105437, critical heap overflow in the bundled git that runs commands in Gitaly (16.2 onwards, no fix for 19.2 or older); before that CVE-2026-110264 (CVSS 10.0 regex RCE) and the exploited CVE-2026-97229 (CISA KEV, public Metasploit module)",
+      "source": "https://docs.gitlab.com/releases/patches/patch-release-gitlab-19-6-2-released/",
       "cves": [
+        "CVE-2026-132825",
+        "CVE-2026-119452",
+        "CVE-2026-132156",
+        "CVE-2026-132822",
+        "CVE-2026-81336",
+        "CVE-2026-131867",
+        "CVE-2026-135221",
+        "CVE-2026-132102",
+        "CVE-2026-16744",
+        "CVE-2026-107633",
+        "CVE-2026-132794",
+        "CVE-2026-129982",
+        "CVE-2026-135636",
+        "CVE-2026-17194",
         "CVE-2026-110264",
         "CVE-2026-103515",
         "CVE-2026-105711",
@@ -418,13 +450,13 @@
       "version_file": "/opt/gitlab/embedded/service/gitlab-rails/VERSION",
       "not_found": "self-managed only; GitLab.com is already patched",
       "fixed": [
-        "19.5.6",
-        "19.4.8",
-        "19.3.9"
+        "19.6.2",
+        "19.5.9",
+        "19.4.11"
       ],
       "branch_width": 2,
       "feed": "gitlab",
-      "checked": "2026-11-17T06:00:00Z"
+      "checked": "2026-11-26T09:00:00Z"
     },
     {
       "name": "WordPress",
@@ -510,7 +542,7 @@
     },
     {
       "name": "Google Chrome / Chromium",
-      "about": "CVE-2026-87491 and CVE-2026-85046: V8 bugs exploited in the wild (CISA KEV), fixed in 153.0.8010.36; on macOS also CVE-2026-106378, a GPU sandbox escape fixed in 155.0.8059.39; and four critical bugs fixed on 27 Oct 2026 in 156.0.8078.73 (CVE-2026-118306 escapes the sandbox, CVE-2026-118331/118348/118344 run code inside it); and 196 bugs fixed in 157.0.8103.38 (stable on Linux 3 Nov, macOS 5 Nov 2026), 33 of them critical, several running code outside the sandbox (e.g. CVE-2026-121035, CVE-2026-121086, CVE-2026-121189); and CVE-2026-125350, a use-after-free in XML exploited in the wild, fixed on 9 Nov 2026 in 157.0.8103.50; and Chrome 158 (17 Nov 2026, 158.0.8127.36): 204 bugs, 6 critical, CVE-2026-131031 (GPU) and CVE-2026-131054 (ANGLE) running code outside the sandbox",
+      "about": "CVE-2026-87491 and CVE-2026-85046: V8 bugs exploited in the wild (CISA KEV), fixed in 153.0.8010.36; on macOS also CVE-2026-106378, a GPU sandbox escape fixed in 155.0.8059.39; and four critical bugs fixed on 27 Oct 2026 in 156.0.8078.73 (CVE-2026-118306 escapes the sandbox, CVE-2026-118331/118348/118344 run code inside it); and 196 bugs fixed in 157.0.8103.38 (stable on Linux 3 Nov, macOS 5 Nov 2026), 33 of them critical, several running code outside the sandbox (e.g. CVE-2026-121035, CVE-2026-121086, CVE-2026-121189); and CVE-2026-125350, a use-after-free in XML exploited in the wild, fixed on 9 Nov 2026 in 157.0.8103.50; and Chrome 158 (17 Nov 2026, 158.0.8127.36): 204 bugs, 6 critical, CVE-2026-131031 (GPU) and CVE-2026-131054 (ANGLE) running code outside the sandbox; and CVE-2026-134401 (critical, 9.6), input validation in Variations that runs code outside the sandbox, fixed on 23 Nov 2026 in 158.0.8127.88, not known exploited",
       "source": "https://www.cisa.gov/known-exploited-vulnerabilities-catalog?field_cve=CVE-2026-87491",
       "cves": [
         "CVE-2026-87491",
@@ -525,7 +557,8 @@
         "CVE-2026-121189",
         "CVE-2026-125350",
         "CVE-2026-131031",
-        "CVE-2026-131054"
+        "CVE-2026-131054",
+        "CVE-2026-134401"
       ],
       "binary": "google-chrome",
       "flag": "--version",
@@ -540,49 +573,55 @@
         [
           "0.0.0.0",
           "153.0.8010.35",
-          "update to 158.0.8127.36+ (fixes the exploited V8 bugs and the Oct 27 and Nov 3 critical ones) and relaunch the browser"
+          "update to 158.0.8127.88+ (fixes the exploited V8 bugs and the Oct 27 and Nov 3 critical ones) and relaunch the browser"
         ],
         [
           "153.0.8010.36",
           "155.0.8059.38",
-          "macOS sandbox escape CVE-2026-106378: update to 158.0.8127.36+ and relaunch the browser",
+          "macOS sandbox escape CVE-2026-106378: update to 158.0.8127.88+ and relaunch the browser",
           "darwin"
         ],
         [
           "0.0.0.0",
           "156.0.8078.72",
-          "four critical bugs fixed on 27 Oct 2026: update to 158.0.8127.36+ and relaunch the browser"
+          "four critical bugs fixed on 27 Oct 2026: update to 158.0.8127.88+ and relaunch the browser"
         ],
         [
           "0.0.0.0",
           "157.0.8103.37",
-          "33 critical bugs fixed on 3 Nov 2026: update to 158.0.8127.36+ and relaunch the browser"
+          "33 critical bugs fixed on 3 Nov 2026: update to 158.0.8127.88+ and relaunch the browser"
         ],
         [
           "0.0.0.0",
           "157.0.8103.49",
-          "CVE-2026-125350 is exploited in the wild: update to 158.0.8127.36+ and relaunch the browser"
+          "CVE-2026-125350 is exploited in the wild: update to 158.0.8127.88+ and relaunch the browser"
         ],
         [
           "157.0.8103.50",
           "157.0.8103.77",
-          "83 security fixes on 11 Nov 2026 (V8 and Skia code execution among them, none known exploited): update to 158.0.8127.36+ and relaunch the browser"
+          "83 security fixes on 11 Nov 2026 (V8 and Skia code execution among them, none known exploited): update to 158.0.8127.88+ and relaunch the browser"
         ],
         [
           "157.0.8103.78",
           "158.0.8127.35",
-          "Chrome 158 (17 Nov 2026) fixes 204 bugs, 6 critical; CVE-2026-131031 (GPU) and CVE-2026-131054 (ANGLE) run code outside the sandbox, none known exploited: update to 158.0.8127.36+ and relaunch the browser"
+          "Chrome 158 (17 Nov 2026) fixes 204 bugs, 6 critical; CVE-2026-131031 (GPU) and CVE-2026-131054 (ANGLE) run code outside the sandbox, none known exploited: update to 158.0.8127.88+ and relaunch the browser"
+        ],
+        [
+          "158.0.8127.36",
+          "158.0.8127.87",
+          "CVE-2026-134401 (critical, fixed 23 Nov 2026) runs code outside the sandbox, not known exploited: update to 158.0.8127.88+ and relaunch the browser"
         ]
       ],
-      "checked": "2026-11-19T09:00:00Z",
+      "checked": "2026-11-26T09:00:00Z",
       "feed": "chrome"
     },
     {
       "name": "Microsoft Edge",
-      "about": "CVE-2026-125350, the Chrome XML use-after-free exploited in the wild, is also in Edge; Microsoft's notes now say it was fixed on desktop in 157.0.4341.46 (9 Nov 2026) and on Android in 157.0.4341.53",
+      "about": "CVE-2026-125350, the Chrome XML use-after-free exploited in the wild, is also in Edge; Microsoft's notes now say it was fixed on desktop in 157.0.4341.46 (9 Nov 2026) and on Android in 157.0.4341.53. Chrome 158's 204 fixes came with Edge 158.0.4370.33 (19 Nov 2026) and the critical CVE-2026-134401 with 158.0.4370.45 (25 Nov); Microsoft's notes don't name the Chromium build, so both are matched by date",
       "source": "https://learn.microsoft.com/en-us/deployedge/microsoft-edge-relnotes-security",
       "cves": [
-        "CVE-2026-125350"
+        "CVE-2026-125350",
+        "CVE-2026-134401"
       ],
       "binary": "microsoft-edge",
       "flag": "--version",
@@ -595,22 +634,28 @@
         [
           "0.0.0.0",
           "157.0.4341.45",
-          "CVE-2026-125350 is exploited in the wild: update Edge to 157.0.4341.46 or later (edge://settings/help)"
+          "CVE-2026-125350 is exploited in the wild: update Edge to 158.0.4370.45 or later (edge://settings/help)"
         ],
         [
           "157.0.4341.46",
           "157.0.4341.56",
-          "Chrome's 11 Nov 2026 security fixes reached Edge in 157.0.4341.57: update (edge://settings/help)"
+          "Chrome's 11 Nov 2026 security fixes reached Edge in 157.0.4341.57: update to 158.0.4370.45+ (edge://settings/help)"
+        ],
+        [
+          "157.0.4341.57",
+          "158.0.4370.44",
+          "Chrome 158's 204 security fixes and CVE-2026-134401 (critical, runs code outside the sandbox, not known exploited) are in Edge 158.0.4370.45 (25 Nov 2026): update (edge://settings/help)"
         ]
       ],
-      "checked": "2026-11-16T09:00:00Z"
+      "checked": "2026-11-26T09:00:00Z"
     },
     {
       "name": "Brave",
-      "about": "CVE-2026-125350, the Chrome XML use-after-free exploited in the wild: Brave took the fix (Chromium 157.0.8103.50) in Release 1.99.56 and Beta 1.100.52 on 10 Nov 2026; Chrome 158's 204 fixes are in Release 1.100.58 (18 Nov 2026)",
+      "about": "CVE-2026-125350, the Chrome XML use-after-free exploited in the wild: Brave took the fix (Chromium 157.0.8103.50) in Release 1.99.56 and Beta 1.100.52 on 10 Nov 2026; Chrome 158's 204 fixes are in Release 1.100.58 (18 Nov 2026), and the critical CVE-2026-134401 (Chromium 158.0.8127.92) in 1.100.59 (24 Nov 2026)",
       "source": "https://github.com/brave/brave-browser/releases/tag/v1.99.56",
       "cves": [
-        "CVE-2026-125350"
+        "CVE-2026-125350",
+        "CVE-2026-134401"
       ],
       "binary": "brave-browser",
       "flag": "--version",
@@ -625,25 +670,30 @@
         [
           "0.0.0",
           "1.99.55",
-          "CVE-2026-125350 is exploited in the wild: update to 1.100.58+ (brave://settings/help) and relaunch Brave"
+          "CVE-2026-125350 is exploited in the wild: update to 1.100.59+ (brave://settings/help) and relaunch Brave"
         ],
         [
           "1.100.0",
           "1.100.51",
-          "CVE-2026-125350 is exploited in the wild: update to 1.100.58+ (brave://settings/help) and relaunch Brave"
+          "CVE-2026-125350 is exploited in the wild: update to 1.100.59+ (brave://settings/help) and relaunch Brave"
         ],
         [
           "1.99.56",
           "1.99.56",
-          "Chrome's 11 Nov 2026 security fixes (83, none known exploited) are in 1.99.57: update to 1.100.58+ (brave://settings/help) and relaunch Brave"
+          "Chrome's 11 Nov 2026 security fixes (83, none known exploited) are in 1.99.57: update to 1.100.59+ (brave://settings/help) and relaunch Brave"
         ],
         [
           "1.99.57",
           "1.100.57",
-          "Chrome 158's 204 security fixes (17 Nov 2026, none known exploited) are in Release 1.100.58 (Chromium 158.0.8127.42): update (brave://settings/help) and relaunch Brave"
+          "Chrome 158's 204 security fixes (17 Nov 2026, none known exploited) are in Release 1.100.58 (Chromium 158.0.8127.42): update to 1.100.59+ (brave://settings/help) and relaunch Brave"
+        ],
+        [
+          "1.100.58",
+          "1.100.58",
+          "CVE-2026-134401 (critical, runs code outside the sandbox, not known exploited) is fixed in Release 1.100.59 (Chromium 158.0.8127.92, 24 Nov 2026): update (brave://settings/help) and relaunch Brave"
         ]
       ],
-      "checked": "2026-11-19T09:00:00Z"
+      "checked": "2026-11-26T09:00:00Z"
     },
     {
       "name": "macOS",
@@ -862,7 +912,7 @@
     },
     {
       "name": "PostgreSQL server",
-      "about": "Nov 2026 release (12 Nov): 53 CVEs, most of them code execution as the database's OS user by anyone who can create objects (plperl, pltcl, dblink, type confusion, tsvector overflows), plus an unauthenticated restart. Also fixes the Aug 2026 batch. 14.25 is PostgreSQL 14's last release. Public proofs of concept are out for CVE-2026-6460 (13 Nov write-up, crashes 18.6 and leaks memory addresses) and CVE-2026-116331 (16 Nov); no attacks reported",
+      "about": "Nov 2026 release (12 Nov): 53 CVEs, most of them code execution as the database's OS user by anyone who can create objects (plperl, pltcl, dblink, type confusion, tsvector overflows), plus an unauthenticated restart. Also fixes the Aug 2026 batch. 14.25 is PostgreSQL 14's last release. PostgreSQL 19 (19 Nov) already has these fixes. Public proofs of concept are out for CVE-2026-6460 (13 Nov write-up, crashes 18.6 and leaks memory addresses) and CVE-2026-116331 (16 Nov); no attacks reported",
       "source": "https://www.postgresql.org/support/security/",
       "cves": [
         "CVE-2026-16239",
@@ -954,6 +1004,7 @@
         "/Applications/Postgres.app/Contents/Versions/*/bin/postgres"
       ],
       "fixed": [
+        "19.0",
         "18.7",
         "17.12",
         "16.16",
@@ -963,7 +1014,7 @@
       "branch_width": 1,
       "after_fix": "restart PostgreSQL (and reindex pg_trgm GiST and bpchar B-tree indexes, and take a new full backup if you use incremental ones)",
       "feed": "postgresql",
-      "checked": "2026-11-17T06:00:00Z",
+      "checked": "2026-11-26T09:00:00Z",
       "plan": [
         "Update PostgreSQL to 18.7 / 17.12 / 16.16 / 15.20 / 14.25 and restart it",
         "sudo apt update && sudo apt upgrade   # dnf: sudo dnf upgrade 'postgresql*'   Homebrew: brew upgrade postgresql@<major>; then restart the server"
@@ -997,6 +1048,7 @@
         "/Applications/Postgres.app/Contents/Versions/*/bin/psql"
       ],
       "fixed": [
+        "19.0",
         "18.7",
         "17.12",
         "16.16",
@@ -1201,6 +1253,28 @@
       "plan": [
         "Update Spring Framework to 5.3.18+ (Spring Boot 2.6.6+)",
         "set spring-framework.version to 5.3.18 (or Spring Boot to 2.6.6+) in the build, rebuild and redeploy"
+      ]
+    },
+    {
+      "name": "Apache Roller",
+      "package": "roller-webapp",
+      "ecosystem": "maven",
+      "about": "CVE-2026-129448 (CVSS 9.8, CISA KEV 20 Nov 2026, exploited): the XML-RPC endpoint deserializes vendor extension types before it checks who is asking, so anyone who can reach /roller-services/xmlrpc runs code on the server. 4.0.0 through 6.1.4, and 6.1.5 under the earlier CVE-2026-82384; fixed in 6.1.6",
+      "source": "https://www.openwall.com/lists/oss-security/2026/11/17/5",
+      "cves": [
+        "CVE-2026-129448",
+        "CVE-2026-82384"
+      ],
+      "bad_ranges": [
+        [
+          "4.0.0",
+          "6.1.5"
+        ]
+      ],
+      "cleanup": "update Roller to 6.1.6+ (6.1.7 is current) and restart Tomcat. Until then set enabledForExtensions to false in WEB-INF/web.xml or remove the /roller-services/xmlrpc servlet mapping, and restart; turning XML-RPC off in Roller's admin page is not enough. It is exploited, so check the server for files and accounts you didn't create",
+      "plan": [
+        "Update Apache Roller to 6.1.6+ and restart Tomcat",
+        "replace webapps/roller.war with the one from apache-roller-6.1.7-binary.zip (roller.apache.org/downloads), keep roller-custom.properties in Tomcat's lib folder, and restart Tomcat"
       ]
     },
     {
@@ -1534,7 +1608,7 @@
     },
     {
       "name": "MySQL",
-      "about": "Oracle's October 2026 Critical Patch Update (20 Oct): 98 MySQL fixes, 29 of them reachable without a login, the worst through the bundled curl and OpenSSL (9.8) and Group Replication (CVE-2026-101781, 8.8); fixed in 8.4.13 and 9.7.4. Oracle's new monthly patch update on 17 Nov adds 10 more (CVE-2026-114952 in the client programs is 9.1), fixed versions not yet confirmed. MySQL 8.0 reached end of life in April 2026: Ubuntu still backports fixes into 8.0.46, Oracle's own 8.0 builds get none. None known exploited",
+      "about": "Oracle's October 2026 Critical Patch Update (20 Oct): 98 MySQL fixes, 29 of them reachable without a login, the worst through the bundled curl and OpenSSL (9.8) and Group Replication (CVE-2026-101781, 8.8); fixed in 8.4.13 and 9.7.4. Oracle's 17 Nov patch update, which these versions don't fix, is its own row. MySQL 8.0 reached end of life in April 2026: Ubuntu still backports fixes into 8.0.46, Oracle's own 8.0 builds get none. None known exploited",
       "source": "https://www.oracle.com/security-alerts/cpuoct2026.html",
       "cves": [
         "CVE-2026-101781",
@@ -1545,13 +1619,7 @@
         "CVE-2026-101800",
         "CVE-2026-101801",
         "CVE-2026-101802",
-        "CVE-2026-101803",
-        "CVE-2026-114949",
-        "CVE-2026-114950",
-        "CVE-2026-114951",
-        "CVE-2026-114952",
-        "CVE-2026-114953",
-        "CVE-2026-127428"
+        "CVE-2026-101803"
       ],
       "deb_packages": [
         "mysql-server-8.0",
@@ -1584,7 +1652,54 @@
       },
       "after_fix": "restart mysqld",
       "feed": "mysql",
-      "checked": "2026-11-19T09:00:00Z"
+      "checked": "2026-11-26T09:00:00Z"
+    },
+    {
+      "name": "MySQL (17 Nov 2026 patch update)",
+      "about": "Oracle's 17 Nov 2026 patch update: CVE-2026-114952 (9.1), an authentication bypass in the client programs reachable over the network without a login, plus replication, optimizer, logging and GIS bugs (7.2 and below) in the server. 8.4.13, 9.7.4 and 26.10, the newest public releases, are affected; so far Oracle's fix is only for support customers, and no distro has shipped it. None known exploited; the GitHub 'proof of concept' for CVE-2026-114952 is a version audit script, not an exploit",
+      "source": "https://www.oracle.com/security-alerts/cspunov2026.html",
+      "cves": [
+        "CVE-2026-114952",
+        "CVE-2026-114949",
+        "CVE-2026-114950",
+        "CVE-2026-114951",
+        "CVE-2026-114953",
+        "CVE-2026-127428"
+      ],
+      "deb_packages": [
+        "mysql-server-8.0",
+        "mysql-server-core-8.0",
+        "mysql-server-8.4",
+        "mysql-server-core-8.4",
+        "mysql-community-server",
+        "mysql-community-server-core",
+        "mysql-client-8.0",
+        "mysql-client-core-8.0",
+        "mysql-client-8.4",
+        "mysql-client-core-8.4",
+        "mysql-community-client"
+      ],
+      "rpm_packages": [
+        "mysql-server",
+        "mysql8.4-server",
+        "mysql-community-server",
+        "mysql",
+        "mysql8.4",
+        "mysql-community-client"
+      ],
+      "brew_packages": [
+        "mysql",
+        "mysql@8.4",
+        "mysql@8.0",
+        "mysql-client"
+      ],
+      "fixed": {
+        "*": "unfixed"
+      },
+      "status": "REVIEW",
+      "mitigation": "keep port 3306 reachable only from the hosts that need it, don't point MySQL client programs at servers you don't control, and update when your distro or Oracle's repo ships the 17 Nov fixes",
+      "after_fix": "restart mysqld",
+      "checked": "2026-11-26T09:00:00Z"
     },
     {
       "name": "MongoDB",

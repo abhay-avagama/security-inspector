@@ -27,7 +27,9 @@ def test_versions():
     assert by_branch((8, 1, 99), PHP, 2)[0] == "AFFECTED"  # end-of-life
     assert by_branch((8, 6, 0), PHP, 2)[0] == "UNKNOWN"
     assert status("PHP", (7, 4, 33)) == "AFFECTED"
-    assert status("PHP", (8, 2, 35)) == "OK"
+    assert status("PHP", (8, 2, 35)) == "AFFECTED" and status("PHP", (8, 5, 12)) == "AFFECTED"  # 19 Nov releases
+    assert status("PHP", (8, 2, 36)) == "OK" and status("PHP", (8, 5, 13)) == "OK" and status("PHP", (8, 6, 0)) == "OK"
+    assert status("PHP", (8, 1, 34)) == "AFFECTED"  # no fix on 8.1
     assert "restart" in version_status(ADV["PHP"], (8, 5, 11))[1]
     assert status("Node.js", (26, 7, 0)) == "AFFECTED"
     assert status("Node.js", (20, 19, 2)) == "AFFECTED"  # EOL
@@ -35,8 +37,9 @@ def test_versions():
     assert status("Node.js", (24, 22, 3)) == "OK"
     assert status("Node.js", (26, 13, 1)) == "OK"
     assert status("Node.js", (22, 23, 4)) == "AFFECTED"
-    assert status("GitLab", (19, 5, 6)) == "OK" and status("GitLab", (19, 3, 9)) == "OK"
-    assert status("GitLab", (19, 5, 5)) == "AFFECTED" and status("GitLab", (19, 4, 7)) == "AFFECTED"  # 16 Nov release
+    assert status("GitLab", (19, 6, 2)) == "OK" and status("GitLab", (19, 5, 9)) == "OK" and status("GitLab", (19, 4, 11)) == "OK"
+    assert status("GitLab", (19, 6, 0)) == "AFFECTED" and status("GitLab", (19, 6, 1)) == "AFFECTED"  # 20 Nov Ruby, 25 Nov release
+    assert status("GitLab", (19, 5, 8)) == "AFFECTED" and status("GitLab", (19, 4, 10)) == "AFFECTED" and status("GitLab", (19, 3, 10)) == "AFFECTED"
     assert status("GitLab", (19, 2, 9)) == "AFFECTED" and status("GitLab", (18, 11, 13)) == "AFFECTED"  # no fix for the git overflow
     assert status("BIND", (9, 18, 50)) == "AFFECTED"
     assert status("BIND", (9, 20, 30)) == "OK"
@@ -206,6 +209,10 @@ def test_distro():
     # ponytail: Oracle's own 8.0.46 (8.0.46-1ubuntu24.04) sorts above Ubuntu's patched build and reads OK; Oracle ships no 8.0 fixes
     assert st("MySQL", "ubuntu:24.04", "8.4.12-1ubuntu24.04") == "AFFECTED" and st("MySQL", "ubuntu:24.04", "8.4.13-1ubuntu24.04") == "OK"
     assert st("MySQL", "ubuntu:24.04", "26.7.1-1ubuntu24.04") == "AFFECTED"  # innovation release past its window
+    # Oracle's 17 Nov update: no public fix anywhere yet, so every MySQL is REVIEW with the mitigation, Homebrew too
+    nov = "MySQL (17 Nov 2026 patch update)"
+    assert st(nov, "ubuntu:24.04", "8.4.13-1ubuntu24.04") == "REVIEW" and st(nov, "el:9", "8.4.13-1.el9") == "REVIEW"
+    assert distro_status(DIST[nov], None, "9.7.4", "", lt) == ("REVIEW", "no fixed upstream package yet: " + DIST[nov]["mitigation"])
     # vendor-only software
     assert st("MongoDB", None, "8.0.31") == "AFFECTED" and st("MongoDB", "ubuntu:24.04", "8.0.32") == "OK"
     assert st("Plex Media Server", "debian:12", "1.42.9.1000-abc") == "AFFECTED"
@@ -393,10 +400,12 @@ def test_electron_edge_brave():
                        "slack": ("Electron 46.0.0, Chromium 160.0.1.1", "UNKNOWN")}, got
         assert check_electron({**ELECTRON, "mac": [], "linux": []})[0][3] == "NOT FOUND"
     assert "supported Electron" in fix_for(ELECTRON["name"], "/Applications/Old.app")[1]
-    assert status("Microsoft Edge", (157, 0, 4341, 42)) == "AFFECTED" and status("Microsoft Edge", (157, 0, 4341, 46)) == "AFFECTED" and status("Microsoft Edge", (157, 0, 4341, 57)) == "OK"
+    assert status("Microsoft Edge", (157, 0, 4341, 42)) == "AFFECTED" and status("Microsoft Edge", (157, 0, 4341, 46)) == "AFFECTED" and status("Microsoft Edge", (157, 0, 4341, 57)) == "AFFECTED"
+    assert status("Microsoft Edge", (158, 0, 4370, 33)) == "AFFECTED" and status("Microsoft Edge", (158, 0, 4370, 45)) == "OK"  # CVE-2026-134401
     assert status("FrankenPHP", (1, 13, 4)) == "AFFECTED" and status("FrankenPHP", (1, 13, 5)) == "OK"
     assert status("Brave", (1, 98, 63)) == "AFFECTED" and status("Brave", (1, 99, 56)) == "AFFECTED" and status("Brave", (1, 99, 57)) == "AFFECTED"  # Chrome 158 fixes need 1.100.58
     assert status("Brave", (1, 100, 51)) == "AFFECTED" and status("Brave", (1, 101, 47)) == "OK"
+    assert status("Brave", (1, 100, 58)) == "AFFECTED" and status("Brave", (1, 100, 59)) == "OK"  # CVE-2026-134401
 
 
 def test_eol_settings():
@@ -570,8 +579,9 @@ def test_chrome():
     assert status("Google Chrome / Chromium", (157, 0, 8103, 38)) == "AFFECTED"  # CVE-2026-125350, exploited
     assert status("Google Chrome / Chromium", (157, 0, 8103, 50)) == "AFFECTED"  # 11 Nov fixes
     assert status("Google Chrome / Chromium", (157, 0, 8103, 78)) == "AFFECTED"  # Chrome 158's 204 fixes
-    assert status("Google Chrome / Chromium", (158, 0, 8127, 36)) == "OK"
-    assert status("Brave", (1, 100, 57)) == "AFFECTED" and status("Brave", (1, 100, 58)) == "OK"
+    assert status("Google Chrome / Chromium", (158, 0, 8127, 36)) == "AFFECTED"  # CVE-2026-134401, 23 Nov
+    assert status("Google Chrome / Chromium", (158, 0, 8127, 88)) == "OK" and status("Google Chrome / Chromium", (159, 0, 8154, 33)) == "OK"
+    assert status("Brave", (1, 100, 57)) == "AFFECTED" and status("Brave", (1, 100, 59)) == "OK"
     assert version_status(CHROMIUM, (157, 0, 8103, 49))[0] == "AFFECTED"
     assert version_status(CHROMIUM, (142, 0, 7444, 175))[0] == "AFFECTED"
     assert version_status(CHROMIUM, (156, 0, 8078, 47))[0] == "AFFECTED"  # Puppeteer 25.16.0's build
@@ -635,6 +645,17 @@ def test_queue_nov3():
     assert war == [("Log4Shell (Log4j)", "2.17.1", "OK"), ("Spring4Shell (Spring Framework)", "5.3.17", "REVIEW")], war
     assert rows("/srv/app.jar", jar({"BOOT-INF/lib/spring-beans-5.3.18.jar": b""})) == [("Spring4Shell (Spring Framework)", "5.3.18", "OK")]
     assert rows("/srv/broken.jar", b"not a zip") == [] and rows("/p/yarn.lock", b"spring-beans 5.0.0") == []
+    # Apache Roller: the war's own pom.properties; 6.1.6 fixes CVE-2026-129448 (6.1.5 had CVE-2026-82384)
+    roller = lambda v: jar({"META-INF/maven/org.apache.roller/roller-webapp/pom.properties": f"artifactId=roller-webapp\nversion={v}\n".encode()})
+    assert rows("/var/lib/tomcat9/webapps/roller.war", roller("6.1.4")) == [("Apache Roller", "6.1.4", "AFFECTED")]
+    assert rows("/opt/tomcat/webapps/roller.war", roller("6.1.5")) == [("Apache Roller", "6.1.5", "AFFECTED")]
+    assert rows("/opt/tomcat/webapps/roller.war", roller("6.1.6")) == [("Apache Roller", "6.1.6", "OK")]
+    # a war on disk is opened in place, so one past MAX_READ (read() gives b"") is still checked
+    with tempfile.TemporaryDirectory() as d:
+        open(f"{d}/roller.war", "wb").write(roller("5.2.4"))
+        read = lambda: b""
+        read.path = f"{d}/roller.war"
+        assert [(r[0], r[2], r[3]) for r in inspect_file(read.path, read)[0]] == [("Apache Roller", "5.2.4", "AFFECTED")]
     # @fastify/http-proxy in each lockfile format; 11.6.6 is fixed, ^ranges in specs are ignored
     lock = b'{"packages": {"": {"dependencies": {"@fastify/http-proxy": "^11.0.0"}},' \
            b' "node_modules/@fastify/http-proxy": {"version": "11.6.5", "resolved": "x"}}}'
@@ -662,6 +683,7 @@ def test_queue_nov3():
 def test_postgres():
     assert status("PostgreSQL server", (16, 10)) == "AFFECTED"
     assert status("PostgreSQL server", (16, 15)) == "AFFECTED" and status("PostgreSQL server", (16, 16)) == "OK"
+    assert status("PostgreSQL server", (19, 0)) == "OK" and status("PostgreSQL client (psql, pg_dump)", (19, 0)) == "OK"  # 19 shipped with the 12 Nov fixes
     assert status("PostgreSQL server", (13, 22)) == "AFFECTED"  # end-of-life
     assert status("PostgreSQL client (psql, pg_dump)", (18, 6)) == "AFFECTED" and status("PostgreSQL client (psql, pg_dump)", (18, 7)) == "OK"
     assert version_status(ADV["pgAdmin 4"], (9, 18))[0] == "REVIEW"
