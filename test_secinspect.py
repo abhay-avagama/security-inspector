@@ -213,6 +213,15 @@ def test_distro():
     nov = "MySQL (17 Nov 2026 patch update)"
     assert st(nov, "ubuntu:24.04", "8.4.13-1ubuntu24.04") == "REVIEW" and st(nov, "el:9", "8.4.13-1.el9") == "REVIEW"
     assert distro_status(DIST[nov], None, "9.7.4", "", lt) == ("REVIEW", "no fixed upstream package yet: " + DIST[nov]["mitigation"])
+    # PHP from the distro: the backported build decides, not the 8.3.6 / 8.1.2 / 8.0.30 in its name
+    php = "PHP (distro packages)"
+    assert st(php, "ubuntu:24.04", "8.3.6-0ubuntu0.24.04.13") == "AFFECTED" and st(php, "ubuntu:24.04", "8.3.6-0ubuntu0.24.04.14") == "OK"
+    assert st(php, "ubuntu:22.04", "8.1.2-1ubuntu2.29") == "OK" and st(php, "debian:12", "8.2.35-1~deb12u1") == "AFFECTED"
+    assert st(php, "el:9", "8.0.30-8.el9_9.1") == "AFFECTED" and st(php, "el:9", "8.0.30-8.el9_9.2") == "OK"
+    # deb.sury.org and RHEL module streams carry upstream versions: the upstream rule
+    assert st(php, "ubuntu:24.04", "8.3.37-1+ubuntu24.04.1+deb.sury.org+1") == "OK" and st(php, "ubuntu:24.04", "8.4.27-1+ubuntu24.04.1+deb.sury.org+1") == "AFFECTED"
+    assert st(php, "el:9", "8.2.36-1.module+el9.9.0+25365+396707ba") == "OK" and st(php, "el:10", "8.3.36-1.el10_2") == "AFFECTED"
+    assert "skip_prefixes" in ADV["PHP"]  # so /usr/bin/php isn't also judged by its version alone
     # vendor-only software
     assert st("MongoDB", None, "8.0.31") == "AFFECTED" and st("MongoDB", "ubuntu:24.04", "8.0.32") == "OK"
     assert st("Plex Media Server", "debian:12", "1.42.9.1000-abc") == "AFFECTED"

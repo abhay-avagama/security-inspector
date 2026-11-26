@@ -35,6 +35,7 @@
   <url><loc>https://amiaffected.now/advisories/pgadmin-4/</loc></url>
   <url><loc>https://amiaffected.now/advisories/linux-kernel-exploited/</loc></url>
   <url><loc>https://amiaffected.now/advisories/linux-kernel-remote-tcp/</loc></url>
+  <url><loc>https://amiaffected.now/advisories/php-distro-packages/</loc></url>
   <url><loc>https://amiaffected.now/advisories/nginx/</loc></url>
   <url><loc>https://amiaffected.now/advisories/apache-httpd/</loc></url>
   <url><loc>https://amiaffected.now/advisories/apache-mod-http2/</loc></url>
