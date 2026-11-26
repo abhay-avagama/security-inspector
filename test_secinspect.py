@@ -1029,6 +1029,13 @@ def test_agent_update():
         try:
             release("2026-11-06")
             assert si.release_signed(site, good) and not si.release_signed(site, bad)
+            # the line under every table and report: which release, and whether it's the signed one
+            line = si.release_line(site, good)
+            assert line.startswith("Release 2026-11-06T00:00:00Z, secinspect.py sha256 ") and line.endswith("signed by release key " + si.fingerprint(good)), line
+            assert "NOT the signed release" in si.release_line(site, bad)
+            with tempfile.TemporaryDirectory() as bare:  # a copy without .sig files, e.g. a download of the two files only
+                shutil.copy(os.path.join(site, "advisories.json"), bare)
+                assert si.release_line(bare).endswith("sha256 ?, signature not checked")
             assert si.update_agent(d, log) == 1  # not installed yet
             assert si.install_agent(d, log, good) == 0
             assert json.load(open(os.path.join(d, "advisories.json")))["versions"][0]["checked"] == "2026-11-06"

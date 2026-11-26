@@ -148,8 +148,11 @@ running; it never refreshes or installs anything from cron.
 
 ## Install it, with signed updates
 
-The one-liner fetches a fresh copy every time, from the same site as the data. That suits a quick
-check. For a server you watch from cron, or before running `--fix` as root, install a copy that
+The one-liner fetches a fresh copy every time, from the same site as the data, and runs it only if
+`secinspect.py` and `advisories.json` match our release key (it needs `ssh-keygen` from OpenSSH 8.1 or
+newer; without one it says the signature wasn't checked). The line under the table names the release
+that produced the result. [SECURITY.md](SECURITY.md#checking-what-you-were-served) has the ways to
+check what you were served, including a public log we don't control. That suits a quick check. For a server you watch from cron, or before running `--fix` as root, install a copy that
 only takes updates you can check came from us:
 
 ```sh

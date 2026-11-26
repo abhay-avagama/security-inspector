@@ -1928,7 +1928,7 @@ summary{{cursor:pointer;padding:8px 0;display:flex;gap:8px;align-items:center;fl
 .share{{background:var(--card);border:1px solid var(--line);border-radius:8px;padding:10px 12px;font:13px ui-monospace,monospace;overflow-x:auto}}
 .fix details summary{{color:var(--muted);font-size:12px}} .fix ul{{margin:6px 0 0;padding-left:18px}}
 </style></head><body><main><h1>Am I affected?</h1>
-<p class="sub">{e(platform.node())} · {e(platform.platform())} · {when}</p><div class="stats">{counts}</div>
+<p class="sub">{e(platform.node())} · {e(platform.platform())} · {when}<br>{e(release_line())}</p><div class="stats">{counts}</div>
 {fixhtml}
 <h2>Issues by component</h2>{tree}
 <h2>Advisories checked</h2><ul class="sources">{sources}</ul>
@@ -2375,6 +2375,24 @@ def release_of(path):
         return {}
 
 
+def release_line(d=HERE, key=None):
+    """Which release produced this result: its date, the script's hash and whether both files match the release
+    key, so a table or report someone passes on can be traced to a signed, publicly logged version."""
+    rel = release_of(os.path.join(d, "advisories.json")).get("released", "unstamped")
+    try:
+        sha = sha256_file(os.path.join(d, "secinspect.py"))[:16]
+    except OSError:
+        sha = "?"
+    have = all(os.path.exists(os.path.join(d, f + ".sig")) for f in AGENT_FILES)
+    try:  # OpenSSH before 8.1 can't check a signature: "unknown option -- Y"
+        can = have and b"option -- Y" not in subprocess.run(["ssh-keygen", "-Y", "verify"], capture_output=True, timeout=20).stderr
+    except (OSError, subprocess.TimeoutExpired):
+        can = False
+    state = "signature not checked" if not can else f"signed by release key {fingerprint(key or SIGNING_KEY)}" if release_signed(d, key) \
+        else "NOT the signed release (changed, or files from two releases)"
+    return f"Release {rel}, secinspect.py sha256 {sha}, {state}"
+
+
 def newest_checked(path):
     try:
         return max(re.findall(r'"checked":\s*"([^"]+)"', open(path).read()), default="")
@@ -2593,8 +2611,9 @@ def main(argv):
     widths = [max(len(str(r[i])) for r in rows) for i in range(4)]
     for r in rows:
         print("  ".join(str(c).ljust(w) for c, w in zip(r, widths)), r[4])
-    if not args.files_only:  # stderr, so the table on stdout stays clean for scripts; not in CI or cron
-        print("\n" + share_line(rows) + RUN_CMD, file=sys.stderr)
+    print("\n" + release_line(), file=sys.stderr)  # stderr, so the table on stdout stays clean for scripts
+    if not args.files_only:  # not in CI or cron
+        print(share_line(rows) + RUN_CMD, file=sys.stderr)
     if args.html:
         html_report(rows, args.html)
         print(f"Report written to {os.path.abspath(args.html)}", file=sys.stderr)

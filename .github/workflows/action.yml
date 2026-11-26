@@ -5,16 +5,35 @@ on:
   workflow_dispatch:
 permissions:
   contents: write
+  id-token: write       # the two below: record each release in the public transparency log
+  attestations: write
 jobs:
   test:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 2  # to see whether this push changed the release
       - run: python3 test_secinspect.py
       - run: python3 changelog.py --check  # page and feed match changelog.json
       - name: Release signatures match the files (once signing has started)
         run: |
           python3 -c "import secinspect as s, sys; sys.exit(0 if not s.SIGNING_KEY or s.release_signed() else 'secinspect.py.sig or advisories.json.sig is missing or stale, sign the release')"
+      # The signature above proves who released the files; this puts their hashes in Sigstore's public, append-only log,
+      # which we don't control, so anyone can check a file they were served is one we released:
+      #   gh attestation verify secinspect.py --repo abhay-avagama/security-inspector
+      - name: Did this push change the release or the installer?
+        id: release
+        if: github.event_name == 'push'
+        run: git diff --name-only HEAD~1 HEAD | grep -qE '\.sig$|^run$' && echo "changed=1" >> "$GITHUB_OUTPUT" || true
+      - name: Record the release in the public transparency log
+        if: steps.release.outputs.changed == '1'
+        uses: actions/attest-build-provenance@v2
+        with:
+          subject-path: |
+            secinspect.py
+            advisories.json
+            run
       - name: Make a fixture repo with a backdoored pin and an archived MCP server
         run: |
           mkdir -p "$RUNNER_TEMP/fixture"

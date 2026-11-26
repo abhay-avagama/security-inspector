@@ -1,10 +1,30 @@
 #!/bin/sh
 # curl -fsSL https://amiaffected.now/run | sh            (args: ... | sh -s -- --html report.html)
-# Downloads secinspect.py + advisories.json to a temp dir, runs them, cleans up.
+# Downloads secinspect.py + advisories.json and their signatures to a temp dir, checks both files against
+# the release key below (kept offline by the maintainer), runs them only if they match, cleans up.
+# The same key is in secinspect.py (SIGNING_KEY) and in SECURITY.md on GitHub: compare them if you like.
 set -e
+SITE="https://amiaffected.now"
+SIGNER="release@amiaffected.now"
+KEY="ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAINNGctHXayqCsdirLrReypA24IT2fPuIWgGM55YfntaM"  # SHA256:J2gtbuBTYxZRpDwEsKM6owYkY38bCClyuybzmeCu01U
 d=$(mktemp -d)
 trap 'rm -rf "$d"' EXIT
-for f in secinspect.py advisories.json; do
-  curl -fsSL "https://amiaffected.now/$f" -o "$d/$f"
+for f in secinspect.py advisories.json secinspect.py.sig advisories.json.sig; do
+  curl -fsSL "$SITE/$f" -o "$d/$f"
 done
+# ssh-keygen checks signatures from OpenSSH 8.1 on; older ones answer "unknown option -- Y"
+if command -v ssh-keygen >/dev/null 2>&1 && ! ssh-keygen -Y verify 2>&1 | grep -q "option -- Y"; then
+  echo "$SIGNER namespaces=\"amiaffected\" $KEY" > "$d/signers"
+  for f in secinspect.py advisories.json; do
+    if ! ssh-keygen -Y verify -f "$d/signers" -I "$SIGNER" -n amiaffected -s "$d/$f.sig" < "$d/$f" >/dev/null 2>&1; then
+      echo "Not running: $f from $SITE doesn't match its signature by the release key." >&2
+      echo "A release may be going out right now, so try again in a few minutes. If it still fails, don't run it;" >&2
+      echo "tell us at https://github.com/abhay-avagama/security-inspector/security" >&2
+      exit 1
+    fi
+  done
+  echo "Signature checked: both files are signed by the release key SHA256:J2gtbuBTYxZRpDwEsKM6owYkY38bCClyuybzmeCu01U" >&2
+else
+  echo "Signature not checked: this machine has no ssh-keygen that can verify one (OpenSSH 8.1+). Running anyway." >&2
+fi
 python3 "$d/secinspect.py" "$@"

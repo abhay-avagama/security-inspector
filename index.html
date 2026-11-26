@@ -42,7 +42,7 @@ h2[id]{scroll-margin-top:4.5rem}
 </div>
 
 <div class="run"><pre id="cmd">curl -fsSL https://amiaffected.now/run | sh</pre><button type="button" onclick="navigator.clipboard.writeText(document.getElementById('cmd').textContent).then(()=>{this.textContent='Copied'})">Copy</button></div>
-<p class="muted">Rather read it first? <a href="/run">run</a> is ten lines; it fetches <a href="/secinspect.py">secinspect.py</a> and <a href="/advisories.json">advisories.json</a> into a temp folder and runs them. Pass options after <code>sh -s --</code>:</p>
+<p class="muted">Rather read it first? <a href="/run">run</a> is thirty lines; it fetches <a href="/secinspect.py">secinspect.py</a> and <a href="/advisories.json">advisories.json</a> into a temp folder, checks both against our offline release key and runs them only if they match. <a href="https://github.com/abhay-avagama/security-inspector/blob/main/SECURITY.md#checking-what-you-were-served">How to check what you were served</a>. Pass options after <code>sh -s --</code>:</p>
 <pre>curl -fsSL https://amiaffected.now/run | sh -s -- --html report.html   # HTML report
 curl -fsSL https://amiaffected.now/run | sh -s -- --docker             # also scan Docker images
 curl -fsSL https://amiaffected.now/run | sh -s -- ~/work               # only search this folder
