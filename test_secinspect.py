@@ -306,6 +306,12 @@ def test_zero_day():
     d = w.kev_digest(kev, date(2026, 11, 13), set())
     assert d[0]["cve"] == "KEV week of 2026-11-02" and "CVE-2026-1" in d[0]["detail"] and "CVE-2026-2" not in d[0]["detail"] and "CVE-2026-3" not in d[0]["detail"]
     assert w.kev_digest(kev, date(2026, 11, 13), {"CVE-2026-1"}) == []
+    # CVEs listed after an issue was opened go to it as a comment; after it was closed, into a new issue; never twice
+    lines = {"CVE-2026-1": "- nvd/CVE-2026-1 pgjdbc SQL injection", "CVE-2026-2": "- nvd/CVE-2026-2 PEM"}
+    assert w.late(lines, [{"number": 38, "state": "OPEN", "body": "- CVE-2026-2", "comments": []}]) == ([lines["CVE-2026-1"]], 38)
+    assert w.late(lines, [{"number": 38, "state": "CLOSED", "body": "- CVE-2026-2", "comments": [{"body": "x"}]}]) == ([lines["CVE-2026-1"]], None)
+    assert w.late(lines, [{"number": 38, "state": "OPEN", "body": "CVE-2026-2", "comments": [{"body": "Also: CVE-2026-1"}]}]) == ([], 38)
+    assert w.cve_line("CVE-2026-1", {"CVE-2026-1": "psqlODBC memory disclosure"}).endswith("CVE-2026-1 psqlODBC memory disclosure")
     feed = {"items": [  # the 13 Nov public exploit for a CVE we already checked, which the queue missed
         {"id": "CVE-2026-6460#2026-11-13T07:56:34Z", "date_modified": "2026-11-13T07:56:34Z", "title": "CVE-2026-6460: ... (Update: proof of concept on GitHub published)"},
         {"id": "CVE-2026-6460", "date_modified": "2026-11-12T14:00:00Z", "title": "CVE-2026-6460: ..."}]}

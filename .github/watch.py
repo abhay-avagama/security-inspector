@@ -154,6 +154,17 @@ def kev_digest(kev, today, known):
              "detail": "\n".join(f'- {v["cveID"]} {v["vendorProject"]} {v["product"]}: {v["vulnerabilityName"]}' for v in week),
              "fix": "", "source": "https://www.cisa.gov/known-exploited-vulnerabilities-catalog"}]
 
+def cve_line(cve, said):
+    return f"- https://nvd.nist.gov/vuln/detail/{cve}" + (f" {said[cve]}" if said.get(cve) else "")
+
+
+def late(cves, issues):
+    """(lines no issue for this key mentions yet, the open issue to add them to or None). An issue stays open for days
+    while its tech's `checked` date stands still, and CVEs listed in that time were never queued."""
+    seen = " ".join(i.get("body", "") + " ".join(c.get("body", "") for c in i.get("comments", [])) for i in issues)
+    return [line for cve, line in cves.items() if cve not in seen], next((i["number"] for i in issues if i.get("state") == "OPEN"), None)
+
+
 def feed_candidates():
     out = []
     for adv in ADVISORIES["versions"] + ADVISORIES["distro"] + ADVISORIES["packages"]:
@@ -168,12 +179,14 @@ def feed_candidates():
         # ponytail: judged against this product's own CVEs, not every CVE we list: GitLab's fix for a git CVE we
         # already had under Git (CVE-2026-105437) is still news for GitLab. Same rule as the scanner's stale check.
         fresh = new_cves(items, adv["checked"], own)
+        # cve.now's title names the product, so a mysql_fdw or psqlODBC CVE in MySQL's or PostgreSQL's feed shows at a glance
+        said = {it["id"].split("#")[0]: it.get("title", "").split(": ", 1)[-1] for it in reversed(items) if it.get("id")}
         if fresh:  # one issue per tech: Chrome alone lists a dozen CVEs per release
             # ponytail: the lead CVE shifts as the feed reorders, so dedupe on tech + checked date instead;
             # each key must match only its own title ("new CVE" vs "CVEs we check") or one kind hides the other
             out.append({"cve": fresh[0], "key": f'"{adv["name"]}" "new CVE" "since {adv["checked"][:10]}"', "title": f'{adv["name"]}: {len(fresh)} new CVE(s) since {adv["checked"][:10]}',
                         "why": f'Listed on cve.now for {adv["name"]} after {adv["checked"][:10]}.',
-                        "detail": "\n".join(f"- https://nvd.nist.gov/vuln/detail/{c}" for c in fresh), "fix": "",
+                        "detail": "\n".join(cve_line(c, said) for c in fresh), "fix": "", "cves": {c: cve_line(c, said) for c in fresh},
                         "source": f'https://cve.now/feed?tech={adv["feed"]}'})
         # cve.now re-lists a CVE as "<id>#<time>" when it changes; for one we already check, that's news like a public exploit
         upd = [it for it in items if "#" in it.get("id", "") and it["id"].split("#")[0] in own
@@ -405,9 +418,10 @@ def proposed(key):
 
 
 def queued(key):
-    out = subprocess.run(["gh", "issue", "list", "--state", "all", "--search", f"{key} in:title", "--json", "number"],
+    """The issues, open or closed, already raised for this key."""
+    out = subprocess.run(["gh", "issue", "list", "--state", "all", "--search", f"{key} in:title", "--json", "number,state,body,comments"],
                          capture_output=True, text=True, check=True).stdout
-    return bool(json.loads(out))
+    return json.loads(out)
 
 
 def main(argv):
@@ -460,10 +474,17 @@ def main(argv):
         elif c.get("apply"):
             if not proposed(c["cve"]):
                 open_pr(c)
-        elif not queued(c.get("key", c["cve"])):
-            labels = ["--label", "zero-day"] if c.get("zero_day") else []
-            subprocess.run(["gh", "issue", "create", "--label", "queue", *labels, "--title", f'{c["cve"]}: {c["title"]}',
-                            "--body", body(c)], check=True)
+        else:
+            issues = queued(c.get("key", c["cve"]))
+            more, open_issue = late(c["cves"], issues) if issues and c.get("cves") else ([], None)
+            if more and open_issue:  # listed after the issue was opened: add them to it
+                subprocess.run(["gh", "issue", "comment", str(open_issue), "--body", "Also listed since:\n\n" + "\n".join(more)], check=True)
+            elif more:  # the issue was closed without moving `checked` past these: they need their own
+                c = {**c, "detail": "\n".join(more), "title": c["title"] + " (after the earlier issue)"}
+            if not issues or (more and not open_issue):
+                labels = ["--label", "zero-day"] if c.get("zero_day") else []
+                subprocess.run(["gh", "issue", "create", "--label", "queue", *labels, "--title", f'{c["cve"]}: {c["title"]}',
+                                "--body", body(c)], check=True)
     print(f"{len(seen)} candidate(s)", file=sys.stderr)
 
 
