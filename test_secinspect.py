@@ -626,6 +626,7 @@ def test_mcp():
 
 
 def test_agent_inventory():
+    import importlib.util
     import secinspect as si
     sp = si.server_package
     assert sp("npx", ["-y", "@modelcontextprotocol/server-github"]) == ("npm", "@modelcontextprotocol/server-github", "")
@@ -683,6 +684,53 @@ def test_agent_inventory():
         assert sorted(sent) == ["@modelcontextprotocol/server-puppeteer@2025.5.12", "@upstash/context7-mcp@1.0.14"], sent
         assert osv == [(si.OSV_ITEM, f"{path} (MCP server browser)", "npm @modelcontextprotocol/server-puppeteer 2025.5.12", "AFFECTED", osv[0][4])], osv
         assert any(f.startswith(si.OSV_ITEM) for f in si.agent_inventory(rows + osv, home)[0]["findings"])
+        # the signed feed, matched offline: pinned version, the version npx last fetched, or no version at all
+        feed, si.AGENT_FEED = si.AGENT_FEED, {"name": "AI agent: MCP server advisories", "packages": [
+            {"ecosystem": "npm", "package": "@modelcontextprotocol/server-puppeteer", "advisories": [
+                {"id": "CVE-2026-1", "severity": "CRITICAL", "ranges": [["0", "2025.6.1"]]}, {"id": "CVE-2026-2", "severity": "LOW", "ranges": [["2026.1.0", ""]]}]},
+            {"ecosystem": "npm", "package": "@upstash/context7-mcp", "advisories": [{"id": "GHSA-a", "severity": "MODERATE", "ranges": [["1.0.0", "1.0.14", "last"]]}]},
+            {"ecosystem": "PyPI", "package": "mcp-server-git", "advisories": [{"id": "CVE-2025-68144", "severity": "MODERATE", "ranges": [["0", "2025.12.18"]]}]},
+            {"ecosystem": "npm", "package": "postmark-mcp", "advisories": [{"id": "MAL-1", "severity": "MALICIOUS", "ranges": [["1.0.16", ""]]}]}]}
+        try:
+            fh = si.feed_hits
+            assert [a["id"] for a in fh("npm", "@modelcontextprotocol/server-puppeteer", "2025.5.12")[0]] == ["CVE-2026-1"]
+            assert fh("npm", "@modelcontextprotocol/server-puppeteer", "2025.6.1")[0] == [] and fh("npm", "@upstash/context7-mcp", "1.0.15")[0] == []
+            assert len(fh("npm", "@upstash/context7-mcp", "1.0.14")[0]) == 1  # the last affected version counts
+            assert fh("npm", "postmark-mcp", "1.0.15")[0] == [] and len(fh("npm", "postmark-mcp", "1.0.18")[0]) == 1  # open-ended
+            assert fh("pypi", "mcp-server-git", "")[0] == [] and len(fh("pypi", "mcp-server-git", "")[1]) == 1 and fh("npm", "unknown", "1.0.0") == ([], [])
+            si.FOUND_MCP[(path, "git")] = {"command": "uvx", "args": ["mcp-server-git"]}
+            si.FOUND_MCP[(path, "mail")] = {"command": "npx", "args": ["-y", "postmark-mcp@1.0.18"]}
+            got = {r[2]: (r[3], r[4]) for r in si.check_agent_feed(home)}
+            assert got["browser: @modelcontextprotocol/server-puppeteer 2025.5.12"] == ("AFFECTED", "1 known (critical): CVE-2026-1; update to 2025.6.1+ and pin it"), got
+            assert got["docs: @upstash/context7-mcp 1.0.14"][0] == "REVIEW" and "no fixed version listed" in got["docs: @upstash/context7-mcp 1.0.14"][1]
+            assert got["git: mcp-server-git"][0] == "REVIEW" and "no version is pinned" in got["git: mcp-server-git"][1]
+            assert got["mail: postmark-mcp 1.0.18"] == ("AFFECTED", "a malicious package: MAL-1; no fixed version listed: remove it or replace it")
+            assert len(got) == 4  # db (a local program) and cloud (remote) have no package to judge
+            inv = {i["name"]: i for i in si.agent_inventory(rows + si.check_agent_feed(home), home)}
+            assert inv["mail"]["status"] == "AFFECTED" and any("malicious" in f for f in inv["mail"]["findings"]) and inv["db"]["status"] == "OK"
+            si.FOUND_MCP.clear()
+            assert si.check_agent_feed(home) == [("AI agent: MCP server advisories", "-", "-", "NOT FOUND", "")]
+        finally:
+            si.AGENT_FEED = feed
+        # the feed as the watch job compiles it from OSV: one entry per CVE, GitHub's record over PyPA's copy
+        spec = importlib.util.spec_from_file_location("watch", os.path.join(os.path.dirname(os.path.abspath(__file__)), ".github", "watch.py"))
+        w = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(w)
+        recs = {"GHSA-1": {"id": "GHSA-1", "aliases": ["CVE-2026-9"], "summary": "path  traversal", "database_specific": {"severity": "HIGH"},
+                           "affected": [{"package": {"name": "x-mcp"}, "ranges": [{"events": [{"introduced": "0"}, {"fixed": "1.2.0"}, {"introduced": "2.0.0"}, {"last_affected": "2.0.3"}]}]},
+                                        {"package": {"name": "other"}, "ranges": [{"events": [{"introduced": "0"}]}]}]},
+                "PYSEC-1": {"id": "PYSEC-1", "aliases": ["CVE-2026-9"], "affected": [{"package": {"name": "x-mcp"}, "ranges": [{"events": [{"introduced": "0"}, {"fixed": "1.2.0"}]}]}]},
+                "MAL-1": {"id": "MAL-1", "summary": "Malicious code in x-mcp", "affected": [{"package": {"name": "x-mcp"}, "versions": ["9.9.9"]}]}}
+        fake = lambda url, body=None: {"results": [{"vulns": [{"id": i} for i in recs]} if q["package"]["name"] == "x-mcp" else {} for q in body["queries"]]} if body else recs[url.rsplit("/", 1)[1]]
+        pk = w.agent_feed({"npm": ["x-mcp", "quiet-mcp"]}, fake)
+        assert [p["package"] for p in pk] == ["x-mcp"] and [(a["id"], a["osv"], a["severity"]) for a in pk[0]["advisories"]] == [("CVE-2026-9", "GHSA-1", "HIGH"), ("MAL-1", "MAL-1", "MALICIOUS")], pk
+        assert pk[0]["advisories"][0]["ranges"] == [["0", "1.2.0"], ["2.0.0", "2.0.3", "last"]] and pk[0]["advisories"][0]["summary"] == "path traversal"
+        assert w.agent_feed_candidates(pk, pk) == [] and "x-mcp CVE-2026-9" in w.agent_feed_candidates([], pk)[0]["title"]
+        with tempfile.TemporaryDirectory() as t:  # the block is rewritten in place and the file still parses, eol untouched
+            shutil.copy(os.path.join(os.path.dirname(os.path.abspath(__file__)), "advisories.json"), t)
+            w.refresh_agent_feed(pk, os.path.join(t, "advisories.json"))
+            new, old = json.load(open(os.path.join(t, "advisories.json"))), json.load(open(os.path.join(os.path.dirname(os.path.abspath(__file__)), "advisories.json")))
+            assert new["agent_feed"]["packages"] == pk and new["eol"] == old["eol"] and new["agent_feed"]["watch"] == old["agent_feed"]["watch"]
         si.FOUND_MCP.clear()
 
 

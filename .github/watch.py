@@ -12,7 +12,7 @@ the CVE id in its title means it's already queued, so reruns never duplicate.
 Changes that need no judgement (end-of-life dates, a new Electron major) come as a draft PR with the edit made,
 labelled `queue`; the release is still signed by hand after merging, so nothing goes live by itself.
 
-Usage: python3 .github/watch.py [--dry-run] [--days 14] [--refresh-eol]   (needs `gh` logged in unless --dry-run)
+Usage: python3 .github/watch.py [--dry-run] [--days 14] [--refresh-eol] [--refresh-agent-feed]   (needs `gh` logged in unless --dry-run)
 """
 import argparse
 import hashlib
@@ -365,6 +365,91 @@ def refresh_eol(apis, path=ADVISORIES_JSON):
         fh.write(text[:text.index('\n  "eol": ')] + '\n  "eol": ' + eol_block(eol) + "\n}\n")
 
 
+# --- Agent feed: known advisories for MCP servers and agent tools, compiled from OSV so the scanner can match offline ---
+OSV_QUERY, OSV_VULN = "https://api.osv.dev/v1/querybatch", "https://api.osv.dev/v1/vulns/{}"
+
+
+def osv_post(url, body=None):
+    req = urllib.request.Request(url, json.dumps(body).encode() if body else None,
+                                 {"Content-Type": "application/json", "User-Agent": "amiaffected-watch"})
+    with urllib.request.urlopen(req, timeout=60) as r:
+        return json.load(r)
+
+
+def feed_advisory(d, name):
+    """One OSV record as the feed keeps it: id (the CVE when there is one), severity, [first affected, first fixed] ranges
+    for this package ("" = no fix listed; a third item "last" = the second is the last affected version) and a short summary."""
+    ranges = []
+    for a in d.get("affected", []):
+        if a.get("package", {}).get("name") != name:
+            continue
+        for r in a.get("ranges", []):
+            lo = None
+            for ev in r.get("events", []):
+                if "introduced" in ev:
+                    lo = ev["introduced"]
+                elif lo is not None and "fixed" in ev:
+                    ranges.append([lo, ev["fixed"]]); lo = None
+                elif lo is not None and "last_affected" in ev:
+                    ranges.append([lo, ev["last_affected"], "last"]); lo = None
+            if lo is not None:
+                ranges.append([lo, ""])
+        if not a.get("ranges"):  # a malicious package lists versions, or nothing: every version
+            ranges.append(["0", ""])
+    cve = next((x for x in d.get("aliases", []) if x.startswith("CVE-")), "")
+    sev = "MALICIOUS" if d["id"].startswith("MAL-") else str((d.get("database_specific") or {}).get("severity", "")).upper()
+    return {"id": cve or d["id"], "osv": d["id"], "severity": sev, "ranges": sorted(ranges),
+            "summary": " ".join((d.get("summary") or d.get("details") or "").split())[:110]}
+
+
+def agent_feed(watch, fetch=osv_post):
+    """[{ecosystem, package, advisories}] for the watched packages that have any, from OSV. Only public package names are sent."""
+    out = []
+    for eco, names in sorted(watch.items()):
+        names = sorted(set(names))
+        res = fetch(OSV_QUERY, {"queries": [{"package": {"name": n, "ecosystem": eco}} for n in names]})["results"]
+        for n, r in zip(names, res):
+            got = {}
+            for i in sorted(v["id"] for v in r.get("vulns", [])):
+                a = feed_advisory(fetch(OSV_VULN.format(i)), n)
+                # PyPA re-issues GitHub's advisories as PYSEC-…: one entry per CVE, GitHub's first since it rates severity
+                if a["ranges"] and (a["id"] not in got or (not got[a["id"]]["severity"] and a["severity"])):
+                    got[a["id"]] = a
+            if got:
+                out.append({"ecosystem": eco, "package": n, "advisories": sorted(got.values(), key=lambda a: a["id"])})
+    return out
+
+
+def feed_block(feed):
+    """The agent_feed section, one package per line, in the hand-kept layout of advisories.json."""
+    top = {k: v for k, v in feed.items() if k != "packages"}
+    lines = ",\n".join("      " + json.dumps(p, ensure_ascii=False) for p in feed["packages"])
+    return json.dumps(top, ensure_ascii=False)[:-1] + ', "packages": [\n' + lines + "\n    ]}"
+
+
+def refresh_agent_feed(packages, path=ADVISORIES_JSON):
+    """Rewrites only the agent_feed block of advisories.json (it sits just before eol, the last key)."""
+    text = open(path).read()
+    feed = {**json.loads(text)["agent_feed"], "packages": packages, "checked": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")}
+    start, end = text.index('\n  "agent_feed": '), text.index('\n  "eol": ')
+    with open(path, "w") as fh:
+        fh.write(text[:start] + '\n  "agent_feed": ' + feed_block(feed) + "," + text[end:])
+
+
+def agent_feed_candidates(current, packages):
+    """A draft PR when OSV's advisories for the watched agent packages differ from the signed feed."""
+    ids = lambda ps: {(p["ecosystem"], p["package"], a["id"]) for p in ps for a in p["advisories"]}
+    if packages == current:
+        return []
+    new = sorted(ids(packages) - ids(current))
+    key = hashlib.sha256(json.dumps(packages, sort_keys=True).encode()).hexdigest()[:8]
+    what = "; ".join(f"{n} {i}" for _, n, i in new[:4]) + (f" and {len(new) - 4} more" if len(new) > 4 else "") if new else "ranges or severities changed"
+    return [{"cve": f"Agent feed {key}", "title": f"MCP server and agent advisories changed: {what}",
+             "why": "OSV lists advisories for watched agent packages that the signed feed doesn't have, or has differently.",
+             "detail": "The PR runs `python3 .github/watch.py --refresh-agent-feed`. Check the diff: new packages, ranges and severities.",
+             "fix": "", "source": "https://osv.dev", "apply": lambda: refresh_agent_feed(packages)}]
+
+
 def eol_apis():
     apis = {}
     for p in ADVISORIES["eol"]["products"]:
@@ -429,9 +514,12 @@ def main(argv):
     ap.add_argument("--dry-run", action="store_true", help="print candidates, don't open issues")
     ap.add_argument("--days", type=int, default=14, help="how far back to look in CISA KEV")
     ap.add_argument("--refresh-eol", action="store_true", help="rewrite advisories.json's end-of-life dates from endoflife.date")
+    ap.add_argument("--refresh-agent-feed", action="store_true", help="rewrite advisories.json's agent_feed from OSV")
     args = ap.parse_args(argv)
     if args.refresh_eol:
         return refresh_eol(eol_apis())
+    if args.refresh_agent_feed:
+        return refresh_agent_feed(agent_feed(ADVISORIES["agent_feed"]["watch"]))
     known = known_cves()
     since = (date.today() - timedelta(days=args.days)).isoformat()
     zsince = (date.today() - timedelta(days=3)).isoformat()  # vendor notes are same-day; KEV can lag weeks
@@ -447,6 +535,10 @@ def main(argv):
     except Exception as e:
         print(f"skip Electron releases: {e}", file=sys.stderr)
     cands += eol_candidates(ADVISORIES["eol"]["products"], eol_apis())
+    try:
+        cands += agent_feed_candidates(ADVISORIES["agent_feed"]["packages"], agent_feed(ADVISORIES["agent_feed"]["watch"]))
+    except Exception as e:
+        print(f"skip agent feed: {e}", file=sys.stderr)
     checked = {a["name"]: a.get("checked") for a in ADVISORIES["versions"] + ADVISORIES["distro"] + ADVISORIES["packages"]}
     for name, (url, pattern) in VENDOR_FEEDS.items():
         try:

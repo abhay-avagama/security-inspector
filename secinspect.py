@@ -340,6 +340,45 @@ def server_summary(name, e, home=HOME):
     return out
 
 
+AGENT_FEED = ADVISORIES.get("agent_feed", {"name": "AI agent: MCP server advisories", "packages": []})
+FEED_RANK = {"MALICIOUS": 0, "CRITICAL": 0, "HIGH": 1, "MODERATE": 2, "LOW": 3}  # 0 and 1 are AFFECTED, like --osv
+
+
+def feed_hits(eco, package, version):
+    """The feed's advisories for this package that cover this version, and all of them (for a version we can't tell).
+    A range is [first affected, first fixed]; "" = no fix listed; a third item = the second is the last affected version."""
+    key = lambda v: tuple(int(x) for x in re.findall(r"\d+", v))  # ponytail: digits only, so 2.0.0a1 sorts after 2.0.0
+    entry = next((p for p in AGENT_FEED["packages"] if p["package"] == package and p["ecosystem"].lower() == eco.lower()), None)
+    every = entry["advisories"] if entry else []
+    covers = lambda lo, hi, last=None: key(lo) <= key(version) and (not hi or key(version) < key(hi) or (last and key(version) == key(hi)))
+    return [a for a in every if version and any(covers(*r) for r in a["ranges"])], every
+
+
+def check_agent_feed(home=HOME):
+    """Each configured MCP server's package against the signed feed: offline, at the pinned version or the one npx last fetched."""
+    name, rows, seen = AGENT_FEED["name"], [], 0
+    for (path, server), e in sorted(FOUND_MCP.items()):
+        eco, package, version = server_package(e.get("command"), e.get("args")) or ("", "", "")
+        if not package:
+            continue
+        seen += 1
+        version = version or (npx_cached(package, home) if eco == "npm" else "")
+        hits, every = feed_hits(eco, package, version)
+        fixes = [r[1] for a in (hits or every) for r in a["ranges"] if r[1] and len(r) == 2]
+        fix = f"update to {max(fixes, key=vkey)}+ and pin it" if fixes else "no fixed version listed: remove it or replace it"
+        if hits:
+            worst = min(FEED_RANK.get(a["severity"], 9) for a in hits)
+            label = "a malicious package" if any(a["severity"] == "MALICIOUS" for a in hits) else \
+                f"{len(hits)} known ({ {0: 'critical', 1: 'high', 2: 'medium', 3: 'low'}.get(worst, 'unrated')})"
+            ids = ", ".join(a["id"] for a in sorted(hits, key=lambda a: FEED_RANK.get(a["severity"], 9))[:3]) + (", …" if len(hits) > 3 else "")
+            rows.append((name, path, f"{server}: {package} {version}", "AFFECTED" if worst <= 1 else "REVIEW", f"{label}: {ids}; {fix}"))
+        elif every and not version:
+            rows.append((name, path, f"{server}: {package}", "REVIEW",
+                         f"{len(every)} advisories are known for this package and no version is pinned, so it can't be judged: {fix}"))
+    return rows or [(name, f"{seen} MCP server packages" if seen else "-", "-", "OK" if seen else "NOT FOUND",
+                     "none has a known advisory in the feed" if seen else "")]
+
+
 def agent_inventory(rows, home=HOME):
     """One entry per MCP server, skill, hook and permission setting: everything the agents on this machine can load or
     run, with the findings the checks above raised against each. Built from what the scan already read."""
@@ -350,6 +389,7 @@ def agent_inventory(rows, home=HOME):
         mine = [r for r in rows if r[1].startswith(path) and r[3] in ("AFFECTED", "REVIEW") and it["package"]
                 and (r[0] == "AI agent: unpinned MCP servers" and r[2].startswith(it["package"])
                      or r[0] == MCP["name"] and it["package"].endswith(r[2])
+                     or r[0] == AGENT_FEED["name"] and r[2].startswith(f"{name}: {it['package']}")
                      or r[0] == OSV_ITEM and f" {it['package']} " in f" {r[2]} " and r[1].endswith(f"(MCP server {name})"))]
         inv.append({**it, "where": path, "status": worst(mine), "findings": sorted({f"{r[0]}: {r[4]}" for r in mine})})
     for d in skill_dirs(home, FOUND_SKILL_DIRS):
@@ -1908,6 +1948,9 @@ def fix_for(item, where, note=""):
         return ("Read what changed in your skills", "open each skill listed and diff it against its source; remove it if you can't explain the change")
     if item == "AI agent: hooks":
         return ("Check what each hook runs", "read the hooks.json listed; remove the plugin if a hook runs something you don't recognise")
+    if item == AGENT_FEED["name"]:
+        return ("Update MCP servers that have known advisories",
+                "in the MCP config listed, set the package to the fixed version in the note, e.g. npx -y <package>@<fixed version>, and restart the agent")
     if item == "AI agent: unpinned MCP servers":
         return ("Pin MCP server versions", "replace @latest or a bare package name with an exact version, e.g. npx -y @playwright/mcp@0.0.84")
     if item == "AI agent: permissions":
@@ -2016,7 +2059,7 @@ def html_report(rows, path):
                  f'<ul class="leaves">{leaves}</ul></details>')
 
     sources = "".join(f'<li><a href="{e(a["source"])}">{e(a["name"])}</a>: {e(a["about"])}</li>'
-                      for a in ADVISORIES["versions"] + DISTRO + PACKAGES + ADVISORIES.get("iocs", []) + [CHROMIUM, ELECTRON, MCP, AGENT, SKILLS, {"name": "eMudhra CA", **ADVISORIES["ca"]}])
+                      for a in ADVISORIES["versions"] + DISTRO + PACKAGES + ADVISORIES.get("iocs", []) + [CHROMIUM, ELECTRON, MCP, AGENT_FEED, AGENT, SKILLS, {"name": "eMudhra CA", **ADVISORIES["ca"]}] if a.get("source"))
     when = datetime.datetime.now().strftime("%d %b %Y, %H:%M")
     open(path, "w").write(f"""<!doctype html><html><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1"><title>Am I affected? — report</title><style>
@@ -2705,12 +2748,13 @@ def main(argv):
         # images are only listed by digest; --docker reads them)
         rows = scan_files(roots) + check_docker(args.docker)
         rows += check_skills(home=os.path.join(roots[0], ".no-home"), extra=FOUND_SKILL_DIRS)
+        rows += check_agent_feed(os.path.join(roots[0], ".no-home"))  # a repo's .mcp.json: pinned versions only, not this machine's npx cache
         rows += check_osv() if args.osv else []
     else:
         offline = bool(args.no_update_check or os.environ.get("SECINSPECT_NO_UPDATE_CHECK"))
         rows = [r for adv in ADVISORIES["versions"] for r in check_version(adv)] + check_distro(offline=offline)
         rows += check_chromium_cache() + check_electron() + scan_files(roots) + check_docker(args.docker) + check_stores()
-        rows += check_mcp(rows) + check_iocs() + check_skills(extra=FOUND_SKILL_DIRS) + check_hooks()
+        rows += check_mcp(rows) + check_agent_feed() + check_iocs() + check_skills(extra=FOUND_SKILL_DIRS) + check_hooks()
         rows += check_osv() if args.osv else []
         try:
             rows += os_row(open("/etc/os-release").read())

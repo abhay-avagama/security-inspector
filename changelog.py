@@ -199,12 +199,24 @@ def watchlist():
     servers += card("Official example MCP servers, now archived", "REVIEW",
                     f"These <code>@modelcontextprotocol</code> servers were archived in May 2025 and get no security fixes, per {mcp_src}.",
                     "their names in an MCP config", "Switch to the vendor's own server, for example GitHub's for <code>server-github</code>.", mcp["deprecated"])
+    feed = ADVISORIES["agent_feed"]
+    bad = [p for p in feed["packages"] if any(a["severity"] == "MALICIOUS" for a in p["advisories"])]
+    if bad:
+        servers += card("Malicious packages", "AFFECTED", f"Published with malicious code, per {src(feed['source'], 'OSV')}.",
+                        "the package in an MCP config, at an affected version", "Remove it, then rotate any keys the agent could reach.",
+                        [p["package"] for p in bad])
+    servers += card("MCP servers and agent tools with known advisories", "AFFECTED",
+                    f"Each has published security advisories, compiled from {src(feed['source'], 'OSV')} into the signed data the tool reads, so the match happens on your machine. "
+                    "The number is how many advisories; whether you are affected depends on your version.",
+                    "the package and version in an MCP config, or the version npx last fetched when none is pinned",
+                    "Update to the fixed version the tool names, and pin it. High and critical ones are reported as affected, the rest for review.",
+                    [f"{p['package']} ({len(p['advisories'])})" for p in feed["packages"] if p not in bad])
     ext = "".join(card(e(x["name"]), "AFFECTED", f'{e(x["about"])}. {src(x["source"], "The vendor notice")}.',
                        "its SSH key, files and launch agent on disk, and the bad versions if still installed",
                        e(x["cleanup"][0].upper() + x["cleanup"][1:]) + ".")
                   for x in iocs)
     patterns = "".join(f"<div><b>{e(k[0].upper() + k[1:])}</b><span>{e(v[0].upper() + v[1:])}</span></div>\n" for k, v in SKILL_NOTES.items())
-    count = len(sk["bad_authors"]) + len(sk["bad_names"]) + len(sk["bad_strings"]), len(mcp["rce"]) + len(mcp["deprecated"]), len(iocs)
+    count = len(sk["bad_authors"]) + len(sk["bad_names"]) + len(sk["bad_strings"]), len(mcp["rce"]) + len(mcp["deprecated"]) + len(ADVISORIES["agent_feed"]["packages"]), len(iocs)
     css = """
 .lede{font-size:1.1rem}
 nav.jump{display:flex;flex-wrap:wrap;gap:.4rem 1.2rem;margin:1.5rem 0 0;font-size:15px}nav.jump a{text-decoration:none}nav.jump span{color:var(--muted)}
