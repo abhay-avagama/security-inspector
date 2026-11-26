@@ -269,6 +269,115 @@ def unpinned(command, args):
     return spec if version in ("", "latest", "next") else None
 
 
+FOUND_MCP = {}  # (config path, server name) -> its entry; filled as configs are read, like FOUND_LOCKFILES
+MCP_KEYS = ("mcpServers", "servers", "mcp_servers", "context_servers")  # Claude and Cursor, VS Code, Codex, Zed
+
+
+def named_servers(obj):
+    """(name, entry) for every MCP server in a config, wherever its servers map sits (~/.claude.json has one per project)."""
+    if isinstance(obj, dict):
+        for k, v in obj.items():
+            if k in MCP_KEYS and isinstance(v, dict):
+                yield from ((n, e) for n, e in v.items()
+                            if isinstance(e, dict) and (isinstance(e.get("command"), str) or isinstance(e.get("url"), str)))
+            else:
+                yield from named_servers(v)
+    elif isinstance(obj, list):
+        for v in obj:
+            yield from named_servers(v)
+
+
+def server_package(command, args):
+    """(ecosystem, package, version or "") for a server started through npx / bunx / pnpm dlx / uvx; None for a local program.
+    ponytail: docker run images aren't parsed (its options take values, so the image isn't findable by position)."""
+    args = [a for a in (args or []) if isinstance(a, str)]
+    base = os.path.basename(command or "")
+    if base in ("pnpm", "yarn") and args[:1] == ["dlx"]:
+        base, args = "npx", args[1:]
+    if base not in ("npx", "bunx", "uvx"):
+        return None
+    flag = next((f for f in (("--from",) if base == "uvx" else ("-p", "--package")) if f in args[:-1]), None)
+    spec = args[args.index(flag) + 1] if flag else next((a for a in args if not a.startswith("-")), None)
+    if not spec:
+        return None
+    if base == "uvx":
+        m = re.fullmatch(r"([A-Za-z0-9][\w.-]*)(?:\[[^\]]*\])?(?:(?:==|@)(\d[\w.!+]*))?", spec)
+        return ("PyPI", m[1], m[2] or "") if m else None
+    name, _, version = spec[1:].partition("@") if spec.startswith("@") else spec.partition("@")
+    name = "@" + name if spec.startswith("@") else name
+    return ("npm", name, version if re.fullmatch(r"\d[\w.+-]*", version) else "") if re.fullmatch(r"[@\w./-]+", name) else None
+
+
+def npx_cached(name, home=HOME):
+    """The newest version of a package in npx's cache: what an unpinned server last ran. npx may fetch a newer one next time."""
+    found = []
+    for p in glob.glob(os.path.join(home, ".npm", "_npx", "*", "node_modules", *name.split("/"), "package.json")):
+        try:
+            found.append(str(json.load(open(p)).get("version", "")))
+        except (OSError, ValueError, AttributeError):
+            pass
+    return max((v for v in found if re.fullmatch(r"\d[\w.+-]*", v)), key=nums, default="")
+
+
+def server_summary(name, e, home=HOME):
+    """What one MCP server entry runs, without its secrets: env and header names only, the URL's host only, and for a
+    local program its name and first argument (later arguments can carry tokens or connection strings)."""
+    out = {"kind": "MCP server", "name": name, "package": "", "ecosystem": "", "version": "", "last_fetched": "", "pinned": None, "url": "",
+           "env": sorted(str(k) for d in (e.get("env"), e.get("headers")) if isinstance(d, dict) for k in d)}
+    if isinstance(e.get("url"), str):
+        u = urllib.parse.urlsplit(e["url"])
+        out["url"] = out["runs"] = f"{u.scheme}://{u.hostname or ''}"
+        return out
+    pkg = server_package(e.get("command"), e.get("args"))
+    if pkg:
+        eco, pname, version = pkg
+        out.update(ecosystem=eco, package=pname, version=version, pinned=bool(version),
+                   last_fetched="" if version or eco != "npm" else npx_cached(pname, home))
+        out["runs"] = f"{eco} {pname}" + (f"@{version}" if version else " (no version pinned" + (f", last fetched {out['last_fetched']})" if out["last_fetched"] else ")"))
+    else:
+        first = next((a for a in (e.get("args") or []) if isinstance(a, str) and not a.startswith("-") and "://" not in a and "=" not in a), "")
+        out["runs"] = (os.path.basename(e["command"]) + " " + first).strip()
+    return out
+
+
+def agent_inventory(rows, home=HOME):
+    """One entry per MCP server, skill, hook and permission setting: everything the agents on this machine can load or
+    run, with the findings the checks above raised against each. Built from what the scan already read."""
+    worst = lambda rs: min((r[3] for r in rs), key=STATUSES.index, default="OK")
+    inv = []
+    for (path, name), e in sorted(FOUND_MCP.items()):
+        it = server_summary(name, e, home)
+        mine = [r for r in rows if r[1].startswith(path) and r[3] in ("AFFECTED", "REVIEW") and it["package"]
+                and (r[0] == "AI agent: unpinned MCP servers" and r[2].startswith(it["package"])
+                     or r[0] == MCP["name"] and it["package"].endswith(r[2])
+                     or r[0] == OSV_ITEM and f" {it['package']} " in f" {r[2]} " and r[1].endswith(f"(MCP server {name})"))]
+        inv.append({**it, "where": path, "status": worst(mine), "findings": sorted({f"{r[0]}: {r[4]}" for r in mine})})
+    for d in skill_dirs(home, FOUND_SKILL_DIRS):
+        mine = [r for r in rows if r[0] == SKILLS["name"] and r[3] in ("AFFECTED", "REVIEW") and (r[1] == d or r[1].startswith(d + os.sep))]
+        m = re.search(r"/plugins/cache/([^/]+)/([^/]+)/([^/]+)/", d + "/")
+        inv.append({"kind": "skill", "name": os.path.basename(d), "where": d, "version": m[3] if m else "",
+                    "runs": f"plugin {m[2]} ({m[1]})" if m else "home folder" if d.startswith(home + os.sep + ".") else "project",
+                    "status": worst(mine), "findings": sorted({f"{r[2]}: {r[4]}" for r in mine})})
+    for item, kind in (("AI agent: hooks", "hook"), ("AI agent: permissions", "permission")):
+        inv += [{"kind": kind, "name": r[2], "where": r[1], "runs": "runs on its own" if kind == "hook" else "setting",
+                 "status": r[3], "findings": [r[4]]} for r in rows if r[0] == item and r[3] == "REVIEW"]
+    return inv
+
+
+def inventory_table(inv):
+    """The inventory as lines for the terminal: what there is, then one line each."""
+    if not inv:
+        return ["Agent inventory: no MCP servers, skills, hooks or agent settings found"]
+    count = lambda k: sum(i["kind"] == k for i in inv)
+    out = [f"Agent inventory: {count('MCP server')} MCP servers, {count('skill')} skills, {count('hook')} hooks, "
+           f"{count('permission')} permission settings to review"]
+    quiet = sum(i["kind"] == "skill" and i["status"] == "OK" for i in inv)  # hundreds on a busy machine: counted, not listed
+    cells = [(i["kind"], i["name"][:40], i["runs"][:60], i["status"], i["where"]) for i in inv if i["kind"] != "skill" or i["status"] != "OK"]
+    widths = [max(len(str(c[n])) for c in cells) for n in range(4)] if cells else []
+    return out + ["  ".join(str(c).ljust(w) for c, w in zip(row, widths)) + "  " + row[4] for row in cells] \
+        + ([f"{quiet} skills with nothing flagged aren't listed; --json FILE has every one"] if quiet else [])
+
+
 def load_config(path, data):
     try:
         if path.endswith(".toml"):
@@ -280,12 +389,14 @@ def load_config(path, data):
 
 
 def agent_config_rows(path, data):
-    if re.search(r"/plugins/marketplaces/|/\.tmp/", path):  # catalogs of plugins you could install, not ones that run
+    # catalogs of plugins you could install, and package caches holding a package's own sample config: not ones that run
+    if re.search(r"/plugins/marketplaces/|/\.tmp/|/\.bun/install/cache/|/\.npm/|/node_modules/", path):
         return []
     rows = mcp_rows(path, data)
     cfg = load_config(path, data)
     if not isinstance(cfg, dict):
         return rows
+    FOUND_MCP.update({(path, n): e for n, e in named_servers(cfg)})
     for spec in sorted({unpinned(e["command"], e.get("args")) for e in server_entries(cfg)} - {None}):
         rows.append(("AI agent: unpinned MCP servers", path, spec, "REVIEW",
                      "starts whatever version was published last: pin an exact version"))
@@ -1325,6 +1436,11 @@ def check_osv(fetch=osv_fetch):
             where.setdefault(k, []).append(p)
     for site, n, v in FOUND_DIST_INFO:
         where.setdefault(("PyPI", n, v), []).append(site)
+    for (path, name), e in sorted(FOUND_MCP.items()):  # an MCP server's own package: the pinned version, or the one npx last fetched
+        eco, pname, version = server_package(e.get("command"), e.get("args")) or ("", "", "")
+        version = version or (npx_cached(pname, HOME) if eco == "npm" else "")
+        if version:
+            where.setdefault((eco, pname, version), []).append(f"{path} (MCP server {name})")
     if not where:
         return [(OSV_ITEM, "-", "-", "NOT FOUND", "no lockfiles or installed Python packages found")]
     keys = sorted(where)
@@ -2530,6 +2646,9 @@ def main(argv):
     ap.add_argument("dirs", nargs="*", help="search only these folders for Python envs, lockfiles and CA bundles")
     ap.add_argument("--docker", action="store_true", help="also look inside every local Docker image (slow)")
     ap.add_argument("--html", metavar="FILE", help="also write an HTML report")
+    ap.add_argument("--json", metavar="FILE", help="also write the findings and the agent inventory as JSON")
+    ap.add_argument("--agents", action="store_true", help="also list every MCP server, skill, hook and agent permission setting "
+                                                          "found: what it runs, whether it is pinned, and what was flagged")
     ap.add_argument("--watch", metavar="STATE_FILE",
                     help="for cron: compare with the last run recorded in STATE_FILE and report only what changed")
     ap.add_argument("--notify", metavar="URL", help="with --watch: post changes to this webhook (Slack, Discord, Teams or any JSON endpoint)")
@@ -2611,6 +2730,14 @@ def main(argv):
     widths = [max(len(str(r[i])) for r in rows) for i in range(4)]
     for r in rows:
         print("  ".join(str(c).ljust(w) for c, w in zip(r, widths)), r[4])
+    inventory = agent_inventory(rows, os.path.join(roots[0], ".no-home") if args.files_only else HOME) if args.agents or args.json else []
+    if args.agents:
+        print("\n" + "\n".join(inventory_table(inventory)))
+    if args.json:
+        json.dump({"release": release_line(), "generated": datetime.datetime.now(datetime.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
+                   "machine": platform.node(), "findings": [dict(zip(("item", "where", "found", "status", "note"), r)) for r in rows],
+                   "agents": inventory}, open(args.json, "w"), indent=1)
+        print(f"JSON written to {os.path.abspath(args.json)}", file=sys.stderr)
     print("\n" + release_line(), file=sys.stderr)  # stderr, so the table on stdout stays clean for scripts
     if not args.files_only:  # not in CI or cron
         print(share_line(rows) + RUN_CMD, file=sys.stderr)
