@@ -36,6 +36,10 @@ h2[id]{scroll-margin-top:4.5rem}
 <main>
 <h1>Changelog</h1>
 <p>What the tool checks, and when each check went live. New exploited bugs usually land within a day of disclosure. Follow along with the <a href="/changelog.xml">RSS feed</a>.</p>
+<h2 id="2026-11-26">26 November 2026</h2>
+<ul class="log">
+<li><b>Chrome&#x27;s 23 Nov fix, PHP&#x27;s November releases, GitLab, Apache Roller and MySQL&#x27;s November update</b>. Chrome 158.0.8127.88 (23 Nov) fixes CVE-2026-134401, a critical bug that runs code outside the sandbox, and is now the minimum, with Edge 158.0.4370.45 and Brave 1.100.59 for the same fix. PHP 8.5.13, 8.4.28, 8.3.37 and 8.2.36 (19 Nov) fix 17 bugs, the worst a request-smuggling bug in PHP-FPM; 8.6.0 already has the fixes. GitLab is flagged below 19.6.2, 19.5.9 or 19.4.11. New: Apache Roller below 6.1.6, whose XML-RPC bug is exploited, found from the version inside roller.war. Oracle&#x27;s 17 Nov MySQL update isn&#x27;t public yet and affects 8.4.13 and 9.7.4, so MySQL is flagged for review with what to do until it ships. PostgreSQL 19 counts as fixed. Wars and jars over 50 MB were skipped before and are now checked. <a class="muted" href="https://github.com/abhay-avagama/security-inspector/commit/5ee0b29">5ee0b29</a></li>
+</ul>
 <h2 id="2026-11-16">16 November 2026</h2>
 <ul class="log">
 <li><b>Chrome&#x27;s 11 Nov fixes, PostgreSQL&#x27;s November release, FrankenPHP and GPUStack</b>. Microsoft&#x27;s notes now say desktop Edge got the fix for the exploited Chrome bug in 157.0.4341.46 on 9 Nov, so Edge from that build on is no longer flagged for it. Chrome 157.0.8103.78 (11 Nov) fixes 83 more bugs, none known exploited, and is now the minimum, with Edge 157.0.4341.57 and Brave 1.99.57 for the same fixes. PostgreSQL 18.7, 17.12, 16.16, 15.20 and 14.25 fix 53 CVEs, most of them code execution by a user who can create objects, and 14.25 is the last release of 14. New: FrankenPHP below 1.13.5, and GPUStack below 2.3.1, whose admin bypass is exploited. <a class="muted" href="https://github.com/abhay-avagama/security-inspector/commit/7669cb5">7669cb5</a></li>
