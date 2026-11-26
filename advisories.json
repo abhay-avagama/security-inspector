@@ -1780,6 +1780,10 @@
         "*": "unfixed"
       },
       "status": "REVIEW",
+      "awaiting": {
+        "url": "https://ubuntu.com/security/cves/CVE-2026-114952.json",
+        "regex": "\"status\":\\s*\"released\""
+      },
       "mitigation": "keep port 3306 reachable only from the hosts that need it, don't point MySQL client programs at servers you don't control, and update when your distro or Oracle's repo ships the 17 Nov fixes",
       "after_fix": "restart mysqld",
       "checked": "2026-11-26T09:00:00Z"

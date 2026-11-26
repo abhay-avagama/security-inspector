@@ -294,6 +294,10 @@ def test_zero_day():
              "... Microsoft Edge for Stable (Version 156.0.4314.58)")
     assert w.awaiting_candidates(notes, edge) == []  # Android alone isn't the desktop fix
     assert w.awaiting_candidates("Microsoft Edge for Stable (Version 157.0.4341.61) " + notes, edge)[0]["cve"] == "Microsoft Edge 157.0.4341.61"
+    # a fix nobody ships yet (MySQL's 17 Nov update): queued once Ubuntu's CVE page says released
+    nov = next(a for a in w.ADVISORIES["distro"] if a["name"] == "MySQL (17 Nov 2026 patch update)")
+    assert w.awaiting_candidates('{"status": "active", "packages": [{"statuses": [{"status": "needs-triage"}]}]}', nov) == []
+    assert w.awaiting_candidates('{"statuses": [{"status": "released", "description": "8.4.14-0ubuntu0.26.04.1"}]}', nov)[0]["title"].endswith("a fix has shipped")
     from datetime import date
     kev = {"vulnerabilities": [
         {"cveID": "CVE-2026-1", "vendorProject": "Acme", "product": "Router", "vulnerabilityName": "RCE", "dateAdded": "2026-11-04"},

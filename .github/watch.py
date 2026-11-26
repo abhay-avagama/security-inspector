@@ -293,6 +293,11 @@ def bump_electron(old, newest, root=ROOT):
 def awaiting_candidates(page, adv):
     """The vendor said a fix is coming (Edge): queue once their notes list a newer build than the last affected one."""
     w = adv["awaiting"]
+    if "above" not in w:  # no version to beat (MySQL's fix isn't public): queue once the distro's CVE page says released
+        return [{"cve": f'{adv["name"]} fix', "key": f'"{adv["name"]}" "has shipped"', "title": f'{adv["name"]}: a fix has shipped',
+                 "why": f'The {adv["name"]} entry is REVIEW because no fix was public; {w["url"]} now lists one.',
+                 "detail": "Put the fixed builds in the entry's `fixed` map (and `upstream_fixed`), drop `status` and `awaiting`.",
+                 "fix": "", "source": w["url"]}] if re.search(w["regex"], page) else []
     newer = sorted({v for v in re.findall(w["regex"], page) if nums(v) > nums(w["above"])}, key=nums)
     if not newer:
         return []
@@ -438,7 +443,7 @@ def main(argv):
         cands += scheduled_candidates(scheduled(date.today(), get_text(PG_ROADMAP)), date.today())
     except Exception as e:
         print(f"skip schedules: {e}", file=sys.stderr)
-    for adv in ADVISORIES["versions"]:
+    for adv in ADVISORIES["versions"] + ADVISORIES["distro"]:
         if adv.get("awaiting"):
             try:
                 cands += awaiting_candidates(get_text(adv["awaiting"]["url"]), adv)
