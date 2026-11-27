@@ -508,6 +508,9 @@ def test_old_brew_bundle():
             assert "brew upgrade doesn't reach" in si.fix_hint("/usr/local/etc/openssl/cert.pem")
             assert si.fix_for("eMudhra CA", "/usr/local/etc/openssl/cert.pem")[0].startswith("Replace CA bundles left by an older Homebrew")
             assert si.fix_for("eMudhra CA", "/etc/ssl/cert.pem")[0].startswith("Update the system CA bundle")
+            assert si.fix_for("eMudhra CA", "/opt/local/etc/openssl/cert.pem")[0].startswith("Update the system CA bundle")  # was Firefox's fix
+            assert si.fix_for("eMudhra CA", "/usr/lib/x86_64-linux-gnu/nss/libnssckbi.so")[0].startswith("Update Firefox")
+            assert si.fix_for("eMudhra CA", "9 app CA bundles, e.g. /usr/local/lib/ruby/gems/2.7.0/gems/x/ca-bundle.crt")[0].startswith("Update the packages and apps")
         finally:
             si.BREW_BUNDLE = old
 

@@ -1278,7 +1278,7 @@ def store_status(path, names, accepted):
     hint = fix_hint(path)
     if accepted:
         return "AFFECTED", f"openssl verify accepts the cracked {', '.join(accepted)}: {hint}"
-    if "nss" in path.lower():
+    if "nssckbi" in path.lower():
         return "REVIEW", "Firefox also blocks the intermediates via OneCRL, keep it updated"
     if accepted is None and AAA in names:
         return "AFFECTED", f"trusts {AAA}, which cross-signed the cracked intermediates: {hint}"
@@ -1921,7 +1921,7 @@ def fix_for(item, where, note=""):
     if item == "eMudhra CA":
         if "keychain" in w:
             return ("Install pending macOS updates (system Keychain trust)", "softwareupdate --install --all")
-        if "nss" in w or "firefox" in w or "thunderbird" in w:
+        if "nssckbi" in w or "firefox" in w or "thunderbird" in w:  # not a bare "nss": it is inside "openssl"
             return ("Update Firefox / Thunderbird (they carry their own roots)", "update Firefox/Thunderbird to the latest version")
         if "cacerts" in w or "/java/" in w or "jvm" in w:
             return ("Update the Java trust store", "update the JDK, or: keytool -delete -alias <cracked alias> -keystore <cacerts>")
@@ -1938,6 +1938,9 @@ def fix_for(item, where, note=""):
         if old_brew_bundle(where):
             return ("Replace CA bundles left by an older Homebrew in /usr/local",
                     f"cp {BREW_BUNDLE} <each file listed>   # or: /usr/local/bin/brew uninstall openssl openssl@1.1")
+        if "app CA bundles" in where:  # shipped inside a gem, an app or a runtime: the system's package manager doesn't own them
+            return ("Update the packages and apps that ship their own CA bundle",
+                    "update whatever owns each file (its folder names the gem, app or runtime); the system bundle isn't the problem here")
         return ("Update the system CA bundle (OpenSSL / curl / git)",
                 "brew upgrade ca-certificates   # Linux: sudo update-ca-certificates  (Red Hat: sudo update-ca-trust)")
     if item == "PHP":
