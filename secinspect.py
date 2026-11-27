@@ -1246,8 +1246,20 @@ def chain_accepts(bundle):
         return accepted
 
 
+BREW_BUNDLE = "/opt/homebrew/etc/ca-certificates/cert.pem"
+
+
+def old_brew_bundle(path, new=None):
+    """An Apple-silicon Mac that still has the Intel Homebrew in /usr/local: its OpenSSL bundles date from that install,
+    and `brew upgrade` (the /opt/homebrew one) never touches them."""
+    return path.startswith("/usr/local/etc/openssl") and os.path.exists(new or BREW_BUNDLE)
+
+
 def fix_hint(path):
     p = path.lower()
+    if old_brew_bundle(path):
+        return (f"left by an older Homebrew in /usr/local, which brew upgrade doesn't reach: cp {BREW_BUNDLE} {shlex.quote(path)} "
+                "(or remove that old OpenSSL with /usr/local/bin/brew uninstall)")
     if p.startswith("/usr/lib/python3/dist-packages/"):  # Debian/Ubuntu: apt owns these, pip refuses (PEP 668)
         return f"apt owns it (python3-{p.split('dist-packages/')[1].split('/')[0]}): sudo apt upgrade once the distro drops the root"
     if "/certifi/" in p:  # not "ca-certificates"
@@ -1923,6 +1935,9 @@ def fix_for(item, where, note=""):
             return ("Update Python packages that ship their own CA bundle", "pip install -U <package>   # e.g. botocore, once it drops the root")
         if "(via" in where:
             return ("Fix the custom CA bundle pointed to by an env var / tool config", "point the override at a patched bundle, or unset it to use the system store")
+        if old_brew_bundle(where):
+            return ("Replace CA bundles left by an older Homebrew in /usr/local",
+                    f"cp {BREW_BUNDLE} <each file listed>   # or: /usr/local/bin/brew uninstall openssl openssl@1.1")
         return ("Update the system CA bundle (OpenSSL / curl / git)",
                 "brew upgrade ca-certificates   # Linux: sudo update-ca-certificates  (Red Hat: sudo update-ca-trust)")
     if item == "PHP":

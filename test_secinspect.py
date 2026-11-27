@@ -498,6 +498,20 @@ def test_eol_settings():
     assert "Security Responses" in fix_for("Setting: automatic security updates", "/Library/Preferences/com.apple.SoftwareUpdate")[1]
 
 
+def test_old_brew_bundle():
+    import secinspect as si
+    with tempfile.NamedTemporaryFile() as new:  # stands for the current Homebrew's bundle
+        assert si.old_brew_bundle("/usr/local/etc/openssl@1.1/cert.pem", new.name)
+        assert not si.old_brew_bundle("/etc/ssl/cert.pem", new.name) and not si.old_brew_bundle("/usr/local/etc/openssl/cert.pem", new.name + ".gone")
+        old, si.BREW_BUNDLE = si.BREW_BUNDLE, new.name
+        try:
+            assert "brew upgrade doesn't reach" in si.fix_hint("/usr/local/etc/openssl/cert.pem")
+            assert si.fix_for("eMudhra CA", "/usr/local/etc/openssl/cert.pem")[0].startswith("Replace CA bundles left by an older Homebrew")
+            assert si.fix_for("eMudhra CA", "/etc/ssl/cert.pem")[0].startswith("Update the system CA bundle")
+        finally:
+            si.BREW_BUNDLE = old
+
+
 def test_launch_agent():
     import plistlib
     import secinspect as si
@@ -1281,6 +1295,7 @@ if __name__ == "__main__":
     test_osv()
     test_eol_settings()
     test_launch_agent()
+    test_old_brew_bundle()
     test_dev_tools()
     test_share_line()
     test_macos_firefox()
