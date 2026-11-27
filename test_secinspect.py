@@ -1163,6 +1163,8 @@ def test_agent_update():
                 shutil.copy(os.path.join(site, "advisories.json"), bare)
                 assert si.release_line(bare).endswith("sha256 ?, signature not checked")
             assert si.update_agent(d, log) == 1  # not installed yet
+            real = si.launch_agent  # --install writes a LaunchAgent on a Mac: keep it out of the real ~/Library/LaunchAgents
+            si.launch_agent = lambda d_, py, agents=None: real(d_, py, agents or os.path.join(os.path.dirname(d), "LaunchAgents"))
             assert si.install_agent(d, log, good) == 0
             assert json.load(open(os.path.join(d, "advisories.json")))["versions"][0]["checked"] == "2026-11-06"
             assert si.install_agent(d, log, bad) == 1  # a different key is never silently re-pinned
