@@ -36,6 +36,10 @@ h2[id]{scroll-margin-top:4.5rem}
 <main>
 <h1>Changelog</h1>
 <p>What the tool checks, and when each check went live. New exploited bugs usually land within a day of disclosure. Follow along with the <a href="/changelog.xml">RSS feed</a>.</p>
+<h2 id="2026-11-27">27 November 2026</h2>
+<ul class="log">
+<li><b>Claude Code and Codex are checked too</b>. The advisory list for agent tools already covered the agents themselves. The tool now finds an installed Claude Code or Codex, asks it for its version, and matches that on your machine against the signed list: 30 published advisories for Claude Code and 2 for Codex to start with. High and critical ones are AFFECTED and give the version to update to; the rest are REVIEW. Both appear in --agents and --json alongside the MCP servers and skills. Nothing is sent anywhere. <a class="muted" href="https://github.com/abhay-avagama/security-inspector/commit/8e8a205">8e8a205</a></li>
+</ul>
 <h2 id="2026-11-26">26 November 2026</h2>
 <ul class="log">
 <li><b>Known advisories for MCP servers, matched on your machine</b>. The tool now knows the published security advisories for MCP servers and agent tools: 144 of them across 32 packages to start with, among them mcp-remote, mcp-atlassian, the reference servers and four packages published with malicious code. For each MCP server in your configs it takes the package and the version it starts (the pinned one, or the one npx last fetched) and checks it against that list. High, critical and malicious ones are reported as affected, so the GitHub Action fails a pull request that adds one; the rest are for review, and so is a package with advisories and no pinned version. The list is compiled from OSV into advisories.json, reviewed and signed with the rest, so the match happens on your machine and no package name is sent anywhere. The watchlist page names every package. <a class="muted" href="https://github.com/abhay-avagama/security-inspector/commit/68b9ed5">68b9ed5</a></li>
