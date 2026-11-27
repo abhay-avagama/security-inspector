@@ -663,7 +663,7 @@ def test_agent_inventory():
         assert by["start.sh"]["kind"] == "hook" and by["bypassPermissions"]["kind"] == "permission"
         out = json.dumps(inv) + "\n".join(si.inventory_table(inv))
         assert not any(x in out for x in ("SECRETSECRET", "hunter2", "abc123", "user:pw")), "a secret reached the inventory"
-        assert si.inventory_table(inv)[0].startswith("Agent inventory: 4 MCP servers, 1 skills, 1 hooks, 1 permission")
+        assert si.inventory_table(inv)[0].startswith("Agent inventory: 0 agents, 4 MCP servers, 1 skills, 1 hooks, 1 permission")
         quiet = si.inventory_table(inv + [{"kind": "skill", "name": "calm", "runs": "home folder", "status": "OK", "where": "/s", "findings": []}])
         assert quiet[-1].startswith("1 skills with nothing flagged") and not any(l.startswith("skill") and "calm" in l for l in quiet)
         assert si.agent_config_rows(f"{home}/.bun/install/cache/x@1.0.0/.mcp.json", json.dumps(cfg["projects"]["/p"]).encode()) == []  # a package's sample config
@@ -710,6 +710,23 @@ def test_agent_inventory():
             assert inv["mail"]["status"] == "AFFECTED" and any("malicious" in f for f in inv["mail"]["findings"]) and inv["db"]["status"] == "OK"
             si.FOUND_MCP.clear()
             assert si.check_agent_feed(home) == [("AI agent: MCP server advisories", "-", "-", "NOT FOUND", "")]
+            # the agents themselves: a fake "codex" that reports an old version, one that reports nothing, and none installed
+            si.AGENT_FEED["packages"].append({"ecosystem": "npm", "package": "@openai/codex", "advisories": [
+                {"id": "CVE-2025-59532", "severity": "HIGH", "ranges": [["0.2.0", "0.39.0"]]}]})
+            def tool(name, says):
+                p = os.path.join(home, name)
+                open(p, "w").write(f"#!/bin/sh\necho '{says}'\n")
+                os.chmod(p, 0o755)
+                return (("Codex", "no-such-command-" + name, "@openai/codex", (p,)),)
+            old, new, mute = tool("codex-old", "codex-cli 0.38.0"), tool("codex-new", "codex-cli 0.39.0"), tool("codex-mute", "hello")
+            assert si.check_agent_tools(old)[0][2:] == ("Codex 0.38.0", "AFFECTED", "1 known (high): CVE-2025-59532; update to 0.39.0+")
+            assert si.check_agent_tools(new)[0][2:] == ("Codex 0.39.0", "OK", "")
+            r = si.check_agent_tools(mute)[0]
+            assert r[2:4] == ("Codex", "REVIEW") and "its version could not be read" in r[4]
+            assert si.check_agent_tools(()) == [("AI agent: coding agent advisories", "-", "-", "NOT FOUND", "")]
+            inv = [i for i in si.agent_inventory(si.check_agent_tools(old), home) if i["kind"] == "agent" and i["version"] == "0.38.0"]
+            assert inv and inv[-1]["status"] == "AFFECTED" and inv[-1]["runs"] == "@openai/codex 0.38.0"
+            si.FOUND_TOOLS.clear()
         finally:
             si.AGENT_FEED = feed
         # the feed as the watch job compiles it from OSV: one entry per CVE, GitHub's record over PyPA's copy
