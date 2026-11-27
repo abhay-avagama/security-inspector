@@ -38,6 +38,7 @@ h2[id]{scroll-margin-top:4.5rem}
 <p>What the tool checks, and when each check went live. New exploited bugs usually land within a day of disclosure. Follow along with the <a href="/changelog.xml">RSS feed</a>.</p>
 <h2 id="2026-11-27">27 November 2026</h2>
 <ul class="log">
+<li><b>The right fix for CA bundles an older Homebrew left behind</b>. On an Apple-silicon Mac that still has the Intel Homebrew in /usr/local, the old OpenSSL bundles there were flagged with the advice to run brew upgrade ca-certificates. That command updates the Homebrew in /opt/homebrew and never touches them, so the finding stayed. The note and the fix plan now say where the file came from and give the command that replaces it with the current bundle. <a class="muted" href="https://github.com/abhay-avagama/security-inspector/commit/cf60789">cf60789</a></li>
 <li><b>Claude Code and Codex are checked too</b>. The advisory list for agent tools already covered the agents themselves. The tool now finds an installed Claude Code or Codex, asks it for its version, and matches that on your machine against the signed list: 30 published advisories for Claude Code and 2 for Codex to start with. High and critical ones are AFFECTED and give the version to update to; the rest are REVIEW. Both appear in --agents and --json alongside the MCP servers and skills. Nothing is sent anywhere. <a class="muted" href="https://github.com/abhay-avagama/security-inspector/commit/8e8a205">8e8a205</a></li>
 </ul>
 <h2 id="2026-11-26">26 November 2026</h2>
